@@ -7,6 +7,9 @@
 @using Harborline.App.Blazor.ReferenceHost.Admin.Authorization
 @using Harborline.Contracts.Authorization
 @inject IAuthorizationAdminClient AuthorizationClient
+@using Harborline.App.Blazor.ReferenceHost.Navigation
+@inject IPackNavigationClient PackNavigationClient
+@implements IDisposable
 
 @* Composed from the platform's hlp.ui.app-shell module rather than hand-written chrome. This
    lives in its own component because it must be INTERACTIVE: the shell resolves railCapable from
@@ -17,9 +20,13 @@
    apps/react/src/App.tsx exactly: same workspace, same item ids, same labels, same body response
    to selection, same Pilot-panel placeholder behind the header sparkle action. Two lanes of one
    app must not disagree about whether navigation routes or activates. *@
+@if (navigationError is not null)
+{
+    <section role="alert"><p>@navigationError</p><button type="button" @onclick="LoadNavigationAsync">Retry navigation</button></section>
+}
 <HarborlineAppShell ShellId="harborline-app"
                   BrandText="Harborline"
-                  Navigation="@Navigation"
+                  Navigation="@(packNavigation ?? Navigation)"
                   NavigationState="@NavigationState"
                   RoleVocabulary="@roleVocabulary"
                   HeldRoles="@HeldRoles"
@@ -95,7 +102,10 @@
         Items: NavigationItems.ToDictionary(item => item.Id));
 
     private string activeItemId = "assets";
-    private bool pilotOpen;
+    private IReadOnlyList<string> openPanelIds = [];
+    private PackNavigationDeclaration? packNavigation;
+    private string? navigationError;
+    private readonly CancellationTokenSource navigationCancellation = new();
     private RoleVocabulary roleVocabulary = RoleVocabulary.FromApi([]);
     private static readonly HeldRoleSet HeldRoles = new([]);
 
@@ -108,19 +118,44 @@
         "admin-data-exchange" => "Data Exchange",
         "admin-scheduling" => "Scheduling",
         "admin-authorization" => "Settings › System",
-        _ => "Assets",
+        "assets" => "Assets",
+        _ => activeItemId,
     };
     private string ActiveDescription => activeItemId == "run-report"
         ? "Generate a report across the assets your organization tracks."
-        : "Browse and manage the physical assets your organization tracks.";
+        : activeItemId == "assets" ? "Browse and manage the physical assets your organization tracks."
+        : "This application surface is not available in this version.";
 
     private RenderFragment PageHeaderFragment => @<nav aria-label="Breadcrumb" class="happ-breadcrumb">Harborline / Portfolio / @ActiveLabel</nav>;
-    private IReadOnlyList<string> OpenPanelIds => pilotOpen ? ["pilot"] : [];
-    private RenderFragment<PackPanelDeclaration> PanelContent => _ => @<section class="happ-pilot"><p>Pilot sees what you see — Portfolio · @ActiveLabel.</p></section>;
-    private void SetOpenPanelIds(IReadOnlyList<string> ids) => pilotOpen = ids.Contains("pilot");
+    private IReadOnlyList<string> OpenPanelIds => openPanelIds;
+    private RenderFragment<PackPanelDeclaration> PanelContent => panel => @<section class="happ-pilot"><p>@(panel.Id == "pilot" ? $"Pilot sees what you see — Portfolio · {ActiveLabel}." : $"{panel.LabelKey ?? panel.Id}: This application surface is not available in this version.")</p></section>;
+    private void SetOpenPanelIds(IReadOnlyList<string> ids) => openPanelIds = ids;
+
+    private async Task LoadNavigationAsync()
+    {
+        navigationError = null;
+        try
+        {
+            packNavigation = await PackNavigationClient.ReadAsync(navigationCancellation.Token);
+            openPanelIds = (packNavigation ?? Navigation).PanelSet?.Where(panel => panel.DefaultOpen).Select(panel => panel.Id).ToArray() ?? [];
+            activeItemId = "assets";
+        }
+        catch (OperationCanceledException) when (navigationCancellation.IsCancellationRequested) { }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException)
+        {
+            navigationError = "Unable to load application navigation. Retry the request.";
+        }
+    }
+
+    public void Dispose()
+    {
+        navigationCancellation.Cancel();
+        navigationCancellation.Dispose();
+    }
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadNavigationAsync();
         try
         {
             var rows = await AuthorizationClient.ListRoleVocabularyAsync();

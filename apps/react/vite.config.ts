@@ -7,7 +7,7 @@ import react from '@vitejs/plugin-react'
 // but carries no stylesheet).
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const origin = env.VITE_FORMS_API_ORIGIN ?? env.VITE_REPORTS_API_ORIGIN ?? env.VITE_VIEWS_API_ORIGIN ?? env.VITE_DATA_EXCHANGE_API_ORIGIN ?? env.VITE_SCHEDULING_API_ORIGIN
+  const origin = env.VITE_FORMS_API_ORIGIN ?? env.VITE_REPORTS_API_ORIGIN ?? env.VITE_VIEWS_API_ORIGIN ?? env.VITE_DATA_EXCHANGE_API_ORIGIN ?? env.VITE_SCHEDULING_API_ORIGIN ?? env.VITE_AUTHORIZATION_API_ORIGIN
 
   // Ticket 093. The local node's listener gate is gate-all-by-default, so an unauthenticated
   // request answers 401 and every admin surface's HTTP client showed an error instead of data.

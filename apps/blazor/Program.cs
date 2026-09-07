@@ -1,4 +1,5 @@
 using Harborline.UIAdapters.Blazor;
+using Harborline.App.Blazor.ReferenceHost.Navigation;
 using Harborline.App.Blazor.ReferenceHost;
 using Harborline.App.Blazor.ReferenceHost.Admin.Forms;
 using Harborline.App.Blazor.ReferenceHost.Admin.Reports;
@@ -105,12 +106,15 @@ else
 var authorizationAdminBaseUrl = builder.Configuration["AuthorizationAdmin:BaseUrl"];
 if (!string.IsNullOrWhiteSpace(authorizationAdminBaseUrl))
 {
+    builder.Services.AddHttpClient<IPackNavigationClient, HttpPackNavigationClient>(
+        client => ConfigureNodeClient(client, authorizationAdminBaseUrl));
     builder.Services.AddHttpClient<IAuthorizationAdminClient, HttpAuthorizationAdminClient>(
         client => ConfigureNodeClient(client, authorizationAdminBaseUrl));
 }
 else if (builder.Configuration.GetValue<bool>("AuthorizationAdmin:UseFixture"))
 {
     builder.Services.AddSingleton<IAuthorizationAdminClient, FixtureAuthorizationAdminClient>();
+    builder.Services.AddSingleton<IPackNavigationClient, FixturePackNavigationClient>();
 }
 else
 {

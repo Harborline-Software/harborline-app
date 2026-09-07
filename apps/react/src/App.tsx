@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { readPackNavigation } from './navigation/packNavigation'
 import { RoleVocabulary, type HeldRoleSet } from '@harborline-software/contracts/authorization'
 import { AppShell, type PackNavigationDeclaration, type ShellNavigationState, type ShellNavItem } from '@harborline-software/ui-react'
 import { FormsAdminPage } from './admin/forms/FormsAdminPage'
@@ -121,9 +122,27 @@ const BODY: Record<string, { title: string; description: string }> = {
 
 export function App() {
   const [activeItemId, setActiveItemId] = useState('assets')
-  const [pilotOpen, setPilotOpen] = useState(false)
+  const [openPanelIds, setOpenPanelIds] = useState<readonly string[]>([])
+  const [packNavigation, setPackNavigation] = useState<PackNavigationDeclaration | null>(null)
+  const [navigationError, setNavigationError] = useState<string | null>(null)
+  const [navigationAttempt, setNavigationAttempt] = useState(0)
   const [roleVocabulary, setRoleVocabulary] = useState(EMPTY_ROLE_VOCABULARY)
-  const body = BODY[activeItemId] ?? BODY.assets
+  const body = BODY[activeItemId] ?? { title: activeItemId, description: 'This application surface is not available in this version.' }
+
+  useEffect(() => {
+    if (authorizationAdminClient === null || formsAdminClient === null) return
+    const abort = new AbortController()
+    setNavigationError(null)
+    void readPackNavigation(abort.signal).then(declaration => {
+      if (abort.signal.aborted) return
+      setPackNavigation(declaration)
+      setOpenPanelIds((declaration ?? NAVIGATION).panelSet?.filter(panel => panel.defaultOpen).map(panel => panel.id) ?? [])
+      setActiveItemId('assets')
+    }).catch((error: unknown) => {
+      if (!abort.signal.aborted) setNavigationError(error instanceof Error ? error.message : 'Unable to load application navigation.')
+    })
+    return () => abort.abort()
+  }, [navigationAttempt])
 
   useEffect(() => {
     const abort = new AbortController()
@@ -162,10 +181,11 @@ export function App() {
       <DataExchangeAdminClientProvider client={dataExchangeAdminClient}>
       <SchedulingAdminClientProvider client={schedulingAdminClient}>
       <AuthorizationAdminClientProvider client={authorizationClient}>
+      {navigationError && <section role="alert"><p>{navigationError}</p><button type="button" onClick={() => setNavigationAttempt(value => value + 1)}>Retry navigation</button></section>}
       <AppShell
       shellId="harborline-app"
       brandText="Harborline"
-      navigation={NAVIGATION}
+      navigation={packNavigation ?? NAVIGATION}
       navigationState={NAVIGATION_STATE}
       roleVocabulary={roleVocabulary}
       heldRoles={EMPTY_HELD_ROLES}
@@ -176,9 +196,9 @@ export function App() {
           Harborline / Portfolio / {body.title}
         </nav>
       }
-      openPanelIds={pilotOpen ? ['pilot'] : []}
-      onOpenPanelIdsChange={ids => setPilotOpen(ids.includes('pilot'))}
-      panelContent={() => <section className="happ-pilot"><p>Pilot sees what you see — Portfolio · {body.title}.</p></section>}
+      openPanelIds={openPanelIds}
+      onOpenPanelIdsChange={setOpenPanelIds}
+      panelContent={panel => <section className="happ-pilot"><p>{panel.id === 'pilot' ? `Pilot sees what you see — Portfolio · ${body.title}.` : `${panel.labelKey ?? panel.id}: This application surface is not available in this version.`}</p></section>}
       body={activeItemId === 'admin-forms'
         ? <main className="happ-page"><FormsAdminPage /></main>
         : activeItemId === 'admin-reports'

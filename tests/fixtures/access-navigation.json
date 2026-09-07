@@ -1,0 +1,18 @@
+{
+  "configured": true,
+  "pack": {
+    "packId": "harborline.active-pack-composition",
+    "seedWorkspaces": [
+      {
+        "id": "access",
+        "labelKey": "Access",
+        "groups": [
+          { "id": "access-inspection", "labelKey": "Holders", "itemIds": ["access.holders"] }
+        ]
+      }
+    ],
+    "panelSet": [
+      { "id": "access-details", "labelKey": "Access details", "binding": "panels.access-details.toggle", "shortcut": "mod+shift+a", "defaultWidth": 400, "minimumHeight": 300, "defaultOpen": false }
+    ]
+  }
+}
