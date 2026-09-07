@@ -61,9 +61,8 @@ jobs:
       - name: Check out the pinned platform
         uses: actions/checkout@v7
         with:
-          repository: Harborline-Software/harborline-platform-archive
+          repository: Harborline-Software/harborline-platform
           ref: ${{ steps.platform_pin.outputs.commit }}
-          token: ${{ secrets.HARBORLINE_PLATFORM_READ_TOKEN }}
           path: .platform
       - name: Fail loudly when the checkout drifts from the recorded pin
         shell: bash
@@ -108,9 +107,8 @@ jobs:
       - name: Check out the pinned platform
         uses: actions/checkout@v7
         with:
-          repository: Harborline-Software/harborline-platform-archive
+          repository: Harborline-Software/harborline-platform
           ref: ${{ steps.platform_pin.outputs.commit }}
-          token: ${{ secrets.HARBORLINE_PLATFORM_READ_TOKEN }}
           path: .platform
       - name: Fail loudly when the checkout drifts from the recorded pin
         shell: bash
