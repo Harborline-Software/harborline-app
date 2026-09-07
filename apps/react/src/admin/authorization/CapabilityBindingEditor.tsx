@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ConfirmDialog } from '@harborline-software/ui-react'
+import { AuthorizationTrace, type RecordedDecision } from '../../authorization/AuthorizationTrace'
 import { AuthorizationAdminError } from './client'
 import type { AuthorizationCapabilityDefinition, NarrowAuthorizationBindingResult, RoleDefinition, RoleReference } from './client'
 
@@ -9,13 +10,14 @@ const CONFIRMATION = 'Removed roles, including the last role, cannot be restored
 const REASON = 'Narrowed in the Harborline Authorization editor.'
 
 export interface CapabilityBindingEditorProps {
+  readonly decisionTrace?: RecordedDecision
   readonly definition: AuthorizationCapabilityDefinition
   readonly roleDefinitions: readonly RoleDefinition[]
   readonly onNarrow: (definitionId: string, selectedRoles: readonly RoleReference[], reason: string) => Promise<NarrowAuthorizationBindingResult>
   readonly onSaved: (result: NarrowAuthorizationBindingResult) => void
 }
 
-export function CapabilityBindingEditor({ definition, roleDefinitions, onNarrow, onSaved }: CapabilityBindingEditorProps) {
+export function CapabilityBindingEditor({ definition, roleDefinitions, onNarrow, onSaved, decisionTrace }: CapabilityBindingEditorProps) {
   const effectiveKeys = useMemo(() => new Set(definition.binding.effectiveRoles.map(roleKey)), [definition.binding.effectiveRoles])
   const [selectedKeys, setSelectedKeys] = useState(() => new Set(effectiveKeys))
   const [pendingRoles, setPendingRoles] = useState<readonly RoleReference[] | null>(null)
@@ -93,6 +95,7 @@ export function CapabilityBindingEditor({ definition, roleDefinitions, onNarrow,
       </div>
       {submitting && <p aria-live="polite">Saving narrower binding…</p>}
       {error && <p role="alert">{error}</p>}
+      <AuthorizationTrace key={decisionTrace?.auditId ?? 'unlinked'} decision={decisionTrace} />
       <ConfirmDialog
         open={pendingRoles !== null}
         onOpenChange={open => { if (!open) setPendingRoles(null) }}

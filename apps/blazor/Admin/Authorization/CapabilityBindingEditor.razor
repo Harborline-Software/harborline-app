@@ -1,5 +1,6 @@
 @namespace Harborline.App.Blazor.ReferenceHost.Admin.Authorization
 @using Microsoft.AspNetCore.Components
+@using Harborline.App.Blazor.ReferenceHost.Authorization
 @using Harborline.UIAdapters.Blazor.Components.Feedback
 @inject IAuthorizationAdminClient Client
 
@@ -50,6 +51,7 @@
     {
         <p role="alert">@error</p>
     }
+    <AuthorizationTrace @key="DecisionTrace?.AuditId" Decision="DecisionTrace" />
 </article>
 
 <HarborlineConfirmDialog Open="@(pendingRoles is not null)"
@@ -61,6 +63,7 @@
                        OnConfirm="@ConfirmNarrowingAsync" />
 
 @code {
+    [Parameter] public RecordedDecision? DecisionTrace { get; set; }
     private const string Confirmation = "Removed roles, including the last role, cannot be restored through this definition revision. Continue with this narrower binding?";
     private const string Reason = "Narrowed in the Harborline Authorization editor.";
     private HashSet<RoleReference> selectedRoles = [];
