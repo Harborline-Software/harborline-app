@@ -1,0 +1,184 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Admin.Scheduling
+@using System.Globalization
+@using Microsoft.AspNetCore.Components
+@using Harborline.UIAdapters.Blazor.Components.DataDisplay
+@using Harborline.UIAdapters.Blazor.Components.Feedback
+@using Harborline.UIAdapters.Blazor.Components.Layout
+@inject ISchedulingAdminClient Client
+
+<h1>Scheduling</h1>
+
+@if (definitions is null)
+{
+    @if (loadError is null)
+    {
+        <p class="happ-muted">Loading…</p>
+    }
+    else
+    {
+        <p class="happ-error" role="alert">@loadError</p>
+    }
+}
+else
+{
+    <HarborlineDataGrid TRow="SchedulingDefinitionSummary"
+                      Rows="@definitions"
+                      GetRowId="@(d => $"{d.Id}@{d.Revision}")"
+                      Columns="@columns"
+                      Zebra="true"
+                      AccessibleLabel="Scheduling definitions"
+                      Empty="No scheduling definitions for this tenant." />
+}
+
+@if (selected is not null)
+{
+    <HarborlineDetailPanel Label="@($"Scheduling definition {selected.Id}")"
+                         Open="true"
+                         OpenChanged="@CloseDetailAsync"
+                         Width="420"
+                         RailCapable="@PanelRailCapable">
+        <SchedulingDefinitionDetailView Summary="selected"
+                                        Definition="view"
+                                        Versions="versions"
+                                        StatusLine="@statusLine"
+                                        ErrorLine="@restoreError"
+                                        OnRestore="@(revision => pendingRestore = revision)" />
+    </HarborlineDetailPanel>
+}
+
+<HarborlineConfirmDialog Open="@(pendingRestore is not null)"
+                       OpenChanged="@UpdateConfirmOpen"
+                       Title="@RestoreTitle"
+                       Description="@RestoreDescription"
+                       ConfirmLabel="Restore as head"
+                       OnConfirm="@RestoreAsync" />
+
+@code {
+    private IReadOnlyList<SchedulingDefinitionSummary>? definitions;
+    private string? loadError;
+    private SchedulingDefinitionSummary? selected;
+    private SchedulingDefinitionView? view;
+    private IReadOnlyList<SchedulingDefinitionSummary>? versions;
+    private int? pendingRestore;
+    private string? statusLine;
+    private string? restoreError;
+
+    private readonly IReadOnlyList<DataGridColumn<SchedulingDefinitionSummary>> columns;
+
+    /// <summary>
+    /// Gets or sets whether the detail panel may collapse to a rail.
+    /// </summary>
+    [Parameter]
+    public bool? PanelRailCapable { get; set; }
+
+    public SchedulingAdminPage()
+    {
+        columns =
+        [
+            new DataGridColumn<SchedulingDefinitionSummary>(
+                "id",
+                "Id",
+                d => d.Id,
+                CellTemplate: row => @<button type="button" class="happ-link" @onclick="() => SelectAsync(row)">@row.Id</button>, RemovalPriority: 50),
+            new DataGridColumn<SchedulingDefinitionSummary>("title", "Title", d => d.Title, RemovalPriority: 40),
+            new DataGridColumn<SchedulingDefinitionSummary>(
+                "revision", "Revision", d => d.Revision.ToString(CultureInfo.InvariantCulture), RemovalPriority: 30),
+            new DataGridColumn<SchedulingDefinitionSummary>("updated", "Updated", d => FormatDate(d.UpdatedAt), RemovalPriority: 20),
+            new DataGridColumn<SchedulingDefinitionSummary>("updatedBy", "Updated by", d => d.UpdatedBy, RemovalPriority: 10),
+        ];
+    }
+
+    private string RestoreTitle => $"Restore revision {pendingRestore}?";
+
+    // The copy deliberately does NOT predict the minted revision number: against the real API the
+    // head can move between rendering this dialog and confirming it. The React lane says the same
+    // sentence, word for word.
+    private string RestoreDescription => selected is null || pendingRestore is null
+        ? string.Empty
+        : $"Appends revision {pendingRestore}'s content of '{selected.Id}' as the new head revision, effective immediately. History is never modified.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            definitions = await Client.ListDefinitionsAsync();
+        }
+        catch (SchedulingAdminException exception)
+        {
+            loadError = exception.Message;
+        }
+    }
+
+    private async Task SelectAsync(SchedulingDefinitionSummary row)
+    {
+        selected = row;
+        view = null;
+        versions = null;
+        statusLine = null;
+        restoreError = null;
+        try
+        {
+            view = await Client.GetDefinitionAsync(row.Id);
+            versions = await Client.ListVersionsAsync(row.Id);
+        }
+        catch (SchedulingAdminException exception)
+        {
+            restoreError = exception.Message;
+        }
+    }
+
+    private Task CloseDetailAsync(bool open)
+    {
+        if (!open)
+        {
+            selected = null;
+            view = null;
+            versions = null;
+            statusLine = null;
+            restoreError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task UpdateConfirmOpen(bool open)
+    {
+        if (!open)
+        {
+            pendingRestore = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task RestoreAsync()
+    {
+        var revision = pendingRestore;
+        var definition = selected;
+        if (revision is null || definition is null)
+        {
+            return;
+        }
+
+        pendingRestore = null;
+        restoreError = null;
+        try
+        {
+            var result = await Client.RestoreRevisionAsync(definition.Id, revision.Value);
+            statusLine = $"Revision {result.Revision} restored from {result.RestoredFrom}.";
+            // Unlike Forms, scheduling has no Draft/Published split: the restored revision is the
+            // new head immediately, so the history, head view, and definitions list all move.
+            versions = await Client.ListVersionsAsync(definition.Id);
+            view = await Client.GetDefinitionAsync(definition.Id);
+            definitions = await Client.ListDefinitionsAsync();
+            selected = definitions.First(row => row.Id == definition.Id);
+        }
+        catch (SchedulingAdminException exception)
+        {
+            restoreError = exception.Message;
+        }
+    }
+
+    private static string FormatDate(DateTimeOffset value) =>
+        value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+}

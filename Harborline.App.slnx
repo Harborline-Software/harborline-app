@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Harborline.App.Abstractions/Harborline.App.Abstractions.csproj" />
+    <Project Path="src/Harborline.App.Blazor/Harborline.App.Blazor.csproj" />
+    <Project Path="src/Harborline.App.Blazor.Hybrid/Harborline.App.Blazor.Hybrid.csproj" />
+    <Project Path="src/Harborline.App.Testing/Harborline.App.Testing.csproj" />
+  </Folder>
+  <Folder Name="/apps/">
+    <Project Path="apps/blazor/Harborline.App.Blazor.ReferenceHost.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Harborline.App.Tests/Harborline.App.Tests.csproj" />
+    <Project Path="tests/Harborline.App.Blazor.Tests/Harborline.App.Blazor.Tests.csproj" />
+  </Folder>
+</Solution>

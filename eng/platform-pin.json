@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "repository": "Harborline-Software/harborline-platform-archive",
+  "commit": "95d370f41fbd28e8e495f674353feb57f216be81",
+  "recordedAt": "2026-09-06 (platform#91 ticket 143: package versions derive from the packable content)",
+  "why": [
+    "Both app lanes consume the platform's UI packages from a local feed built out of a sibling",
+    "platform checkout. The feed directories are gitignored, so a clean CI runner had no package",
+    "source at all and every restore failed NU1301 - which is why this repository's only workflow",
+    "had been red on every run, main included, and why the React lane's tests had never executed",
+    "in CI even once.",
+    "",
+    "CI now checks the platform out at THIS commit and builds both feeds from it. Pinning rather",
+    "than tracking the platform's default branch is deliberate: a floating checkout would turn app",
+    "CI red for platform reasons unrelated to the app pull request under test, which is the failure",
+    "mode that trains people to ignore a red build.",
+    "",
+    "Publishing the platform's UI packages to a registry and consuming them by version remains the",
+    "durable answer and would remove the feed mechanism from CI entirely. It needs a release cadence",
+    "the platform does not have yet, so this pin is the step that makes CI honest in the meantime."
+  ],
+  "producers": {
+    "Harborline.Contracts": "Harborline.Contracts.dll",
+    "Harborline.Foundation": "Harborline.Foundation.dll",
+    "Harborline.UIAdapters.Blazor": "Harborline.UIAdapters.Blazor.dll"
+  },
+  "producersWhy": [
+    "Control ticket 105 acceptance 3. Two repositories declared eight identical PackageIds, and",
+    "three of the ids this lane consumes were among them. The feed directories are gitignored, so",
+    "nothing recorded WHICH repository packed the bytes the app shipped - only the disk it was",
+    "built on knew. The id cannot tell two producers apart; the assembly inside can.",
+    "",
+    "harborline-api stopped producing these ids on 2026-08-24 (it now packs three Api.* packages",
+    "and nothing else), so there is exactly one producer today. This block is what makes that a",
+    "checked fact rather than a coincidence of the current trees.",
+    "",
+    "Control ticket 063 wave 1 renamed the platform's project and assembly identities.",
+    "The failing producer check was observed while moving this pin,",
+    "then this block was updated from the assemblies emitted by the pinned feed build."
+  ],
+  "ciSecret": {
+    "name": "HARBORLINE_PLATFORM_READ_TOKEN",
+    "repository": "Harborline-Software/harborline-app",
+    "why": "harborline-platform is private, so both CI jobs need a read-only token to check it out.",
+    "howToSet": "bash eng/add-platform-read-token.sh - a guided wizard that walks the PAT form, then writes the secret straight from your shell via gh. The value is never echoed and never written to a file.",
+    "scope": "Fine-grained PAT, resource owner Harborline-Software, Only select repositories -> harborline-platform, Repository permissions -> Contents: Read-only. Nothing wider: this token only ever reads one repository's files."
+  },
+  "packageVersion": [
+    "There is no package VERSION to pin. Platform ticket 143 derives every package version from a",
+    "hash of the platform's packable content, so a repack of a changed tree is a new version and a",
+    "cached extraction can never shadow it. apps/blazor/scripts/build-local-feed.mjs computes it by",
+    "importing the platform's own tooling/package-version.mjs out of this pinned checkout - the same",
+    "function the platform's consumer fixtures call - and writes it to apps/blazor/.feed/packed-version.props,",
+    "which the root Directory.Packages.props imports. Moving this commit is therefore the whole",
+    "re-pin: rebuild the feed and the version follows, with no version edited by hand anywhere."
+  ],
+  "bump": [
+    "Move the commit when the app needs a platform change. Rebuild both feeds locally first",
+    "(npm run feed in apps/react, node scripts/build-local-feed.mjs in apps/blazor), run both",
+    "suites, and land the pin in the same change as whatever needed it - so the reason the pin",
+    "moved is legible in one diff."
+  ]
+}

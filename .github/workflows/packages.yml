@@ -1,0 +1,167 @@
+name: packages
+
+# ---------------------------------------------------------------------------
+# ACTIONS_ENABLED - the switch that decides whether this workflow may run.
+#
+# Every job below is guarded by `if: vars.ACTIONS_ENABLED == 'true'`. The variable is UNSET, so
+# every job reports "skipped" and GitHub allocates no runner and bills no minutes. The condition is
+# evaluated before runner allocation, which is why this keeps working while the account is over its
+# Actions limit - a guarded job never reaches the point where billing refuses it.
+#
+# Why it exists: this org is on the free plan with private repos, and Actions minutes ran out on
+# 2026-08-24. Until the repositories are public (where Actions is free), CI here is a duplicate of
+# work that already happens locally, and a red check that never ran teaches people to ignore checks.
+#
+# Verification does NOT depend on this flag. Run locally instead:
+#     bash eng/verify-packages.sh   # runs eng/verify-boundaries.sh first, then pack + consumer smoke
+#
+# To turn it back on, per repository:
+#     gh variable set ACTIONS_ENABLED --body true
+# and to turn it off again:
+#     gh variable delete ACTIONS_ENABLED
+# ---------------------------------------------------------------------------
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*-preview.*", "v*-alpha.*", "v*-beta.*", "v*-rc.*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish prerelease packages to GitHub Packages
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # The React lane is the parity AUTHORITY for every pillar admin surface, and until control ticket
+  # 089 its 59 tests had never run in CI even once — pull requests #3 through #10 all merged with
+  # them unexecuted by any automation. This job is the fix. It is separate from the .NET job so a
+  # lane failure names the lane.
+  react:
+    if: vars.ACTIONS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - uses: actions/setup-dotnet@v6
+        with: {global-json-file: global.json}
+      # The lane consumes @harborline-software/ui-react as a PACKAGE built from the platform, and
+      # apps/react/.feed is gitignored, so a clean runner has no package source. Check the platform
+      # out at the recorded pin and build the feed the same way a developer does.
+      - name: Read the recorded platform pin
+        id: platform_pin
+        shell: bash
+        run: echo "commit=$(jq -r '.commit' eng/platform-pin.json)" >> "$GITHUB_OUTPUT"
+      - name: Check out the pinned platform
+        uses: actions/checkout@v7
+        with:
+          repository: Harborline-Software/harborline-platform-archive
+          ref: ${{ steps.platform_pin.outputs.commit }}
+          token: ${{ secrets.HARBORLINE_PLATFORM_READ_TOKEN }}
+          path: .platform
+      - name: Fail loudly when the checkout drifts from the recorded pin
+        shell: bash
+        run: |
+          pinned="$(jq -r '.commit' eng/platform-pin.json)"
+          actual="$(git -C .platform rev-parse HEAD)"
+          if [[ "$pinned" != "$actual" ]]; then
+            echo "eng/platform-pin.json records $pinned but the checkout is $actual." >&2
+            echo "The checkout ref is derived from the pin file; a mismatch means the checkout step changed." >&2
+            exit 1
+          fi
+          echo "platform pinned at $actual"
+      - name: Build the local package feed
+        env:
+          HARBORLINE_PLATFORM_REPO: ${{ github.workspace }}/.platform
+        run: npm run feed
+        working-directory: apps/react
+      - run: npm ci
+        working-directory: apps/react
+      - run: npm run typecheck
+        working-directory: apps/react
+      - run: npm test
+        working-directory: apps/react
+      - run: npm run build
+        working-directory: apps/react
+
+  pack-consume-publish:
+    if: vars.ACTIONS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: {fetch-depth: 0}
+      - uses: actions/setup-dotnet@v6
+        with: {global-json-file: global.json}
+      # Same story as the React lane: apps/blazor/nuget.config registers apps/blazor/.feed as a
+      # package source, .feed is gitignored, and a clean runner therefore failed NU1301 on every
+      # restore — which is why this workflow was red on every run since 2026-08-22, main included.
+      - name: Read the recorded platform pin
+        id: platform_pin
+        shell: bash
+        run: echo "commit=$(jq -r '.commit' eng/platform-pin.json)" >> "$GITHUB_OUTPUT"
+      - name: Check out the pinned platform
+        uses: actions/checkout@v7
+        with:
+          repository: Harborline-Software/harborline-platform-archive
+          ref: ${{ steps.platform_pin.outputs.commit }}
+          token: ${{ secrets.HARBORLINE_PLATFORM_READ_TOKEN }}
+          path: .platform
+      - name: Fail loudly when the checkout drifts from the recorded pin
+        shell: bash
+        run: |
+          pinned="$(jq -r '.commit' eng/platform-pin.json)"
+          actual="$(git -C .platform rev-parse HEAD)"
+          if [[ "$pinned" != "$actual" ]]; then
+            echo "eng/platform-pin.json records $pinned but the checkout is $actual." >&2
+            echo "The checkout ref is derived from the pin file; a mismatch means the checkout step changed." >&2
+            exit 1
+          fi
+          echo "platform pinned at $actual"
+      - name: Build the local package feed
+        env:
+          HARBORLINE_PLATFORM_REPO: ${{ github.workspace }}/.platform
+        run: node scripts/build-local-feed.mjs
+        working-directory: apps/blazor
+      - name: Select immutable prerelease version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then value="${GITHUB_REF_NAME#v}"; else value="0.1.0-preview.${GITHUB_RUN_NUMBER}"; fi
+          if [[ "$value" != *-* ]]; then echo "Stable package publication is not authorized: $value" >&2; exit 1; fi
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+      - run: dotnet test Harborline.App.slnx -c Release
+      - name: Pack and verify clean consumer
+        env:
+          HARBORLINE_PACKAGE_VERSION: "${{ steps.version.outputs.value }}"
+          HARBORLINE_PACKAGE_OUTPUT: "${{ github.workspace }}/artifacts/packages"
+        run: bash eng/verify-packages.sh
+      - run: npm run validate
+        working-directory: hosts/react-native
+      - uses: actions/upload-artifact@v7
+        with:
+          name: harborline-app-${{ steps.version.outputs.value }}
+          path: artifacts/packages/*.nupkg
+          if-no-files-found: error
+      - name: Require explicit distribution authority
+        if: startsWith(github.ref, 'refs/tags/') || inputs.publish == true
+        shell: bash
+        run: |
+          authority="$(jq -r '.packageDistributionAuthority // empty' repository.yaml)"
+          remote_status="$(jq -r '.remote.status // empty' repository.yaml)"
+          if [[ -z "$authority" || "$remote_status" != "active" ]]; then
+            echo "Publication requires an active remote and named packageDistributionAuthority in repository.yaml." >&2
+            exit 1
+          fi
+      - name: Publish to GitHub Packages
+        if: startsWith(github.ref, 'refs/tags/') || inputs.publish == true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dotnet nuget add source --username "${GITHUB_ACTOR}" --password "${GH_TOKEN}" --store-password-in-clear-text --name github "https://nuget.pkg.github.com/${GITHUB_REPOSITORY_OWNER}/index.json"
+          dotnet nuget push "artifacts/packages/*.nupkg" --source github --api-key "${GH_TOKEN}" --skip-duplicate

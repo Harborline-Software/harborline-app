@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Harborline.App.Abstractions</PackageId>
+    <Description>Harborline App extension, capability, navigation, and session interfaces.</Description>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+</Project>

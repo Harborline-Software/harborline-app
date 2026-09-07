@@ -1,0 +1,143 @@
+@using Harborline.UIAdapters.Blazor.Components.Layout
+@using Harborline.App.Blazor.ReferenceHost.Admin.Forms
+@using Harborline.App.Blazor.ReferenceHost.Admin.Reports
+@using Harborline.App.Blazor.ReferenceHost.Admin.Views
+@using Harborline.App.Blazor.ReferenceHost.Admin.DataExchange
+@using Harborline.App.Blazor.ReferenceHost.Admin.Scheduling
+@using Harborline.App.Blazor.ReferenceHost.Admin.Authorization
+@using Harborline.Contracts.Authorization
+@inject IAuthorizationAdminClient AuthorizationClient
+
+@* Composed from the platform's hlp.ui.app-shell module rather than hand-written chrome. This
+   lives in its own component because it must be INTERACTIVE: the shell resolves railCapable from
+   a JS media-query subscription after first render, so under static server rendering the rail
+   never appears at all. App.razor is the document and cannot itself carry a render mode.
+
+   Navigation is ACTIVATION-DRIVEN, not href-driven, and deliberately mirrors
+   apps/react/src/App.tsx exactly: same workspace, same item ids, same labels, same body response
+   to selection, same Pilot-panel placeholder behind the header sparkle action. Two lanes of one
+   app must not disagree about whether navigation routes or activates. *@
+<HarborlineAppShell ShellId="harborline-app"
+                  BrandText="Harborline"
+                  Navigation="@Navigation"
+                  NavigationState="@NavigationState"
+                  RoleVocabulary="@roleVocabulary"
+                  HeldRoles="@HeldRoles"
+                  ActiveItemId="@activeItemId"
+                  Navigated="@(item => activeItemId = item.Id)"
+                  PageHeader="@PageHeaderFragment"
+                  OpenPanelIds="@OpenPanelIds"
+                  OpenPanelIdsChanged="@SetOpenPanelIds"
+                  PanelContent="@PanelContent">
+    @if (activeItemId == "admin-forms")
+    {
+        <main class="happ-page">
+            <FormsAdminPage />
+        </main>
+    }
+    else if (activeItemId == "admin-reports")
+    {
+        <main class="happ-page">
+            <ReportsAdminPage />
+        </main>
+    }
+    else if (activeItemId == "admin-views")
+    {
+        <main class="happ-page">
+            <ViewsAdminPage />
+        </main>
+    }
+    else if (activeItemId == "admin-data-exchange")
+    {
+        <main class="happ-page">
+            <DataExchangeAdminPage />
+        </main>
+    }
+    else if (activeItemId == "admin-scheduling")
+    {
+        <main class="happ-page">
+            <SchedulingAdminPage />
+        </main>
+    }
+    else if (activeItemId == "admin-authorization")
+    {
+        <main class="happ-page">
+            <AuthorizationAdminPage />
+        </main>
+    }
+    else
+    {
+        <main class="happ-page">
+            <h1>@ActiveLabel</h1>
+            <p>@ActiveDescription</p>
+        </main>
+    }
+</HarborlineAppShell>
+
+@code {
+    private static readonly IReadOnlyList<ShellNavItem> NavigationItems =
+    [
+        new ShellNavItem("assets", "Assets"),
+        new ShellNavItem("run-report", "Run report"),
+        new ShellNavItem("admin-forms", "Forms"),
+        new ShellNavItem("admin-reports", "Reports"),
+        new ShellNavItem("admin-views", "Views"),
+        new ShellNavItem("admin-data-exchange", "Data Exchange"),
+        new ShellNavItem("admin-scheduling", "Scheduling"),
+        // Ticket 205 will gate this item from live scoped held roles. No existing admin item has
+        // that server/session role snapshot yet, so the API route fence remains authoritative.
+        new ShellNavItem("admin-authorization", "Settings"),
+    ];
+    private static readonly PackNavigationDeclaration Navigation = new(
+        [new("portfolio", "Portfolio", Groups: [new("portfolio-group", "Portfolio", NavigationItems.Select(item => item.Id).ToArray())])],
+        PanelSet: [new("pilot", "panels.pilot.toggle", "mod+shift+p", 400, 300, false, "Pilot")]);
+    private static readonly ShellNavigationState NavigationState = new(
+        Items: NavigationItems.ToDictionary(item => item.Id));
+
+    private string activeItemId = "assets";
+    private bool pilotOpen;
+    private RoleVocabulary roleVocabulary = RoleVocabulary.FromApi([]);
+    private static readonly HeldRoleSet HeldRoles = new([]);
+
+    private string ActiveLabel => activeItemId switch
+    {
+        "run-report" => "Run report",
+        "admin-forms" => "Forms",
+        "admin-reports" => "Reports",
+        "admin-views" => "Views",
+        "admin-data-exchange" => "Data Exchange",
+        "admin-scheduling" => "Scheduling",
+        "admin-authorization" => "Settings › System",
+        _ => "Assets",
+    };
+    private string ActiveDescription => activeItemId == "run-report"
+        ? "Generate a report across the assets your organization tracks."
+        : "Browse and manage the physical assets your organization tracks.";
+
+    private RenderFragment PageHeaderFragment => @<nav aria-label="Breadcrumb" class="happ-breadcrumb">Harborline / Portfolio / @ActiveLabel</nav>;
+    private IReadOnlyList<string> OpenPanelIds => pilotOpen ? ["pilot"] : [];
+    private RenderFragment<PackPanelDeclaration> PanelContent => _ => @<section class="happ-pilot"><p>Pilot sees what you see — Portfolio · @ActiveLabel.</p></section>;
+    private void SetOpenPanelIds(IReadOnlyList<string> ids) => pilotOpen = ids.Contains("pilot");
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var rows = await AuthorizationClient.ListRoleVocabularyAsync();
+            roleVocabulary = RoleVocabulary.FromApi(rows.Select(row => new Harborline.Contracts.Authorization.RoleDefinition(
+                row.RoleDefinitionId,
+                new Harborline.Contracts.Authorization.RoleReference(row.Role.Vocabulary, row.Role.Name),
+                row.DisplayName,
+                new Harborline.Contracts.Authorization.RoleOwner(
+                    Enum.Parse<RoleOwnerKind>(row.Owner.Kind, ignoreCase: false),
+                    row.Owner.OwnerId),
+                row.IsSealed)));
+        }
+        catch (Exception exception) when (exception is AuthorizationAdminException or HttpRequestException or ArgumentException)
+        {
+            // Unknown or unavailable vocabulary fails every role-gated item closed. The Authorization
+            // route itself remains server-fenced and its page owns the visible load/retry error.
+            roleVocabulary = RoleVocabulary.FromApi([]);
+        }
+    }
+}

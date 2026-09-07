@@ -1,0 +1,97 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Admin.DataExchange
+@using System.Globalization
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components
+@using Harborline.UIAdapters.Blazor.Components.DataDisplay
+
+@* The View suffix is required because a component named DataExchangeDefinitionDetail would collide with the seam record in the same namespace. *@
+
+<dl class="happ-meta">
+    <dt>Key</dt>
+    <dd>@Summary.Key</dd>
+    <dt>Title</dt>
+    <dd>@Summary.Title</dd>
+    <dt>Version</dt>
+    <dd>@Summary.Version</dd>
+    <dt>Kind</dt>
+    <dd>@Summary.ExchangeKind</dd>
+    <dt>Cascade layer</dt>
+    <dd>@Summary.CascadeLayer</dd>
+    <dt>Schema version</dt>
+    <dd>@(Detail?.SchemaVersion.ToString(CultureInfo.InvariantCulture) ?? "—")</dd>
+</dl>
+
+@if (ErrorLine is not null)
+{
+    <p class="happ-error" role="alert">@ErrorLine</p>
+}
+
+@if (Detail is null)
+{
+    <p class="happ-muted">Loading…</p>
+}
+else
+{
+    <h2>Settings</h2>
+    <pre class="happ-json" data-testid="settings-json">@FormatJson(Detail.Settings)</pre>
+    <h2>Provenance</h2>
+    <pre class="happ-json" data-testid="provenance-json">@FormatJson(Detail.Provenance)</pre>
+}
+
+@if (History is null)
+{
+    <p class="happ-muted">Loading…</p>
+}
+else
+{
+    <HarborlineTable Density="TableDensity.Small">
+        <HarborlineTableCaption>@OrderingCaption</HarborlineTableCaption>
+        <HarborlineTableHead>
+            <HarborlineTableRow>
+                <HarborlineTableHeaderCell>Version</HarborlineTableHeaderCell>
+                <HarborlineTableHeaderCell>Kind</HarborlineTableHeaderCell>
+                <HarborlineTableHeaderCell>Cascade layer</HarborlineTableHeaderCell>
+            </HarborlineTableRow>
+        </HarborlineTableHead>
+        <HarborlineTableBody>
+            @foreach (var version in History.Versions)
+            {
+                <HarborlineTableRow>
+                    <HarborlineTableCell>@version.Version</HarborlineTableCell>
+                    <HarborlineTableCell>@version.ExchangeKind</HarborlineTableCell>
+                    <HarborlineTableCell>@version.CascadeLayer</HarborlineTableCell>
+                </HarborlineTableRow>
+            }
+        </HarborlineTableBody>
+    </HarborlineTable>
+}
+
+@code {
+    private static readonly JsonSerializerOptions IndentedJson = new()
+    {
+        WriteIndented = true,
+    };
+
+    /// <summary>Gets or sets the report-definition head summary.</summary>
+    [Parameter, EditorRequired]
+    public required DataExchangeDefinitionSummary Summary { get; set; }
+
+    /// <summary>Gets or sets the head revision's detail, or null while loading.</summary>
+    [Parameter]
+    public DataExchangeDefinitionDetail? Detail { get; set; }
+
+    /// <summary>Gets or sets the retained version history, or null while loading.</summary>
+    [Parameter]
+    public DataExchangeVersionList? History { get; set; }
+
+    /// <summary>Gets or sets the detail or history loading failure message.</summary>
+    [Parameter]
+    public string? ErrorLine { get; set; }
+
+    private string OrderingCaption => History!.Ordering == "semver"
+        ? "Ordered by semver"
+        : "Ordered ordinally";
+
+    private static string FormatJson(JsonElement element) =>
+        JsonSerializer.Serialize(element, IndentedJson);
+}

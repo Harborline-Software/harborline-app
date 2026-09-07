@@ -1,0 +1,124 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Admin.Forms
+@using System.Globalization
+@using Microsoft.AspNetCore.Components
+@using Harborline.UIAdapters.Blazor.Components.DataDisplay
+
+@{
+    var head = Versions?.FirstOrDefault(v => v.Version == Definition.Version);
+}
+
+<dl class="happ-meta">
+    <dt>Form id</dt>
+    <dd>@Definition.FormId</dd>
+    <dt>Title</dt>
+    <dd>@FormatIt(Definition.Title)</dd>
+    <dt>Published version</dt>
+    <dd>@Definition.Version</dd>
+    <dt>Cascade layer</dt>
+    <dd>@(Definition.CascadeLayer ?? "—")</dd>
+    <dt>Owner</dt>
+    <dd>@(head?.Owner ?? "—")</dd>
+    <dt>Created</dt>
+    <dd>@FormatDate(head?.CreatedAt)</dd>
+    <dt>Updated</dt>
+    <dd>@FormatDate(Definition.UpdatedAt)</dd>
+    <dt>Derived from</dt>
+    <dd>@(head?.DerivedFrom ?? "—")</dd>
+    <dt>Syncs to peers</dt>
+    <dd>@FormatBoolean(head?.SyncsToPeers)</dd>
+    <dt>Safe for staging</dt>
+    <dd>@FormatBoolean(head?.SafeForStaging)</dd>
+</dl>
+
+@if (StatusLine is not null)
+{
+    <p data-testid="restore-status">@StatusLine</p>
+}
+
+@if (ErrorLine is not null)
+{
+    <p class="happ-error" role="alert">@ErrorLine</p>
+}
+
+@if (Versions is null)
+{
+    <p class="happ-muted">Loading…</p>
+}
+else
+{
+    <HarborlineTable Density="TableDensity.Small">
+        <HarborlineTableHead>
+            <HarborlineTableRow>
+                <HarborlineTableHeaderCell>Version</HarborlineTableHeaderCell>
+                <HarborlineTableHeaderCell>Status</HarborlineTableHeaderCell>
+                <HarborlineTableHeaderCell>Owner</HarborlineTableHeaderCell>
+                <HarborlineTableHeaderCell>Updated</HarborlineTableHeaderCell>
+                <HarborlineTableHeaderCell>Derived from</HarborlineTableHeaderCell>
+                <HarborlineTableHeaderCell>Actions</HarborlineTableHeaderCell>
+            </HarborlineTableRow>
+        </HarborlineTableHead>
+        <HarborlineTableBody>
+            @foreach (var version in Versions)
+            {
+                <HarborlineTableRow>
+                    <HarborlineTableCell>@version.Version</HarborlineTableCell>
+                    <HarborlineTableCell>@version.Status</HarborlineTableCell>
+                    <HarborlineTableCell>@(version.Owner ?? "—")</HarborlineTableCell>
+                    <HarborlineTableCell>@FormatDate(version.UpdatedAt)</HarborlineTableCell>
+                    <HarborlineTableCell>@(version.DerivedFrom ?? "—")</HarborlineTableCell>
+                    <HarborlineTableCell>
+                        <button type="button" class="happ-link" @onclick="() => OnRestore.InvokeAsync(version.Version)">Restore…</button>
+                    </HarborlineTableCell>
+                </HarborlineTableRow>
+            }
+        </HarborlineTableBody>
+    </HarborlineTable>
+}
+
+@code {
+    /// <summary>Gets or sets the published form definition.</summary>
+    [Parameter, EditorRequired]
+    public required FormDefinitionSummary Definition { get; set; }
+
+    /// <summary>Gets or sets the retained versions, or null while loading.</summary>
+    [Parameter]
+    public IReadOnlyList<FormVersionSummary>? Versions { get; set; }
+
+    /// <summary>Gets or sets the restore success message.</summary>
+    [Parameter]
+    public string? StatusLine { get; set; }
+
+    /// <summary>Gets or sets the restore or loading failure message.</summary>
+    [Parameter]
+    public string? ErrorLine { get; set; }
+
+    /// <summary>Gets or sets the callback that requests restoration of a version.</summary>
+    [Parameter]
+    public EventCallback<string> OnRestore { get; set; }
+
+    private static string FormatIt(InternationalizedText? text)
+    {
+        if (text is null)
+        {
+            return "—";
+        }
+
+        if (text.Values.TryGetValue(text.DefaultLocale, out var preferred))
+        {
+            return preferred;
+        }
+
+        return text.Values.Values.FirstOrDefault() ?? "—";
+    }
+
+    private static string FormatDate(DateTimeOffset? value) => value is null
+        ? "—"
+        : value.Value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+
+    private static string FormatBoolean(bool? value) => value switch
+    {
+        true => "Yes",
+        false => "No",
+        null => "—",
+    };
+}

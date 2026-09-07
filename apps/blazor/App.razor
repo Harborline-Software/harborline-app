@@ -1,0 +1,32 @@
+@page "/"
+@using Microsoft.AspNetCore.Components.Web
+@using Harborline.UIAdapters.Blazor.Components.Layout
+@using Harborline.UIAdapters.Blazor.Components.Navigation
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base href="/" />
+    <link rel="icon" type="image/x-icon" href="@Assets["favicon.ico"]" />
+    @* The Blazor package ships PER-MODULE stylesheets under _content/<PackageId>/, unlike the
+       React package which exports one aggregate "./style.css". Each module composed here must
+       be linked. The path uses the PackageId (Harborline.UIAdapters.Blazor), not the producer
+       assembly name; ticket 063 tracks that divergence. *@
+    <link rel="stylesheet" href="_content/Harborline.UIAdapters.Blazor/app-layout.css" />
+    <link rel="stylesheet" href="_content/Harborline.UIAdapters.Blazor/side-nav.css" />
+    <link rel="stylesheet" href="_content/Harborline.UIAdapters.Blazor/app-shell.css" />
+    <link rel="stylesheet" href="_content/Harborline.UIAdapters.Blazor/data-grid.css" />
+    <link rel="stylesheet" href="_content/Harborline.UIAdapters.Blazor/detail-panel.css" />
+    <link rel="stylesheet" href="_content/Harborline.UIAdapters.Blazor/table.css" />
+    <link rel="stylesheet" href="_content/Harborline.UIAdapters.Blazor/dialog.css" />
+    <link rel="stylesheet" href="_content/Harborline.UIAdapters.Blazor/confirm-dialog.css" />
+    @* dialog.css is required because the confirm dialog composes the base dialog; dialog.js needs no script tag because it self-imports via IJSRuntime. *@
+    <link rel="stylesheet" href="@Assets["Harborline.App.Blazor.ReferenceHost.styles.css"]" />
+    <HeadOutlet />
+</head>
+<body>
+    <Shell @rendermode="@RenderMode.InteractiveServer" />
+    <script src="_framework/blazor.web.js"></script>
+</body>
+</html>

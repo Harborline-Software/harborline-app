@@ -1,0 +1,48 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Admin.Authorization
+@using Microsoft.AspNetCore.Components
+
+<section aria-labelledby="standing-catalogue-heading">
+    <h2 id="standing-catalogue-heading">Standing Catalogue</h2>
+    @if (Standings.Count == 0)
+    {
+        <p>No standing rules are declared.</p>
+    }
+    else
+    {
+        @foreach (var rule in Standings)
+        {
+            <article aria-labelledby="@($"standing-{rule.RuleId}-{rule.RuleVersion}")" style="min-width:0">
+                <h3 id="@($"standing-{rule.RuleId}-{rule.RuleVersion}")" style="overflow-wrap:anywhere">@rule.RuleId · @rule.RuleVersion</h3>
+                <dl>
+                    <dt>Standing</dt><dd style="overflow-wrap:anywhere">@rule.Standing</dd>
+                    <dt>Declared record type</dt><dd style="overflow-wrap:anywhere">@rule.DeclaredRecordType</dd>
+                </dl>
+                <h4>Input fields</h4>
+                @foreach (var field in rule.Fields)
+                {
+                    <section aria-label="@($"Standing field {field.Field}")">
+                        <h5 style="overflow-wrap:anywhere">@field.Field</h5>
+                        @if (field.CarryingRecordTypes.Count == 0)
+                        {
+                            <p role="alert">No carrying record types are declared for this field.</p>
+                        }
+                        else
+                        {
+                            <ul>
+                                @foreach (var recordType in field.CarryingRecordTypes)
+                                {
+                                    <li style="overflow-wrap:anywhere">@recordType</li>
+                                }
+                            </ul>
+                        }
+                    </section>
+                }
+            </article>
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<StandingDefinition> Standings { get; set; } = [];
+}

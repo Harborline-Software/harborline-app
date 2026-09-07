@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Harborline.App.Abstractions/Harborline.App.Abstractions.csproj" />
+    <ProjectReference Include="../../src/Harborline.App.Testing/Harborline.App.Testing.csproj" />
+  </ItemGroup>
+</Project>

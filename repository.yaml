@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "repository": "harborline-app",
+  "product": "Harborline",
+  "defaultBranch": "main",
+  "remote": {"status": "active", "requiresMaintainerApproval": true},
+  "phase": "consumer-enablement-envelope",
+  "sourceAuthority": "harborline-app-retained-until-cutover",
+  "packageIdentityAuthority": "harborline-app-provisional-prerelease",
+  "packageDistributionAuthority": null,
+  "previewRegistry": "github-packages-nuget",
+  "stableDistributionAuthorized": false,
+  "productInterfaceRevision": "happ.preview.1",
+  "capabilityManifestRevision": "app-essential.preview.1",
+  "hosts": {
+    "react": ["web", "tauri-desktop", "react-native-ios", "react-native-android"],
+    "blazor": ["web", "maui-desktop", "maui-ios", "maui-android"]
+  }
+}

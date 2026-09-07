@@ -1,0 +1,10 @@
+{
+  "name": "@harborline-software/app-react-native",
+  "version": "0.1.0-preview.1",
+  "private": true,
+  "description": "Harborline App React Native iOS/Android host envelope",
+  "scripts": {
+    "validate": "node validate-host.mjs"
+  },
+  "engines": {"node": ">=22"}
+}

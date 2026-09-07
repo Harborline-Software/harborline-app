@@ -1,0 +1,118 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Admin.Reports
+@using Microsoft.AspNetCore.Components
+@using Harborline.UIAdapters.Blazor.Components.DataDisplay
+@using Harborline.UIAdapters.Blazor.Components.Layout
+@inject IReportsAdminClient Client
+
+<h1>Reports</h1>
+
+@if (definitions is null)
+{
+    @if (loadError is null)
+    {
+        <p class="happ-muted">Loading…</p>
+    }
+    else
+    {
+        <p class="happ-error" role="alert">@loadError</p>
+    }
+}
+else
+{
+    <HarborlineDataGrid TRow="ReportDefinitionSummary"
+                      Rows="@definitions"
+                      GetRowId="@(d => $"{d.Key}@{d.Version}")"
+                      Columns="@columns"
+                      Zebra="true"
+                      AccessibleLabel="Report definitions"
+                      Empty="No report definitions for this tenant." />
+}
+
+@if (selected is not null)
+{
+    <HarborlineDetailPanel Label="@($"Report definition {selected.Key}")"
+                         Open="true"
+                         OpenChanged="@CloseDetailAsync"
+                         Width="420"
+                         RailCapable="@PanelRailCapable">
+        <ReportDefinitionDetailView Summary="selected"
+                                    Detail="detail"
+                                    History="history"
+                                    ErrorLine="@detailError" />
+    </HarborlineDetailPanel>
+}
+
+@code {
+    private IReadOnlyList<ReportDefinitionSummary>? definitions;
+    private string? loadError;
+    private ReportDefinitionSummary? selected;
+    private ReportDefinitionDetail? detail;
+    private ReportVersionList? history;
+    private string? detailError;
+
+    private readonly IReadOnlyList<DataGridColumn<ReportDefinitionSummary>> columns;
+
+    /// <summary>
+    /// Gets or sets whether the detail panel may collapse to a rail.
+    /// </summary>
+    [Parameter]
+    public bool? PanelRailCapable { get; set; }
+
+    public ReportsAdminPage()
+    {
+        columns =
+        [
+            new DataGridColumn<ReportDefinitionSummary>(
+                "key",
+                "Key",
+                d => d.Key,
+                CellTemplate: row => @<button type="button" class="happ-link" @onclick="() => SelectAsync(row)">@row.Key</button>, RemovalPriority: 50),
+            new DataGridColumn<ReportDefinitionSummary>("title", "Title", d => d.Title, RemovalPriority: 40),
+            new DataGridColumn<ReportDefinitionSummary>("version", "Version", d => d.Version, RemovalPriority: 30),
+            new DataGridColumn<ReportDefinitionSummary>("kind", "Kind", d => d.ReportKind, RemovalPriority: 20),
+            new DataGridColumn<ReportDefinitionSummary>("cascadeLayer", "Cascade layer", d => d.CascadeLayer, RemovalPriority: 10),
+        ];
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            definitions = await Client.ListDefinitionsAsync();
+        }
+        catch (ReportsAdminException exception)
+        {
+            loadError = exception.Message;
+        }
+    }
+
+    private async Task SelectAsync(ReportDefinitionSummary row)
+    {
+        selected = row;
+        detail = null;
+        history = null;
+        detailError = null;
+        try
+        {
+            detail = await Client.GetDefinitionAsync(row.Key);
+            history = await Client.ListVersionsAsync(row.Key);
+        }
+        catch (ReportsAdminException exception)
+        {
+            detailError = exception.Message;
+        }
+    }
+
+    private Task CloseDetailAsync(bool open)
+    {
+        if (!open)
+        {
+            selected = null;
+            detail = null;
+            history = null;
+            detailError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+}

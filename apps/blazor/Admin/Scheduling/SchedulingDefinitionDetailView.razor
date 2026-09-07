@@ -1,0 +1,113 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Admin.Scheduling
+@using System.Globalization
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components
+@using Harborline.UIAdapters.Blazor.Components.DataDisplay
+
+@* The View suffix mirrors the Reports lane, which needs it to avoid colliding with a seam record;
+   the pillar pattern keeps the naming uniform across pillars.
+
+   The metadata list is rendered from the SUMMARY, not the head view, so it appears immediately on
+   selection and the two lanes agree field-for-field with
+   apps/react/src/admin/scheduling/SchedulingDefinitionDetail.tsx. *@
+
+<dl class="happ-meta">
+    <dt>Definition id</dt>
+    <dd>@Summary.Id</dd>
+    <dt>Title</dt>
+    <dd>@Summary.Title</dd>
+    <dt>Head revision</dt>
+    <dd>@Summary.Revision.ToString(CultureInfo.InvariantCulture)</dd>
+    <dt>Updated</dt>
+    <dd>@FormatDate(Summary.UpdatedAt)</dd>
+    <dt>Updated by</dt>
+    <dd>@Summary.UpdatedBy</dd>
+</dl>
+
+@if (StatusLine is not null)
+{
+    <p data-testid="restore-status">@StatusLine</p>
+}
+
+@if (ErrorLine is not null)
+{
+    <p class="happ-error" role="alert">@ErrorLine</p>
+}
+
+@if (Definition is null)
+{
+    <p class="happ-muted">Loading…</p>
+}
+else
+{
+    <h2>Definition</h2>
+    <pre class="happ-json" data-testid="definition-json">@FormatJson(Definition.Definition)</pre>
+}
+
+@if (Versions is null)
+{
+    <p class="happ-muted">Loading…</p>
+}
+else
+{
+    @* The caption gives the history table the same accessible name the React lane's
+       <TableCaption> gives it, so a screen-reader user meets one app, not two. *@
+    <HarborlineTable Density="TableDensity.Small">
+        <HarborlineTableCaption>Revision history</HarborlineTableCaption>
+        <HarborlineTableHead>
+            <HarborlineTableRow>
+                <HarborlineTableHeaderCell>Revision</HarborlineTableHeaderCell>
+                <HarborlineTableHeaderCell>Updated</HarborlineTableHeaderCell>
+                <HarborlineTableHeaderCell>Updated by</HarborlineTableHeaderCell>
+                <HarborlineTableHeaderCell>Actions</HarborlineTableHeaderCell>
+            </HarborlineTableRow>
+        </HarborlineTableHead>
+        <HarborlineTableBody>
+            @foreach (var version in Versions)
+            {
+                <HarborlineTableRow>
+                    <HarborlineTableCell>@version.Revision.ToString(CultureInfo.InvariantCulture)</HarborlineTableCell>
+                    <HarborlineTableCell>@FormatDate(version.UpdatedAt)</HarborlineTableCell>
+                    <HarborlineTableCell>@version.UpdatedBy</HarborlineTableCell>
+                    <HarborlineTableCell>
+                        <button type="button" class="happ-link" @onclick="() => OnRestore.InvokeAsync(version.Revision)">Restore…</button>
+                    </HarborlineTableCell>
+                </HarborlineTableRow>
+            }
+        </HarborlineTableBody>
+    </HarborlineTable>
+}
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+
+    /// <summary>Gets or sets the selected definition head summary.</summary>
+    [Parameter]
+    [EditorRequired]
+    public SchedulingDefinitionSummary Summary { get; set; } = default!;
+
+    /// <summary>Gets or sets the current scheduling-definition view, or null while loading.</summary>
+    [Parameter]
+    public SchedulingDefinitionView? Definition { get; set; }
+
+    /// <summary>Gets or sets the retained revisions, or null while loading.</summary>
+    [Parameter]
+    public IReadOnlyList<SchedulingDefinitionSummary>? Versions { get; set; }
+
+    /// <summary>Gets or sets the restore success message.</summary>
+    [Parameter]
+    public string? StatusLine { get; set; }
+
+    /// <summary>Gets or sets the restore or loading failure message.</summary>
+    [Parameter]
+    public string? ErrorLine { get; set; }
+
+    /// <summary>Gets or sets the callback that requests restoration of a revision.</summary>
+    [Parameter]
+    public EventCallback<int> OnRestore { get; set; }
+
+    private static string FormatJson(JsonElement value) => JsonSerializer.Serialize(value, JsonOptions);
+
+    private static string FormatDate(DateTimeOffset value) =>
+        value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+}

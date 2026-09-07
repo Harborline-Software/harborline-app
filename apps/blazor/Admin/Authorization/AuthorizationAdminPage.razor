@@ -1,0 +1,96 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Admin.Authorization
+@inject IAuthorizationAdminClient Client
+@implements IDisposable
+
+@if (loadError is not null)
+{
+    <h1>Settings › System</h1>
+    <section role="alert">
+        <h2>Unable to load authorization settings</h2>
+        <p>@loadError</p>
+    </section>
+    <button type="button" @onclick="LoadAsync">Retry</button>
+}
+else if (roleDefinitions is null || definitions is null || standings is null)
+{
+    <h1>Settings › System</h1>
+    <p aria-live="polite">Loading authorization settings…</p>
+}
+else
+{
+    <div style="display:grid;gap:2rem;min-width:0">
+        <section aria-labelledby="capability-bindings-heading">
+            <h1>Settings › System</h1>
+            <h2 id="capability-bindings-heading">Authorization capability bindings</h2>
+            @if (definitions.Count == 0)
+            {
+                <p>No authorization capability definitions are available.</p>
+            }
+            else
+            {
+                @foreach (var definition in definitions)
+                {
+                    <CapabilityBindingEditor Definition="definition" RoleDefinitions="roleDefinitions" Saved="UpdateBinding" />
+                }
+            }
+        </section>
+        <AuditorAccessReviewPanel Definitions="definitions" />
+        <StandingCataloguePanel Standings="standings" />
+    </div>
+}
+
+@code {
+    private CancellationTokenSource cancellation = new();
+    private IReadOnlyList<RoleDefinition>? roleDefinitions;
+    private IReadOnlyList<AuthorizationCapabilityDefinition>? definitions;
+    private IReadOnlyList<StandingDefinition>? standings;
+    private string? loadError;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        cancellation.Cancel();
+        cancellation.Dispose();
+        cancellation = new CancellationTokenSource();
+        var requestCancellation = cancellation;
+        roleDefinitions = null;
+        definitions = null;
+        standings = null;
+        loadError = null;
+        try
+        {
+            var rolesTask = Client.ListRoleVocabularyAsync(requestCancellation.Token);
+            var definitionsTask = Client.ListCapabilityDefinitionsAsync(requestCancellation.Token);
+            var standingsTask = Client.ListStandingCatalogueAsync(requestCancellation.Token);
+            await Task.WhenAll(rolesTask, definitionsTask, standingsTask);
+            var catalogue = await definitionsTask;
+            var bindings = await Task.WhenAll(catalogue.Select(row => Client.GetEffectiveBindingAsync(row.DefinitionId, requestCancellation.Token)));
+            roleDefinitions = await rolesTask;
+            definitions = catalogue.Select((row, index) => row with { Binding = bindings[index] }).ToArray();
+            standings = await standingsTask;
+        }
+        catch (OperationCanceledException) when (requestCancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            loadError = exception is AuthorizationAdminException
+                ? exception.Message
+                : "The authorization service could not complete the request. Try again.";
+        }
+    }
+
+    private void UpdateBinding(NarrowAuthorizationBindingResult result)
+    {
+        definitions = definitions?.Select(row => row.DefinitionId == result.DefinitionId
+            ? row with { Binding = new(result.Revision, result.EffectiveRoles, result.Warning) }
+            : row).ToArray();
+    }
+
+    public void Dispose()
+    {
+        cancellation.Cancel();
+        cancellation.Dispose();
+    }
+}

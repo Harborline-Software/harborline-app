@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "framework": "react-native",
+  "targets": ["ios", "android"],
+  "productInterfaceRevision": "happ.preview.1",
+  "capabilityManifestRevision": "app-essential.preview.1",
+  "nativeProjectState": "generation-pending-interface-freeze"
+}

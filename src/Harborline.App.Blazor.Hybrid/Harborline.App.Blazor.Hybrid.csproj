@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Harborline.App.Blazor.Hybrid</PackageId>
+    <Description>Native host interfaces for Harborline .NET MAUI Blazor Hybrid adapters.</Description>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Harborline.App.Abstractions/Harborline.App.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

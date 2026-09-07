@@ -1,0 +1,37 @@
+{
+  "name": "@harborline-software/app-react-web",
+  "version": "0.1.0-preview.1",
+  "private": true,
+  "description": "Harborline App React web application",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "feed": "node scripts/build-local-feed.mjs",
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@harborline-software/contracts": "file:.feed/harborline-software-contracts-0.0.0-alpha.0.tgz",
+    "@harborline-software/ui-react": "file:.feed/harborline-software-ui-react-0.8.0-alpha.tgz",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/user-event": "^14.0.0",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.10"
+  }
+}

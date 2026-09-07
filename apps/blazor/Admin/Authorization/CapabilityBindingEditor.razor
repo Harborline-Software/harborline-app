@@ -1,0 +1,142 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Admin.Authorization
+@using Microsoft.AspNetCore.Components
+@using Harborline.UIAdapters.Blazor.Components.Feedback
+@inject IAuthorizationAdminClient Client
+
+<article aria-labelledby="@($"capability-{Definition.DefinitionId:D}")" style="min-width:0">
+    <h3 id="@($"capability-{Definition.DefinitionId:D}")" style="overflow-wrap:anywhere">@Title</h3>
+    <dl>
+        <dt>Operation</dt><dd style="overflow-wrap:anywhere">@Definition.Atom.Operation</dd>
+        <dt>Scoped atom</dt><dd style="overflow-wrap:anywhere">@($"{Definition.Atom.ScopeType}:{Definition.Atom.ScopeValue}")</dd>
+        <dt>Publisher-offered roles</dt><dd style="overflow-wrap:anywhere">@RoleList(Definition.OfferedRoles)</dd>
+        <dt>Effective roles</dt><dd style="overflow-wrap:anywhere">@RoleList(Definition.Binding.EffectiveRoles)</dd>
+        <dt>Source</dt><dd style="overflow-wrap:anywhere">@Definition.PublisherPackageId · definition revision @Definition.DefinitionRevision</dd>
+    </dl>
+    @if (Definition.Binding.Warning == BindingWarningCode.EmptyBinding)
+    {
+        <p role="alert">Binding saved with warning: no roles are effective for this capability.</p>
+    }
+    <p>Definition @Definition.DefinitionId.ToString("D"); binding revision @Definition.Binding.Revision.</p>
+    <p>Publisher-offered roles are shown below. Only roles still effective in this binding can be selected.</p>
+    <fieldset disabled="@submitting">
+        <legend>Effective roles</legend>
+        @foreach (var role in Definition.OfferedRoles)
+        {
+            var effective = EffectiveRoles.Contains(role);
+            <div>
+                <label>
+                    <input type="checkbox"
+                           checked="@(effective && selectedRoles.Contains(role))"
+                           disabled="@(!effective || submitting)"
+                           @onchange="eventArgs => UpdateSelection(role, eventArgs.Value is true)" />
+                    @RoleLabel(role)
+                </label>
+                @if (!effective)
+                {
+                    <span> — Removed; history only</span>
+                }
+            </div>
+        }
+    </fieldset>
+    <div style="display:flex;flex-wrap:wrap;gap:.75rem;margin-block-start:1rem">
+        <button type="button" disabled="@(submitting || Unchanged)" @onclick="() => RequestNarrow(SelectedEffectiveRoles)">Save narrower binding…</button>
+        <button type="button" disabled="@(submitting || Definition.Binding.EffectiveRoles.Count == 0)" @onclick="() => RequestNarrow([])">Clear all roles…</button>
+    </div>
+    @if (submitting)
+    {
+        <p aria-live="polite">Saving narrower binding…</p>
+    }
+    @if (error is not null)
+    {
+        <p role="alert">@error</p>
+    }
+</article>
+
+<HarborlineConfirmDialog Open="@(pendingRoles is not null)"
+                       OpenChanged="@UpdateConfirmOpen"
+                       Title="@(pendingRoles?.Count == 0 ? "Clear all roles?" : "Narrow capability roles?")"
+                       Description="@Confirmation"
+                       ConfirmLabel="@(pendingRoles?.Count == 0 ? "Clear all roles" : "Save narrower binding")"
+                       Variant="ConfirmDialogVariant.Destructive"
+                       OnConfirm="@ConfirmNarrowingAsync" />
+
+@code {
+    private const string Confirmation = "Removed roles, including the last role, cannot be restored through this definition revision. Continue with this narrower binding?";
+    private const string Reason = "Narrowed in the Harborline Authorization editor.";
+    private HashSet<RoleReference> selectedRoles = [];
+    private IReadOnlyList<RoleReference>? pendingRoles;
+    private long loadedRevision = -1;
+    private bool submitting;
+    private string? error;
+
+    [Parameter, EditorRequired]
+    public AuthorizationCapabilityDefinition Definition { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<RoleDefinition> RoleDefinitions { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<NarrowAuthorizationBindingResult> Saved { get; set; }
+
+    private string Title => $"{Definition.Atom.Operation} · {Definition.Atom.ScopeType}:{Definition.Atom.ScopeValue}";
+    private HashSet<RoleReference> EffectiveRoles => Definition.Binding.EffectiveRoles.ToHashSet();
+    private IReadOnlyList<RoleReference> SelectedEffectiveRoles => Definition.Binding.EffectiveRoles.Where(selectedRoles.Contains).ToArray();
+    private bool Unchanged => SelectedEffectiveRoles.Count == Definition.Binding.EffectiveRoles.Count;
+
+    protected override void OnParametersSet()
+    {
+        if (loadedRevision != Definition.Binding.Revision)
+        {
+            loadedRevision = Definition.Binding.Revision;
+            selectedRoles = Definition.Binding.EffectiveRoles.ToHashSet();
+        }
+    }
+
+    private string RoleLabel(RoleReference role)
+    {
+        var definition = RoleDefinitions.FirstOrDefault(candidate => candidate.Role == role);
+        var qualified = $"{role.Vocabulary}/{role.Name}";
+        return definition is null ? qualified : $"{definition.DisplayName} ({qualified})";
+    }
+
+    private string RoleList(IReadOnlyList<RoleReference> roles) =>
+        roles.Count == 0 ? "None" : string.Join(", ", roles.Select(RoleLabel));
+
+    private void UpdateSelection(RoleReference role, bool selected)
+    {
+        if (selected) selectedRoles.Add(role); else selectedRoles.Remove(role);
+    }
+
+    private void RequestNarrow(IReadOnlyList<RoleReference> roles)
+    {
+        pendingRoles = roles.ToArray();
+        error = null;
+    }
+
+    private Task UpdateConfirmOpen(bool open)
+    {
+        if (!open) pendingRoles = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task ConfirmNarrowingAsync()
+    {
+        var roles = pendingRoles;
+        if (roles is null) return;
+        pendingRoles = null;
+        submitting = true;
+        error = null;
+        try
+        {
+            await Saved.InvokeAsync(await Client.NarrowCapabilityBindingAsync(Definition.DefinitionId, roles, Reason));
+        }
+        catch (AuthorizationAdminException exception)
+        {
+            error = exception.Message;
+        }
+        finally
+        {
+            submitting = false;
+        }
+    }
+}

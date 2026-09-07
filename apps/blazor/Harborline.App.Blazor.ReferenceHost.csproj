@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <!-- src/Harborline.App.Blazor was referenced here but never rendered: this host composes the
+         platform's modules directly (see Shell.razor). An unused reference implies a dependency
+         that does not exist. That package still has a consumer in tests/package-consumer. -->
+    <!-- The platform UI package, consumed from the local feed in nuget.config. -->
+    <PackageReference Include="Harborline.UIAdapters.Blazor" />
+  </ItemGroup>
+</Project>

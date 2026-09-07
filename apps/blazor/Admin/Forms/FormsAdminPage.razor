@@ -1,0 +1,180 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Admin.Forms
+@using Microsoft.AspNetCore.Components
+@using Harborline.UIAdapters.Blazor.Components.DataDisplay
+@using Harborline.UIAdapters.Blazor.Components.Feedback
+@using Harborline.UIAdapters.Blazor.Components.Layout
+@inject IFormsAdminClient Client
+
+<h1>Forms</h1>
+
+@if (definitions is null)
+{
+    @if (loadError is null)
+    {
+        <p class="happ-muted">Loading…</p>
+    }
+    else
+    {
+        <p class="happ-error" role="alert">@loadError</p>
+    }
+}
+else
+{
+    <HarborlineDataGrid TRow="FormDefinitionSummary"
+                      Rows="@definitions"
+                      GetRowId="@(d => $"{d.FormId}@{d.Version}")"
+                      Columns="@columns"
+                      Zebra="true"
+                      AccessibleLabel="Form definitions"
+                      Empty="No form definitions for this tenant." />
+}
+
+@if (selected is not null)
+{
+    <HarborlineDetailPanel Label="@($"Form definition {selected.FormId}")"
+                         Open="true"
+                         OpenChanged="@CloseDetailAsync"
+                         Width="420"
+                         RailCapable="@PanelRailCapable">
+        <FormDefinitionDetail Definition="selected"
+                              Versions="versions"
+                              StatusLine="@statusLine"
+                              ErrorLine="@restoreError"
+                              OnRestore="@(v => pendingRestore = v)" />
+    </HarborlineDetailPanel>
+}
+
+<HarborlineConfirmDialog Open="@(pendingRestore is not null)"
+                       OpenChanged="@UpdateConfirmOpen"
+                       Title="@RestoreTitle"
+                       Description="@RestoreDescription"
+                       ConfirmLabel="Restore as draft"
+                       OnConfirm="@RestoreAsync" />
+
+@code {
+    private IReadOnlyList<FormDefinitionSummary>? definitions;
+    private string? loadError;
+    private FormDefinitionSummary? selected;
+    private IReadOnlyList<FormVersionSummary>? versions;
+    private string? pendingRestore;
+    private string? statusLine;
+    private string? restoreError;
+
+    private readonly IReadOnlyList<DataGridColumn<FormDefinitionSummary>> columns;
+
+    /// <summary>
+    /// Gets or sets whether the detail panel may collapse to a rail.
+    /// </summary>
+    [Parameter]
+    public bool? PanelRailCapable { get; set; }
+
+    public FormsAdminPage()
+    {
+        columns =
+        [
+            new DataGridColumn<FormDefinitionSummary>(
+                "key",
+                "Key",
+                d => d.FormId,
+                CellTemplate: row => @<button type="button" class="happ-link" @onclick="() => SelectAsync(row)">@row.FormId</button>, RemovalPriority: 40),
+            new DataGridColumn<FormDefinitionSummary>("title", "Title", d => FormatIt(d.Title), RemovalPriority: 30),
+            new DataGridColumn<FormDefinitionSummary>("version", "Version", d => d.Version, RemovalPriority: 20),
+            new DataGridColumn<FormDefinitionSummary>("cascadeLayer", "Cascade layer", d => d.CascadeLayer ?? "—", RemovalPriority: 10),
+        ];
+    }
+
+    private string RestoreTitle => $"Restore {pendingRestore ?? string.Empty}?";
+
+    private string RestoreDescription => selected is null || pendingRestore is null
+        ? string.Empty
+        : $"Creates a new draft of '{selected.FormId}' derived from {pendingRestore}. Nothing is published and history is never modified. The draft syncs to peers.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            definitions = await Client.ListDefinitionsAsync();
+        }
+        catch (FormsAdminException exception)
+        {
+            loadError = exception.Message;
+        }
+    }
+
+    private async Task SelectAsync(FormDefinitionSummary row)
+    {
+        selected = row;
+        versions = null;
+        statusLine = null;
+        restoreError = null;
+        try
+        {
+            versions = await Client.ListVersionsAsync(row.FormId);
+        }
+        catch (FormsAdminException exception)
+        {
+            restoreError = exception.Message;
+        }
+    }
+
+    private Task CloseDetailAsync(bool open)
+    {
+        if (!open)
+        {
+            selected = null;
+            versions = null;
+            statusLine = null;
+            restoreError = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task UpdateConfirmOpen(bool open)
+    {
+        if (!open)
+        {
+            pendingRestore = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task RestoreAsync()
+    {
+        var v = pendingRestore;
+        var s = selected;
+        if (v is null || s is null)
+        {
+            return;
+        }
+
+        pendingRestore = null;
+        restoreError = null;
+        try
+        {
+            var result = await Client.RestoreVersionAsync(s.FormId, v);
+            statusLine = $"Draft {result.Version} created from {v}.";
+            versions = await Client.ListVersionsAsync(s.FormId);
+        }
+        catch (FormsAdminException exception)
+        {
+            restoreError = exception.Message;
+        }
+    }
+
+    private static string FormatIt(InternationalizedText? text)
+    {
+        if (text is null)
+        {
+            return "—";
+        }
+
+        if (text.Values.TryGetValue(text.DefaultLocale, out var preferred))
+        {
+            return preferred;
+        }
+
+        return text.Values.Values.FirstOrDefault() ?? "—";
+    }
+}

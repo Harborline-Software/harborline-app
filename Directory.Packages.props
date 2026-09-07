@@ -1,0 +1,23 @@
+<Project>
+  <!-- Ticket 143 (platform) makes every platform package version a hash of its packable content,
+       so there is no fixed version to pin: the version is whatever the feed was packed at.
+       apps/blazor/scripts/build-local-feed.mjs writes it here after packing, computing it with the
+       platform's own tooling/package-version.mjs - the same function the platform's consumer
+       fixtures use - so a repack changes the pin with no edit to this file.
+       A tree with no feed falls back to the base version, which no feed carries: restore then
+       fails by name (NU1102) instead of resolving a stale extraction from the global cache. -->
+  <Import Project="$(MSBuildThisFileDirectory)apps/blazor/.feed/packed-version.props" Condition="Exists('$(MSBuildThisFileDirectory)apps/blazor/.feed/packed-version.props')" />
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <HarborlinePackedVersion Condition="'$(HarborlinePackedVersion)' == ''">0.0.0-alpha.0</HarborlinePackedVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="11.0.0-preview.7.26381.103" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <PackageVersion Include="bunit" Version="2.9.0" />
+    <PackageVersion Include="AngleSharp" Version="1.7.2" />
+    <PackageVersion Include="Harborline.UIAdapters.Blazor" Version="$(HarborlinePackedVersion)" />
+  </ItemGroup>
+</Project>

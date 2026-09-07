@@ -1,0 +1,52 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Admin.Authorization
+@using Microsoft.AspNetCore.Components
+
+@* Ticket 217: the Auditor's single capability is DERIVED from the catalogue the api serves (one
+   binding view per definition, publisher ceiling plus the tenant's effective roles), never from a
+   compiled permission composition. Filtering the catalogue by effective roles is the whole display;
+   when the catalogue does not yield exactly one row the surface says so instead of hiding it. *@
+
+<section aria-labelledby="auditor-access-review-heading">
+    <h2 id="auditor-access-review-heading">Access review · Auditor</h2>
+    @{ var held = Held(Definitions); }
+    @if (held.Count != 1)
+    {
+        <p role="alert">Access review: the Auditor should hold exactly one authorization capability, but the catalogue derives @held.Count. Review the capability bindings below.</p>
+    }
+    @if (held.Count == 0)
+    {
+        <p>The catalogue derives no capability for the Auditor.</p>
+    }
+    else
+    {
+        @foreach (var definition in held)
+        {
+            <article aria-labelledby="@($"auditor-capability-{definition.DefinitionId}")" style="min-width:0">
+                <h3 id="@($"auditor-capability-{definition.DefinitionId}")" style="overflow-wrap:anywhere">@definition.Atom.Operation</h3>
+                <dl>
+                    <dt>Operation</dt>
+                    <dd style="overflow-wrap:anywhere">@($"{definition.Atom.Operation} · {definition.Atom.ScopeType}:{definition.Atom.ScopeValue}")</dd>
+                    <dt>Publisher ceiling</dt>
+                    <dd style="overflow-wrap:anywhere">@($"{definition.PublisherPackageId} offers {RoleList(definition.OfferedRoles)}")</dd>
+                    <dt>Effective roles</dt>
+                    <dd style="overflow-wrap:anywhere">@RoleList(definition.Binding.EffectiveRoles)</dd>
+                    <dt>Binding revision</dt>
+                    <dd>@definition.Binding.Revision</dd>
+                </dl>
+            </article>
+        }
+    }
+</section>
+
+@code {
+    public static readonly RoleReference AuditorRole = new("sys.platform-roles", "auditor");
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<AuthorizationCapabilityDefinition> Definitions { get; set; } = [];
+
+    public static IReadOnlyList<AuthorizationCapabilityDefinition> Held(IReadOnlyList<AuthorizationCapabilityDefinition> definitions) =>
+        definitions.Where(definition => definition.Binding.EffectiveRoles.Contains(AuditorRole)).ToArray();
+
+    private static string RoleList(IReadOnlyList<RoleReference> roles) =>
+        roles.Count == 0 ? "none" : string.Join(", ", roles.Select(role => $"{role.Vocabulary}:{role.Name}"));
+}

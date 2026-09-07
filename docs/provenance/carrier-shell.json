@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "module": "harborline.app.chrome.blazor",
+  "sourceRepository": "https://github.com/Harborline-Software/shipyard",
+  "sourceCommit": "a5036ff8b500e0d857d7e0a698408e7cf7f6cf31",
+  "sourcePaths": [
+    "packages/ui-adapters-blazor/Shell/ShipyardAppShell.razor",
+    "packages/ui-adapters-blazor/Shell/ShipyardAppShell.razor.css",
+    "packages/ui-adapters-blazor/Shell/ShipyardAppShellNavGroup.razor",
+    "packages/ui-adapters-blazor/Shell/ShipyardAppShellNavLink.razor"
+  ],
+  "disposition": "carrier-derived-preview-with-localizable-shell-text-and-harborline-namespace",
+  "authority": "Shipyard retained until Harborline App cutover"
+}

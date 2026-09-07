@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Harborline.App.Testing</PackageId>
+    <Description>Explicit test adapters and fixtures for Harborline App consumers.</Description>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Harborline.App.Abstractions/Harborline.App.Abstractions.csproj" />
+    <ProjectReference Include="../Harborline.App.Blazor.Hybrid/Harborline.App.Blazor.Hybrid.csproj" />
+  </ItemGroup>
+</Project>

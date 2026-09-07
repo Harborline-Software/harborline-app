@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <PackageId>Harborline.App.Blazor</PackageId>
+    <Description>Harborline reference-app shell and Blazor composition.</Description>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+    <ProjectReference Include="../Harborline.App.Abstractions/Harborline.App.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

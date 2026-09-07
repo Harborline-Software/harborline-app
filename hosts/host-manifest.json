@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "productInterfaceRevision": "happ.preview.1",
+  "capabilityManifestRevision": "app-essential.preview.1",
+  "hosts": [
+    {"id":"react-web","family":"react","targets":["browser"],"state":"source-migration-pending"},
+    {"id":"react-tauri","family":"react","targets":["windows","macos","linux"],"state":"source-migration-pending"},
+    {"id":"react-native","family":"react","targets":["ios","android"],"state":"envelope-created"},
+    {"id":"blazor-web","family":"blazor","targets":["browser"],"state":"reference-envelope-created"},
+    {"id":"blazor-maui","family":"blazor","targets":["windows","mac-catalyst","ios","android"],"state":"envelope-created-toolchain-pending"}
+  ]
+}

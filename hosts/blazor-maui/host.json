@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "framework": "dotnet-maui-blazor-hybrid",
+  "targets": ["windows", "mac-catalyst", "ios", "android"],
+  "productInterfaceRevision": "happ.preview.1",
+  "capabilityManifestRevision": "app-essential.preview.1",
+  "nativeProjectState": "maui-workload-and-signing-pending"
+}
