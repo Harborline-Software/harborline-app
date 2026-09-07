@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "repository": "Harborline-Software/harborline-platform-archive",
-  "commit": "95d370f41fbd28e8e495f674353feb57f216be81",
-  "recordedAt": "2026-09-06 (platform#91 ticket 143: package versions derive from the packable content)",
+  "repository": "Harborline-Software/harborline-platform",
+  "commit": "44cd8a96d250429623d5a7770dcba7a12c5eb02f",
+  "recordedAt": "2026-09-07 (253: first proven public platform landing)",
   "why": [
     "Both app lanes consume the platform's UI packages from a local feed built out of a sibling",
     "platform checkout. The feed directories are gitignored, so a clean CI runner had no package",
@@ -38,13 +38,6 @@
     "The failing producer check was observed while moving this pin,",
     "then this block was updated from the assemblies emitted by the pinned feed build."
   ],
-  "ciSecret": {
-    "name": "HARBORLINE_PLATFORM_READ_TOKEN",
-    "repository": "Harborline-Software/harborline-app",
-    "why": "harborline-platform is private, so both CI jobs need a read-only token to check it out.",
-    "howToSet": "bash eng/add-platform-read-token.sh - a guided wizard that walks the PAT form, then writes the secret straight from your shell via gh. The value is never echoed and never written to a file.",
-    "scope": "Fine-grained PAT, resource owner Harborline-Software, Only select repositories -> harborline-platform, Repository permissions -> Contents: Read-only. Nothing wider: this token only ever reads one repository's files."
-  },
   "packageVersion": [
     "There is no package VERSION to pin. Platform ticket 143 derives every package version from a",
     "hash of the platform's packable content, so a repack of a changed tree is a new version and a",
