@@ -30,9 +30,11 @@ export function AuthorizationTrace({ decision }: { decision?: RecordedDecision }
   const valid = result?.version === 1 && result.steps.length === 4
     && result.steps.every((step, index) => step.ordinal === index + 1 && step.stage === stages[index])
   const deciding = result?.steps[1]?.facts.find(fact => fact.startsWith('deciding:'))?.slice(9)
+  // No linked decision, no disclosure: the affordance must never promise an answer it cannot give (163 review 1).
+  if (!decision) return null
   return <details onToggle={event => { if (event.currentTarget.open && result === null && error === null) void load() }}>
     <summary>Why can I do this?</summary>
-    {!decision ? <p>A recorded decision is not linked to this result.</p> : <>
+    {<>
       {loading && <p role="status">Loading authorization trace…</p>}
       {error && <p role="alert">{error}</p>}
       {result?.availability === 2 ? <p role="alert">You do not have permission to read this authorization trace.</p>

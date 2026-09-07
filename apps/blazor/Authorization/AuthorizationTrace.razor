@@ -1,13 +1,10 @@
 @namespace Harborline.App.Blazor.ReferenceHost.Authorization
 
+@* No linked decision, no disclosure: the affordance must never promise an answer it cannot give (163 review 1). *@
+@if (Decision is not null)
+{
 <details @ontoggle="LoadAsync">
     <summary>Why can I do this?</summary>
-    @if (Decision is null)
-    {
-        <p>A recorded decision is not linked to this result.</p>
-    }
-    else
-    {
         @if (loading) { <p role="status">Loading authorization trace…</p> }
         @if (error is not null) { <p role="alert">@error</p> }
         @if (result?.Availability == 2)
@@ -40,8 +37,9 @@
         {
             <button type="button" @onclick="RetryAsync">Retry trace read</button>
         }
-    }
+    
 </details>
+}
 
 @code {
     [Parameter] public RecordedDecision? Decision { get; set; }
