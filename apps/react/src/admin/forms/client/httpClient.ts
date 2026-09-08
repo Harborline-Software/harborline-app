@@ -1,4 +1,5 @@
 import { readAdminError } from '../../adminErrorEnvelope'
+import { AuthorizationAdminError } from '../../authorization/client/types'
 import { FormsAdminError } from './types'
 import type { FormDefinitionSummary, FormsAdminClient, FormVersionSummary, InternationalizedText, RestoreResult } from './types'
 
@@ -62,6 +63,19 @@ export function createHttpFormsAdminClient(opts?: HttpFormsAdminClientOptions): 
   }
 
   return {
+    async renderForm(formId, signal) {
+      return getJson(`/api/local-node/forms/${encodeURIComponent(formId)}`, signal)
+    },
+    async submitForm(formId, body, signal) {
+      const response = await request(`${baseUrl}/api/local-node/forms/${encodeURIComponent(formId)}/submit`, {
+        method: 'POST', headers: { ...opts?.headers, 'Content-Type': 'application/json' }, body, signal,
+      })
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({})) as { code?: string; auditId?: string }
+        throw new AuthorizationAdminError(response.status, error.code ?? `http.${response.status}`, error.auditId)
+      }
+      return response.json()
+    },
     async listDefinitions(signal) {
       const rows = await getJson<readonly WireFormDefinitionSummary[]>('/api/local-node/forms/definitions', signal)
       return rows.map((row): FormDefinitionSummary => ({

@@ -1,0 +1,65 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Admin.Forms
+@using System.Text.Json
+@using Harborline.App.Blazor.ReferenceHost.Admin.Authorization
+@using Harborline.App.Blazor.ReferenceHost.Authorization
+@inject IFormsAdminClient Client
+@inject IAuthorizationAdminClient Authorization
+@implements IDisposable
+
+<section aria-label="Grant a role">
+    <AuthorizationTrace @key="auditId" Decision="@(auditId is { } id ? new RecordedDecision(id, Authorization.ReadTraceAsync) : null)" />
+    @if (error is not null) { <div role="alert">@error<button type="button" @onclick="LoadAsync">Reload form</button></div> }
+    @if (view is null) { @if (error is null) { <p role="status">Loading form…</p> } }
+    else
+    {
+        <form aria-label="@Text(view.Title)" @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+            <h2>@Text(view.Title)</h2>
+            @foreach (var section in view.Sections)
+            {
+                <fieldset disabled="@busy"><legend>@Text(section.Title)</legend>
+                @foreach (var field in section.Fields.Where(f => f.IsReadable && f.Rules?.Visible != false))
+                {
+                    <p><label>@Text(field.Label)<input name="@field.Name" @bind="values[field.Name]" required="@(field.Rules?.Required == true)" readonly="@(field.Rules?.ReadOnly == true)" /></label></p>
+                }
+                </fieldset>
+            }
+            <button type="submit" disabled="@busy">@(busy ? "Submitting…" : "Submit")</button>
+        </form>
+    }
+    @if (receipt is not null) { <p role="status">@receipt</p> }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string FormId { get; set; } = "";
+    [Parameter] public EventCallback OnSubmitted { get; set; }
+    private RuntimeForm? view;
+    private string? error, receipt;
+    private Guid? auditId;
+    private bool busy;
+    private Dictionary<string, string> values = [];
+    private readonly CancellationTokenSource cancellation = new();
+    private static string Text(InternationalizedText? value) => value?.Values.GetValueOrDefault(value.DefaultLocale) ?? "";
+    private string? loadedFormId;
+    protected override Task OnParametersSetAsync() => loadedFormId == FormId ? Task.CompletedTask : LoadAsync();
+    private async Task LoadAsync()
+    {
+        loadedFormId = FormId; view = null; error = null; receipt = null; auditId = null;
+        try {
+            view = await Client.RenderFormAsync(FormId, cancellation.Token);
+            values = view.Sections.SelectMany(s => s.Fields).Where(f => f.IsReadable && f.Rules?.Visible != false).ToDictionary(f => f.Name, f => f.Value ?? "");
+        } catch (Exception failure) when (failure is FormsAdminException or HttpRequestException or JsonException or OperationCanceledException) { if (!cancellation.IsCancellationRequested) error = failure.Message; }
+    }
+    private async Task SubmitAsync()
+    {
+        if (busy || view is null) return;
+        busy = true; error = null; receipt = null; auditId = null;
+        try {
+            var body = JsonSerializer.Serialize(values, new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+            var result = await Client.SubmitFormAsync(view.FormId, body, cancellation.Token);
+            if (!cancellation.IsCancellationRequested) { receipt = result.Projection is null ? "Submission saved." : $"Submission {result.Projection}. {string.Join("; ", result.Skips?.Select(s => $"{s.Field}: {s.Reason}") ?? [])}"; await OnSubmitted.InvokeAsync(); }
+        } catch (AuthorizationAdminException failure) { error = failure.Message; auditId = failure.AuditId; }
+        catch (Exception failure) when (failure is FormsAdminException or HttpRequestException or JsonException or OperationCanceledException) { if (!cancellation.IsCancellationRequested) error = failure.Message; }
+        finally { busy = false; }
+    }
+    public void Dispose() { cancellation.Cancel(); cancellation.Dispose(); }
+}

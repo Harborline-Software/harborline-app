@@ -5,6 +5,8 @@ namespace Harborline.App.Blazor.ReferenceHost.Admin.Forms;
 /// </summary>
 public sealed class FixtureFormsAdminClient : IFormsAdminClient
 {
+    public Task<RuntimeForm> RenderFormAsync(string formId, CancellationToken ct = default) => throw new FormsAdminException(503, "Form filling requires the local node.", "forms.fixture_unsupported");
+    public Task<RuntimeReceipt> SubmitFormAsync(string formId, string body, CancellationToken ct = default) => throw new FormsAdminException(503, "Form filling requires the local node.", "forms.fixture_unsupported");
     private static readonly DateTimeOffset RestoreEpoch = DateTimeOffset.Parse("2026-08-15T00:00:00Z");
     private readonly object gate = new();
     private readonly IReadOnlyList<FormDefinitionSummary> definitions =

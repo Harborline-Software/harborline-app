@@ -1,10 +1,13 @@
 @namespace Harborline.App.Blazor.ReferenceHost.Admin.Authorization
 @using Harborline.App.Blazor.ReferenceHost.Authorization
+@using Harborline.App.Blazor.ReferenceHost.Admin.Forms
 @inject IAuthorizationAdminClient Client
 @implements IDisposable
 
 <section aria-labelledby="access-holders-heading" style="overflow-wrap:anywhere">
     <h1 id="access-holders-heading">Holders</h1>
+    <button type="button" aria-expanded="@granting" @onclick="() => granting = !granting">Grant a role</button>
+    @if (granting) { <PackForm FormId="access.grant-a-role" OnSubmitted="LoadAsync" /> }
     @if (error is not null)
     {
         <AuthorizationTrace @key="refusalId" Decision="Trace" />
@@ -33,6 +36,7 @@
 
 @code {
     private IReadOnlyList<AccessHolder>? holders;
+    private bool granting;
     private Guid? refusalId;
     private RecordedDecision? Trace => refusalId is { } id ? new(id, Client.ReadTraceAsync) : null;
     private string? error;

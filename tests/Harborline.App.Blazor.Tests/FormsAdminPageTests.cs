@@ -152,6 +152,8 @@ public sealed class FormsAdminPageTests : BunitContext
 
     private sealed class SpyFormsAdminClient : IFormsAdminClient
     {
+        public Task<RuntimeForm> RenderFormAsync(string formId, CancellationToken ct = default) => inner.RenderFormAsync(formId, ct);
+        public Task<RuntimeReceipt> SubmitFormAsync(string formId, string body, CancellationToken ct = default) => inner.SubmitFormAsync(formId, body, ct);
         private readonly FixtureFormsAdminClient inner = new();
 
         public int ListVersionsCalls { get; private set; }

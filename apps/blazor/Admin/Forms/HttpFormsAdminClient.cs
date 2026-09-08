@@ -8,6 +8,26 @@ namespace Harborline.App.Blazor.ReferenceHost.Admin.Forms;
 /// </summary>
 public sealed class HttpFormsAdminClient(HttpClient http) : IFormsAdminClient
 {
+    public async Task<RuntimeForm> RenderFormAsync(string formId, CancellationToken ct = default)
+    {
+        using var response = await http.GetAsync($"api/local-node/forms/{Uri.EscapeDataString(formId)}", ct);
+        await EnsureSuccessAsync(response, ct);
+        return await response.Content.ReadFromJsonAsync<RuntimeForm>(JsonOptions, ct) ?? throw new JsonException("The form response was empty.");
+    }
+    public async Task<RuntimeReceipt> SubmitFormAsync(string formId, string body, CancellationToken ct = default)
+    {
+        using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        using var response = await http.PostAsync($"api/local-node/forms/{Uri.EscapeDataString(formId)}/submit", content, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            JsonElement error = default;
+            try { error = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions, ct); } catch (JsonException) { }
+            var code = error.ValueKind == JsonValueKind.Object && error.TryGetProperty("code", out var c) ? c.GetString() : null;
+            Guid? auditId = error.ValueKind == JsonValueKind.Object && error.TryGetProperty("auditId", out var id) && id.ValueKind == JsonValueKind.String && id.TryGetGuid(out var parsed) ? parsed : null;
+            throw new Authorization.AuthorizationAdminException((int)response.StatusCode, code ?? $"http.{(int)response.StatusCode}", auditId);
+        }
+        return await response.Content.ReadFromJsonAsync<RuntimeReceipt>(JsonOptions, ct) ?? throw new JsonException("The submission response was empty.");
+    }
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,

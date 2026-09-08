@@ -42,7 +42,18 @@ export class FormsAdminError extends Error {
 }
 
 export interface FormsAdminClient {
+  renderForm(formId: string, signal?: AbortSignal): Promise<FormView>
+  submitForm(formId: string, body: string, signal?: AbortSignal): Promise<FormReceipt>
   listDefinitions(signal?: AbortSignal): Promise<readonly FormDefinitionSummary[]>
   listVersions(formId: string, signal?: AbortSignal): Promise<readonly FormVersionSummary[]>
   restoreVersion(formId: string, version: string, signal?: AbortSignal): Promise<RestoreResult>
 }
+
+export interface FormView {
+  formId: string; version: string; title: InternationalizedText | null
+  sections: { id: string; title: InternationalizedText; fields: {
+    name: string; label: InternationalizedText; isReadable: boolean; value: string | null
+    rules?: { visible: boolean; required: boolean; readOnly: boolean }
+  }[] }[]
+}
+export interface FormReceipt { instanceId: string; projection?: string; skips?: { reason: string; field: string }[] }

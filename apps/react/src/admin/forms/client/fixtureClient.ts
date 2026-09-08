@@ -59,6 +59,8 @@ export function createFixtureFormsAdminClient(): FormsAdminClient {
   let restoreCounter = 0
 
   return {
+    async renderForm() { throw new FormsAdminError(503, 'Form filling requires the local node.', 'forms.fixture_unsupported') },
+    async submitForm() { throw new FormsAdminError(503, 'Form filling requires the local node.', 'forms.fixture_unsupported') },
     async listDefinitions() {
       return definitions.map(row => ({ ...row, title: row.title ? { ...row.title, values: { ...row.title.values } } : null }))
     },

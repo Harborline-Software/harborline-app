@@ -9,6 +9,7 @@ import { FormsAdminPage } from '../FormsAdminPage'
 function createSpyClient() {
   const fixture = createFixtureFormsAdminClient()
   return {
+    renderForm: fixture.renderForm, submitForm: fixture.submitForm,
     listDefinitions: vi.fn((signal?: AbortSignal) => fixture.listDefinitions(signal)),
     listVersions: vi.fn((formId: string, signal?: AbortSignal) => fixture.listVersions(formId, signal)),
     restoreVersion: vi.fn((formId: string, version: string, signal?: AbortSignal) => fixture.restoreVersion(formId, version, signal)),

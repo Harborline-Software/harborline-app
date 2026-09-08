@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { PackForm } from '../forms/PackForm'
 import { AuthorizationTrace } from '../../authorization/AuthorizationTrace'
 import { useAuthorizationAdminClient } from './AuthorizationAdminClientContext'
 import { AuthorizationAdminError, type AccessHolder } from './client'
@@ -9,6 +10,7 @@ export function AccessHoldersPage() {
   const [refusalId, setRefusalId] = useState<string>()
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
+  const [granting, setGranting] = useState(false)
   useEffect(() => {
     const abort = new AbortController()
     setHolders(null); setError(null); setRefusalId(undefined)
@@ -25,6 +27,8 @@ export function AccessHoldersPage() {
   }, [client, attempt])
   return <section aria-labelledby="access-holders-heading" style={{ overflowWrap: 'anywhere' }}>
     <h1 id="access-holders-heading">Holders</h1>
+    <button type="button" aria-expanded={granting} onClick={() => setGranting(value => !value)}>Grant a role</button>
+    {granting && <PackForm formId="access.grant-a-role" onSubmitted={() => setAttempt(value => value + 1)} />}
     <AuthorizationTrace key={refusalId} decision={refusalId ? { auditId: refusalId, read: client.readTrace } : undefined} />
     {error ? <div role="alert"><p>{error}</p><button type="button" onClick={() => setAttempt(value => value + 1)}>Retry holders</button></div>
       : holders === null ? <p role="status">Loading holders…</p>

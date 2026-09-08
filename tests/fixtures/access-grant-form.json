@@ -1,0 +1,107 @@
+{
+  "formId": "access.grant-a-role",
+  "version": "1.0.0",
+  "title": {
+    "defaultLocale": "en",
+    "values": {
+      "en": "Grant a role"
+    }
+  },
+  "sections": [
+    {
+      "id": "grant",
+      "title": {
+        "defaultLocale": "en",
+        "values": {
+          "en": "Grant a role"
+        }
+      },
+      "fields": [
+        {
+          "name": "person",
+          "label": {
+            "defaultLocale": "en",
+            "values": {
+              "en": "Person"
+            }
+          },
+          "controlHint": "text",
+          "isReadable": true,
+          "value": null
+        },
+        {
+          "name": "role",
+          "label": {
+            "defaultLocale": "en",
+            "values": {
+              "en": "Role"
+            }
+          },
+          "controlHint": "text",
+          "isReadable": true,
+          "value": null
+        },
+        {
+          "name": "scope",
+          "label": {
+            "defaultLocale": "en",
+            "values": {
+              "en": "Scope"
+            }
+          },
+          "controlHint": "text",
+          "isReadable": true,
+          "value": null
+        },
+        {
+          "name": "residency",
+          "label": {
+            "defaultLocale": "en",
+            "values": {
+              "en": "Residency"
+            }
+          },
+          "controlHint": "select",
+          "isReadable": true,
+          "value": null
+        },
+        {
+          "name": "effectiveFrom",
+          "label": {
+            "defaultLocale": "en",
+            "values": {
+              "en": "Effective from"
+            }
+          },
+          "controlHint": "text",
+          "isReadable": true,
+          "value": null
+        },
+        {
+          "name": "effectiveTo",
+          "label": {
+            "defaultLocale": "en",
+            "values": {
+              "en": "Effective to"
+            }
+          },
+          "controlHint": "text",
+          "isReadable": true,
+          "value": null
+        },
+        {
+          "name": "reason",
+          "label": {
+            "defaultLocale": "en",
+            "values": {
+              "en": "Reason"
+            }
+          },
+          "controlHint": "select",
+          "isReadable": true,
+          "value": null
+        }
+      ]
+    }
+  ]
+}

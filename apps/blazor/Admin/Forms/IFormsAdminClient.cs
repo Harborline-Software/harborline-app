@@ -5,6 +5,8 @@ namespace Harborline.App.Blazor.ReferenceHost.Admin.Forms;
 /// </summary>
 public interface IFormsAdminClient
 {
+    Task<RuntimeForm> RenderFormAsync(string formId, CancellationToken ct = default);
+    Task<RuntimeReceipt> SubmitFormAsync(string formId, string body, CancellationToken ct = default);
     /// <summary>Lists the published form-definition heads.</summary>
     Task<IReadOnlyList<FormDefinitionSummary>> ListDefinitionsAsync(CancellationToken ct = default);
 
