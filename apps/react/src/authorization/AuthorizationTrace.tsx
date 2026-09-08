@@ -1,7 +1,8 @@
 import { useState } from 'react'
+import { AuthorizationAdminError } from '../admin/authorization/client/types'
 
-// Mirrors kernel-audit/AuthorizationTraceReader.cs. The host supplies the authorized
-// read for an audit entry; this surface never evaluates permissions or invents a route.
+// Mirrors GET /api/local-node/authorization/traces/{auditId}.
+// This surface renders recorded evidence without evaluating permissions.
 export interface AuthorizationTraceRead {
   availability: number
   version: number | null
@@ -24,7 +25,10 @@ export function AuthorizationTrace({ decision }: { decision?: RecordedDecision }
     setResult(null)
     setError(null)
     try { setResult(await decision.read(decision.auditId)) }
-    catch { setError('Unable to read the authorization trace. Try again.') }
+    catch (failure) {
+      if (failure instanceof AuthorizationAdminError && failure.status === 403) setResult({ availability: 2, version: null, steps: [] })
+      else setError('Unable to read the authorization trace. Try again.')
+    }
     finally { setLoading(false) }
   }
   const valid = result?.version === 1 && result.steps.length === 4

@@ -11,17 +11,20 @@ const REASON = 'Narrowed in the Harborline Authorization editor.'
 
 export interface CapabilityBindingEditorProps {
   readonly decisionTrace?: RecordedDecision
+  readonly readTrace?: RecordedDecision['read']
   readonly definition: AuthorizationCapabilityDefinition
   readonly roleDefinitions: readonly RoleDefinition[]
   readonly onNarrow: (definitionId: string, selectedRoles: readonly RoleReference[], reason: string) => Promise<NarrowAuthorizationBindingResult>
   readonly onSaved: (result: NarrowAuthorizationBindingResult) => void
 }
 
-export function CapabilityBindingEditor({ definition, roleDefinitions, onNarrow, onSaved, decisionTrace }: CapabilityBindingEditorProps) {
+export function CapabilityBindingEditor({ definition, roleDefinitions, onNarrow, onSaved, decisionTrace, readTrace }: CapabilityBindingEditorProps) {
   const effectiveKeys = useMemo(() => new Set(definition.binding.effectiveRoles.map(roleKey)), [definition.binding.effectiveRoles])
   const [selectedKeys, setSelectedKeys] = useState(() => new Set(effectiveKeys))
   const [pendingRoles, setPendingRoles] = useState<readonly RoleReference[] | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [refusalId, setRefusalId] = useState<string>()
+  const trace = refusalId && readTrace ? { auditId: refusalId, read: readTrace } : decisionTrace
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => setSelectedKeys(new Set(effectiveKeys)), [effectiveKeys])
@@ -41,9 +44,11 @@ export function CapabilityBindingEditor({ definition, roleDefinitions, onNarrow,
     setPendingRoles(null)
     setSubmitting(true)
     setError(null)
+    setRefusalId(undefined)
     try {
       onSaved(await onNarrow(definition.definitionId, roles, REASON))
     } catch (cause) {
+      setRefusalId(cause instanceof AuthorizationAdminError ? cause.auditId : undefined)
       setError(cause instanceof AuthorizationAdminError ? cause.message : 'The authorization service could not complete the request. Try again.')
     } finally {
       setSubmitting(false)
@@ -95,7 +100,7 @@ export function CapabilityBindingEditor({ definition, roleDefinitions, onNarrow,
       </div>
       {submitting && <p aria-live="polite">Saving narrower binding…</p>}
       {error && <p role="alert">{error}</p>}
-      <AuthorizationTrace key={decisionTrace?.auditId ?? 'unlinked'} decision={decisionTrace} />
+      <AuthorizationTrace key={trace?.auditId ?? 'unlinked'} decision={trace} />
       <ConfirmDialog
         open={pendingRoles !== null}
         onOpenChange={open => { if (!open) setPendingRoles(null) }}

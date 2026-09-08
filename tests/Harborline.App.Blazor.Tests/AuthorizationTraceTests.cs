@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Net;
+using System.Net.Http.Json;
 using Bunit;
 using Harborline.App.Blazor.ReferenceHost.Admin.Authorization;
 using Harborline.App.Blazor.ReferenceHost.Authorization;
@@ -25,7 +27,7 @@ public sealed class AuthorizationTraceTests : BunitContext
         var definition = new AuthorizationCapabilityDefinition(Guid.NewGuid(), "fixture", 1,
             new("tax.return.write", "Tenant", "tenant-163"), [], new(1, [], null));
         var view = Render<CapabilityBindingEditor>(parameters => parameters.Add(p => p.Definition, definition)
-            .Add(p => p.RoleDefinitions, []).Add(p => p.DecisionTrace, new RecordedDecision(fixture.AuditId, read)));
+            .Add(p => p.RoleDefinitions, []).Add(p => p.DecisionTrace, new RecordedDecision(fixture.AuditId, new HttpAuthorizationAdminClient(new HttpClient(new TraceHandler(fixture.AuditId, read)) { BaseAddress = new Uri("http://127.0.0.1:7322") }).ReadTraceAsync)));
         Assert.Equal("Why can I do this?", view.Find("details summary").TextContent);
         view.Find("details").TriggerEvent("ontoggle", EventArgs.Empty);
         return view;
@@ -76,6 +78,16 @@ public sealed class AuthorizationTraceTests : BunitContext
         {
             view.Find("details button").Click();
             view.WaitForAssertion(() => Assert.Single(view.FindAll("details ol")));
+        }
+    }
+    private sealed class TraceHandler(Guid id, Func<Guid, Task<AuthorizationTraceRead>> read) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Assert.Equal($"/api/local-node/authorization/traces/{id:D}", request.RequestUri!.AbsolutePath);
+            var result = await read(id);
+            return new HttpResponseMessage(result.Availability == 2 ? HttpStatusCode.Forbidden : HttpStatusCode.OK)
+            { Content = JsonContent.Create(result) };
         }
     }
 }

@@ -3,11 +3,18 @@ import { describe, expect, it, vi } from 'vitest'
 import fixture from '../../../../tests/fixtures/authorization-trace.json'
 import { CapabilityBindingEditor } from '../admin/authorization/CapabilityBindingEditor'
 import { CAPABILITY_DEFINITIONS, ROLE_DEFINITIONS } from '../admin/authorization/client/fixtureClient'
+import { createHttpAuthorizationAdminClient } from '../admin/authorization/client/httpClient'
 import type { AuthorizationTraceRead } from './AuthorizationTrace'
 
 function mount(read: (id: string) => Promise<AuthorizationTraceRead>) {
+  const client = createHttpAuthorizationAdminClient({ fetchImpl: async input => {
+    expect(String(input)).toBe(`/api/local-node/authorization/traces/${fixture.auditId}`)
+    const result = await read(fixture.auditId)
+    return new Response(JSON.stringify(result.availability === 2 ? { code: 'authorization.permission_required', ...result } : result),
+      { status: result.availability === 2 ? 403 : 200 })
+  } })
   const view = render(<CapabilityBindingEditor definition={CAPABILITY_DEFINITIONS[0]} roleDefinitions={ROLE_DEFINITIONS}
-    onNarrow={vi.fn()} onSaved={vi.fn()} decisionTrace={{ auditId: fixture.auditId, read }} />)
+    onNarrow={vi.fn()} onSaved={vi.fn()} decisionTrace={{ auditId: fixture.auditId, read: client.readTrace }} />)
   const details = screen.getByText('Why can I do this?').closest('details')!
   details.open = true
   fireEvent(details, new Event('toggle'))

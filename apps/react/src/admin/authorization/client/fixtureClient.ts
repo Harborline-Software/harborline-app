@@ -63,6 +63,7 @@ const cloneDefinition = (definition: AuthorizationCapabilityDefinition): Authori
 export function createFixtureAuthorizationAdminClient(): AuthorizationAdminClient {
   const definitions = CAPABILITY_DEFINITIONS.map(cloneDefinition)
   return {
+    async readTrace() { throw new Error('Trace reads require the authorization service.') },
     async listHolders() { throw new Error('Holders require a configured authorization service.') },
 
     async listRoleVocabulary() {

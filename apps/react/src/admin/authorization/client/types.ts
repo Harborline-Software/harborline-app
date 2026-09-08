@@ -1,4 +1,5 @@
 import type { RoleDefinition as PlatformRoleDefinition, RoleReference as PlatformRoleReference } from '@harborline-software/contracts/authorization'
+import type { AuthorizationTraceRead } from '../../../authorization/AuthorizationTrace'
 
 export type RoleReference = PlatformRoleReference
 export type RoleDefinition = PlatformRoleDefinition
@@ -66,13 +67,15 @@ const ERROR_COPY: Readonly<Record<AuthorizationAdminErrorCode, string>> = {
 }
 
 export class AuthorizationAdminError extends Error {
-  constructor(public readonly status: number, public readonly code: string) {
+  // The API includes auditId only when a refusal row was actually recorded.
+  constructor(public readonly status: number, public readonly code: string, public readonly auditId?: string) {
     super(ERROR_COPY[code as AuthorizationAdminErrorCode] ?? 'The authorization service could not complete the request. Try again.')
     this.name = 'AuthorizationAdminError'
   }
 }
 
 export interface AuthorizationAdminClient {
+  readTrace(auditId: string): Promise<AuthorizationTraceRead>
   listHolders(signal?: AbortSignal): Promise<{ holders: readonly AccessHolder[] }>
   listRoleVocabulary(signal?: AbortSignal): Promise<readonly RoleDefinition[]>
   listCapabilityDefinitions(signal?: AbortSignal): Promise<readonly AuthorizationCapabilityDefinition[]>

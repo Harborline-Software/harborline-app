@@ -18,8 +18,9 @@ export interface HttpAuthorizationAdminClientOptions {
 
 async function parseError(response: Response): Promise<AuthorizationAdminError> {
   try {
-    const body = await response.json() as { code?: unknown }
-    return new AuthorizationAdminError(response.status, typeof body.code === 'string' ? body.code : `http.${response.status}`)
+    const body = await response.json() as { code?: unknown; auditId?: unknown }
+    return new AuthorizationAdminError(response.status, typeof body.code === 'string' ? body.code : `http.${response.status}`,
+      typeof body.auditId === 'string' ? body.auditId : undefined)
   } catch {
     return new AuthorizationAdminError(response.status, `http.${response.status}`)
   }
@@ -37,6 +38,7 @@ export function createHttpAuthorizationAdminClient(options: HttpAuthorizationAdm
   }
 
   return {
+    readTrace: auditId => getJson(`/api/local-node/authorization/traces/${encodeURIComponent(auditId)}`),
     listHolders: signal => getJson('/api/local-node/authorization/holders', signal),
     listRoleVocabulary: signal => getJson<readonly RoleDefinition[]>('/api/local-node/authorization/role-vocabulary', signal),
     listCapabilityDefinitions: signal => getJson<readonly AuthorizationCapabilityDefinition[]>('/api/local-node/authorization/capability-definitions', signal),

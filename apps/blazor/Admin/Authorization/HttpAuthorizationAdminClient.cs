@@ -1,10 +1,13 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Harborline.App.Blazor.ReferenceHost.Authorization;
 
 namespace Harborline.App.Blazor.ReferenceHost.Admin.Authorization;
 
 public sealed class HttpAuthorizationAdminClient(HttpClient httpClient, Func<string>? createIdempotencyKey = null) : IAuthorizationAdminClient
 {
+    public Task<AuthorizationTraceRead> ReadTraceAsync(Guid auditId) =>
+        GetAsync<AuthorizationTraceRead>($"{RouteBase}/traces/{auditId:D}", CancellationToken.None);
     public Task<AccessHoldersResponse> ListHoldersAsync(CancellationToken cancellationToken = default) =>
         GetAsync<AccessHoldersResponse>($"{RouteBase}/holders", cancellationToken);
 
@@ -59,7 +62,8 @@ public sealed class HttpAuthorizationAdminClient(HttpClient httpClient, Func<str
             var code = body.RootElement.TryGetProperty("code", out var value) && value.ValueKind == JsonValueKind.String
                 ? value.GetString()!
                 : $"http.{(int)response.StatusCode}";
-            return new AuthorizationAdminException((int)response.StatusCode, code);
+            Guid? auditId = body.RootElement.TryGetProperty("auditId", out var id) && id.ValueKind == JsonValueKind.String && id.TryGetGuid(out var parsed) ? parsed : null;
+            return new AuthorizationAdminException((int)response.StatusCode, code, auditId);
         }
         catch (JsonException)
         {

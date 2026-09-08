@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { AuthorizationTrace } from '../../authorization/AuthorizationTrace'
 import { ErrorCard, LoadingState } from '@harborline-software/ui-react'
+import { AuthorizationAdminError } from './client'
 import type { AuthorizationCapabilityDefinition, RoleDefinition, StandingDefinition } from './client'
 import { AuditorAccessReviewPanel } from './AuditorAccessReviewPanel'
 import { CapabilityBindingEditor } from './CapabilityBindingEditor'
@@ -11,6 +13,7 @@ export function AuthorizationAdminPage() {
   const [roleDefinitions, setRoleDefinitions] = useState<readonly RoleDefinition[] | null>(null)
   const [definitions, setDefinitions] = useState<readonly AuthorizationCapabilityDefinition[] | null>(null)
   const [standings, setStandings] = useState<readonly StandingDefinition[] | null>(null)
+  const [refusalId, setRefusalId] = useState<string>()
   const [loadError, setLoadError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
 
@@ -20,6 +23,7 @@ export function AuthorizationAdminPage() {
     setDefinitions(null)
     setStandings(null)
     setLoadError(null)
+    setRefusalId(undefined)
     void (async () => {
       try {
         const [roles, catalogue, standingCatalogue] = await Promise.all([
@@ -35,6 +39,7 @@ export function AuthorizationAdminPage() {
         setDefinitions(refreshed)
         setStandings(standingCatalogue)
       } catch (cause) {
+        if (!abort.signal.aborted) setRefusalId(cause instanceof AuthorizationAdminError ? cause.auditId : undefined)
         if (!abort.signal.aborted) setLoadError(cause instanceof Error ? cause.message : 'The authorization catalogue could not be loaded.')
       }
     })()
@@ -45,6 +50,7 @@ export function AuthorizationAdminPage() {
     <>
       <h1>Settings › System</h1>
       <ErrorCard title="Unable to load authorization settings" message={loadError} />
+      <AuthorizationTrace key={refusalId} decision={refusalId ? { auditId: refusalId, read: client.readTrace } : undefined} />
       <button type="button" onClick={() => setAttempt(value => value + 1)}>Retry</button>
     </>
   )
@@ -63,6 +69,7 @@ export function AuthorizationAdminPage() {
             definition={definition}
             roleDefinitions={roleDefinitions}
             onNarrow={client.narrowCapabilityBinding}
+            readTrace={client.readTrace}
             onSaved={result => setDefinitions(current => current?.map(row => row.definitionId === result.definitionId
               ? { ...row, binding: { revision: result.revision, effectiveRoles: result.effectiveRoles, warning: result.warning } }
               : row) ?? null)}

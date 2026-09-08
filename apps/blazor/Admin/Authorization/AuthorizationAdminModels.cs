@@ -35,8 +35,10 @@ public sealed record StandingDefinition(
     string DeclaredRecordType,
     IReadOnlyList<StandingFieldRecordTypes> Fields);
 
-public sealed class AuthorizationAdminException(int status, string code) : Exception(MessageFor(code))
+// The API includes auditId only when a refusal row was actually recorded.
+public sealed class AuthorizationAdminException(int status, string code, Guid? auditId = null) : Exception(MessageFor(code))
 {
+    public Guid? AuditId { get; } = auditId;
     public int Status { get; } = status;
     public string Code { get; } = code;
 

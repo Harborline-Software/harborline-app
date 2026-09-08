@@ -1,4 +1,5 @@
 @namespace Harborline.App.Blazor.ReferenceHost.Authorization
+@using Harborline.App.Blazor.ReferenceHost.Admin.Authorization
 
 @* No linked decision, no disclosure: the affordance must never promise an answer it cannot give (163 review 1). *@
 @if (Decision is not null)
@@ -56,6 +57,7 @@
         if (Decision is null || loading || result is not null || error is not null) return;
         loading = true;
         try { result = await Decision.Read(Decision.AuditId); }
+        catch (AuthorizationAdminException failure) when (failure.Status == 403) { result = new(2, null, []); }
         catch (Exception) { error = "Unable to read the authorization trace. Try again."; }
         finally { loading = false; }
     }
