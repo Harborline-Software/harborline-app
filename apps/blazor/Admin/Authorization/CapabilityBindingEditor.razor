@@ -51,7 +51,7 @@
     {
         <p role="alert">@error</p>
     }
-    <AuthorizationTrace @key="DecisionTrace?.AuditId" Decision="DecisionTrace" />
+    <AuthorizationTrace @key="Trace?.AuditId" Decision="Trace" />
 </article>
 
 <HarborlineConfirmDialog Open="@(pendingRoles is not null)"
@@ -71,6 +71,8 @@
     private long loadedRevision = -1;
     private bool submitting;
     private string? error;
+    private Guid? refusalId;
+    private RecordedDecision? Trace => refusalId is { } id ? new(id, Client.ReadTraceAsync) : DecisionTrace;
 
     [Parameter, EditorRequired]
     public AuthorizationCapabilityDefinition Definition { get; set; } = default!;
@@ -114,6 +116,7 @@
     {
         pendingRoles = roles.ToArray();
         error = null;
+        refusalId = null;
     }
 
     private Task UpdateConfirmOpen(bool open)
@@ -129,6 +132,7 @@
         pendingRoles = null;
         submitting = true;
         error = null;
+        refusalId = null;
         try
         {
             await Saved.InvokeAsync(await Client.NarrowCapabilityBindingAsync(Definition.DefinitionId, roles, Reason));
@@ -136,6 +140,7 @@
         catch (AuthorizationAdminException exception)
         {
             error = exception.Message;
+            refusalId = exception.AuditId;
         }
         finally
         {

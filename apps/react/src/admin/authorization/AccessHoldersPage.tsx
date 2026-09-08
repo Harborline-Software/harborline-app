@@ -1,19 +1,22 @@
 import { useEffect, useState } from 'react'
+import { AuthorizationTrace } from '../../authorization/AuthorizationTrace'
 import { useAuthorizationAdminClient } from './AuthorizationAdminClientContext'
 import { AuthorizationAdminError, type AccessHolder } from './client'
 
 export function AccessHoldersPage() {
   const client = useAuthorizationAdminClient()
   const [holders, setHolders] = useState<readonly AccessHolder[] | null>(null)
+  const [refusalId, setRefusalId] = useState<string>()
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     const abort = new AbortController()
-    setHolders(null); setError(null)
+    setHolders(null); setError(null); setRefusalId(undefined)
     void client.listHolders(abort.signal).then(result => {
       if (!Array.isArray(result.holders)) throw new Error('The holders service returned an invalid response.')
       if (!abort.signal.aborted) setHolders(result.holders)
     }).catch((failure: unknown) => {
+      if (!abort.signal.aborted) setRefusalId(failure instanceof AuthorizationAdminError ? failure.auditId : undefined)
       if (!abort.signal.aborted) setError(failure instanceof AuthorizationAdminError
         ? `${failure.message} (${failure.status}: ${failure.code})`
         : failure instanceof Error ? failure.message : 'Unable to load holders.')
@@ -22,6 +25,7 @@ export function AccessHoldersPage() {
   }, [client, attempt])
   return <section aria-labelledby="access-holders-heading" style={{ overflowWrap: 'anywhere' }}>
     <h1 id="access-holders-heading">Holders</h1>
+    <AuthorizationTrace key={refusalId} decision={refusalId ? { auditId: refusalId, read: client.readTrace } : undefined} />
     {error ? <div role="alert"><p>{error}</p><button type="button" onClick={() => setAttempt(value => value + 1)}>Retry holders</button></div>
       : holders === null ? <p role="status">Loading holders…</p>
         : holders.length === 0 ? <p>No active holders.</p>

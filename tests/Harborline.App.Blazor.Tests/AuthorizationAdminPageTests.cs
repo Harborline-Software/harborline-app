@@ -199,6 +199,7 @@ public sealed class AuthorizationAdminPageTests : BunitContext
 
     private sealed class RecordingFixtureClient : IAuthorizationAdminClient
     {
+        public Task<Harborline.App.Blazor.ReferenceHost.Authorization.AuthorizationTraceRead> ReadTraceAsync(Guid auditId) => throw new NotSupportedException();
         public Task<AccessHoldersResponse> ListHoldersAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         private readonly FixtureAuthorizationAdminClient inner = new();
         public IReadOnlyList<RoleReference>? LastSelectedRoles { get; private set; }
@@ -215,6 +216,7 @@ public sealed class AuthorizationAdminPageTests : BunitContext
 
     private sealed class PendingClient : IAuthorizationAdminClient
     {
+        public Task<Harborline.App.Blazor.ReferenceHost.Authorization.AuthorizationTraceRead> ReadTraceAsync(Guid auditId) => throw new NotSupportedException();
         public Task<AccessHoldersResponse> ListHoldersAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public List<CancellationToken> Tokens { get; } = [];
         private Task<T> Pending<T>(CancellationToken token) { Tokens.Add(token); return new TaskCompletionSource<T>().Task; }
@@ -227,6 +229,7 @@ public sealed class AuthorizationAdminPageTests : BunitContext
 
     private sealed class RefusingClient : IAuthorizationAdminClient
     {
+        public Task<Harborline.App.Blazor.ReferenceHost.Authorization.AuthorizationTraceRead> ReadTraceAsync(Guid auditId) => throw new NotSupportedException();
         public Task<AccessHoldersResponse> ListHoldersAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         private readonly FixtureAuthorizationAdminClient inner = new();
         public Task<IReadOnlyList<RoleDefinition>> ListRoleVocabularyAsync(CancellationToken cancellationToken = default) => inner.ListRoleVocabularyAsync(cancellationToken);
@@ -239,6 +242,7 @@ public sealed class AuthorizationAdminPageTests : BunitContext
 
     private sealed class GrowingCatalogueClient : IAuthorizationAdminClient
     {
+        public Task<Harborline.App.Blazor.ReferenceHost.Authorization.AuthorizationTraceRead> ReadTraceAsync(Guid auditId) => throw new NotSupportedException();
         public Task<AccessHoldersResponse> ListHoldersAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         private readonly FixtureAuthorizationAdminClient inner = new();
         private AuthorizationCapabilityDefinition? installed;
@@ -264,6 +268,7 @@ public sealed class AuthorizationAdminPageTests : BunitContext
 
     private sealed class RetryClient : IAuthorizationAdminClient
     {
+        public Task<Harborline.App.Blazor.ReferenceHost.Authorization.AuthorizationTraceRead> ReadTraceAsync(Guid auditId) => throw new NotSupportedException();
         public Task<AccessHoldersResponse> ListHoldersAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public int RoleAttempts { get; private set; }
         public Task<IReadOnlyList<RoleDefinition>> ListRoleVocabularyAsync(CancellationToken cancellationToken = default)

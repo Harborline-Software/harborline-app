@@ -1,7 +1,10 @@
+using Harborline.App.Blazor.ReferenceHost.Authorization;
+
 namespace Harborline.App.Blazor.ReferenceHost.Admin.Authorization;
 
 public interface IAuthorizationAdminClient
 {
+    Task<AuthorizationTraceRead> ReadTraceAsync(Guid auditId);
     Task<AccessHoldersResponse> ListHoldersAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<RoleDefinition>> ListRoleVocabularyAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AuthorizationCapabilityDefinition>> ListCapabilityDefinitionsAsync(CancellationToken cancellationToken = default);

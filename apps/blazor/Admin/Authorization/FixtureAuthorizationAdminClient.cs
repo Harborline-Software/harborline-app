@@ -2,6 +2,8 @@ namespace Harborline.App.Blazor.ReferenceHost.Admin.Authorization;
 
 public sealed class FixtureAuthorizationAdminClient : IAuthorizationAdminClient
 {
+    public Task<Harborline.App.Blazor.ReferenceHost.Authorization.AuthorizationTraceRead> ReadTraceAsync(Guid auditId) =>
+        throw new InvalidOperationException("Trace reads require the authorization service.");
     public Task<AccessHoldersResponse> ListHoldersAsync(CancellationToken cancellationToken = default) =>
         throw new InvalidOperationException("Holders require a configured authorization service.");
     public static readonly IReadOnlyList<RoleDefinition> RoleDefinitions =

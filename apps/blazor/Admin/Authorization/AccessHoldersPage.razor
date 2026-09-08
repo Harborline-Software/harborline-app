@@ -1,4 +1,5 @@
 @namespace Harborline.App.Blazor.ReferenceHost.Admin.Authorization
+@using Harborline.App.Blazor.ReferenceHost.Authorization
 @inject IAuthorizationAdminClient Client
 @implements IDisposable
 
@@ -6,6 +7,7 @@
     <h1 id="access-holders-heading">Holders</h1>
     @if (error is not null)
     {
+        <AuthorizationTrace @key="refusalId" Decision="Trace" />
         <div role="alert"><p>@error</p><button type="button" @onclick="LoadAsync">Retry holders</button></div>
     }
     else if (holders is null) { <p role="status">Loading holders…</p> }
@@ -31,19 +33,21 @@
 
 @code {
     private IReadOnlyList<AccessHolder>? holders;
+    private Guid? refusalId;
+    private RecordedDecision? Trace => refusalId is { } id ? new(id, Client.ReadTraceAsync) : null;
     private string? error;
     private readonly CancellationTokenSource cancellation = new();
     protected override Task OnInitializedAsync() => LoadAsync();
     private async Task LoadAsync()
     {
-        holders = null; error = null;
+        holders = null; error = null; refusalId = null;
         try
         {
             holders = (await Client.ListHoldersAsync(cancellation.Token)).Holders
                 ?? throw new InvalidOperationException("The holders service returned an invalid response.");
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
-        catch (AuthorizationAdminException failure) { error = $"{failure.Message} ({failure.Status}: {failure.Code})"; }
+        catch (AuthorizationAdminException failure) { refusalId = failure.AuditId; error = $"{failure.Message} ({failure.Status}: {failure.Code})"; }
         catch (Exception failure) when (failure is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException)
         { error = failure.Message; }
     }
