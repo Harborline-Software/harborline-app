@@ -1,3 +1,4 @@
+import { AccessHoldersPage } from './admin/authorization/AccessHoldersPage'
 import { useEffect, useState } from 'react'
 import { readPackNavigation } from './navigation/packNavigation'
 import { RoleVocabulary, type HeldRoleSet } from '@harborline-software/contracts/authorization'
@@ -81,11 +82,15 @@ const NAVIGATION: PackNavigationDeclaration = {
   ],
   panelSet: [{ id: 'pilot', labelKey: 'Pilot', binding: 'panels.pilot.toggle', shortcut: 'mod+shift+p', defaultWidth: 400, minimumHeight: 300, defaultOpen: false }],
 }
+const accessLabels: Record<string, string> = { 'access.workspace': 'Access', 'access.holders': 'Holders', 'access.details': 'Access details', 'access.details.footer': 'Access details' }
+const resolveLabel = (key: string) => accessLabels[key] ?? key
+
 const NAVIGATION_STATE: ShellNavigationState = {
   items: Object.fromEntries(NAV_ITEMS.map(item => [item.id, item])),
 }
 
 const BODY: Record<string, { title: string; description: string }> = {
+  'access.holders': { title: 'Holders', description: 'Inspect active access grants.' },
   assets: {
     title: 'Assets',
     description: 'Browse and manage the physical assets your organization tracks.',
@@ -187,19 +192,21 @@ export function App() {
       brandText="Harborline"
       navigation={packNavigation ?? NAVIGATION}
       navigationState={NAVIGATION_STATE}
+      resolveLabel={resolveLabel}
       roleVocabulary={roleVocabulary}
       heldRoles={EMPTY_HELD_ROLES}
       activeItemId={activeItemId}
       onNavigate={(item: ShellNavItem) => setActiveItemId(item.id)}
       pageHeader={
         <nav aria-label="Breadcrumb" className="happ-breadcrumb">
-          Harborline / Portfolio / {body.title}
+          {activeItemId === 'access.holders' ? <>Harborline / Access / Holders</> : <>Harborline / Portfolio / {body.title}</>}
         </nav>
       }
       openPanelIds={openPanelIds}
       onOpenPanelIdsChange={setOpenPanelIds}
-      panelContent={panel => <section className="happ-pilot"><p>{panel.id === 'pilot' ? `Pilot sees what you see — Portfolio · ${body.title}.` : `${panel.labelKey ?? panel.id}: This application surface is not available in this version.`}</p></section>}
-      body={activeItemId === 'admin-forms'
+      panelContent={panel => <section className="happ-pilot"><p>{panel.id === 'pilot' ? `Pilot sees what you see — Portfolio · ${body.title}.` : `${resolveLabel(panel.labelKey ?? panel.id)}: This application surface is not available in this version.`}</p></section>}
+      body={activeItemId === 'access.holders' ? <main className="happ-page"><AccessHoldersPage /></main>
+        : activeItemId === 'admin-forms'
         ? <main className="happ-page"><FormsAdminPage /></main>
         : activeItemId === 'admin-reports'
           ? <main className="happ-page"><ReportsAdminPage /></main>

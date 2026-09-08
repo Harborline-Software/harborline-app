@@ -5,6 +5,9 @@ namespace Harborline.App.Blazor.ReferenceHost.Admin.Authorization;
 
 public sealed class HttpAuthorizationAdminClient(HttpClient httpClient, Func<string>? createIdempotencyKey = null) : IAuthorizationAdminClient
 {
+    public Task<AccessHoldersResponse> ListHoldersAsync(CancellationToken cancellationToken = default) =>
+        GetAsync<AccessHoldersResponse>($"{RouteBase}/holders", cancellationToken);
+
     private const string RouteBase = "api/local-node/authorization";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly Func<string> createKey = createIdempotencyKey ?? (() => Guid.NewGuid().ToString("N"));

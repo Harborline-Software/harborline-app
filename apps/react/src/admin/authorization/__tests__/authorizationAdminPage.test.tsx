@@ -160,6 +160,7 @@ describe('Authorization administration surface', () => {
       return new Promise<never>(() => undefined)
     }
     const client: AuthorizationAdminClient = {
+      listHolders: async () => { throw new Error("Not used by this page") },
       listRoleVocabulary: signal => pending(signal),
       listCapabilityDefinitions: signal => pending(signal),
       getEffectiveBinding: (_definitionId, signal) => pending(signal),

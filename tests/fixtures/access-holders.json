@@ -1,0 +1,58 @@
+{
+  "holders": [
+    {
+      "partyId": "s301b-party-local",
+      "source": "grant",
+      "grantId": "30100000-0000-4000-8000-000000000001",
+      "role": {
+        "vocabulary": "sys.platform-roles",
+        "name": "administrator"
+      },
+      "granter": "s301b-granter",
+      "scope": "/",
+      "effectiveFrom": "2026-09-08T00:17:56.319+00:00",
+      "effectiveTo": null
+    },
+    {
+      "partyId": "UNATTRIBUTED",
+      "source": "unattributed",
+      "grantId": "30100000-0000-4000-8000-000000000002",
+      "role": {
+        "vocabulary": "sys.platform-roles",
+        "name": "administrator"
+      },
+      "granter": "s301b-granter",
+      "scope": "/records/example",
+      "effectiveFrom": "2026-09-08T00:17:56.319+00:00",
+      "effectiveTo": "2026-09-10T00:17:56.319+00:00",
+      "attributionFailure": "No unique live party binding in this tenant: missing, tombstoned, detached, duplicated or wrong-tenant."
+    },
+    {
+      "partyId": "UNATTRIBUTED",
+      "source": "unattributed",
+      "grantId": "ed0d5c5f-f0c3-d0a0-2ae3-d0ff974bc590",
+      "role": {
+        "vocabulary": "tax.roles",
+        "name": "system-scheduler"
+      },
+      "granter": "installer:authorization-definition-seed",
+      "scope": "/",
+      "effectiveFrom": "2026-09-08T00:10:28.463+00:00",
+      "effectiveTo": null,
+      "attributionFailure": "No unique live party binding in this tenant: missing, tombstoned, detached, duplicated or wrong-tenant."
+    },
+    {
+      "partyId": "s301b-party-local",
+      "source": "grant",
+      "grantId": "f32ddd4e-b218-3461-a394-dc45526e3dd9",
+      "role": {
+        "vocabulary": "tax.roles",
+        "name": "node-operator"
+      },
+      "granter": "installer:authorization-definition-seed",
+      "scope": "/",
+      "effectiveFrom": "2026-09-08T00:10:28.463+00:00",
+      "effectiveTo": null
+    }
+  ]
+}

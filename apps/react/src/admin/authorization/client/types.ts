@@ -73,9 +73,16 @@ export class AuthorizationAdminError extends Error {
 }
 
 export interface AuthorizationAdminClient {
+  listHolders(signal?: AbortSignal): Promise<{ holders: readonly AccessHolder[] }>
   listRoleVocabulary(signal?: AbortSignal): Promise<readonly RoleDefinition[]>
   listCapabilityDefinitions(signal?: AbortSignal): Promise<readonly AuthorizationCapabilityDefinition[]>
   getEffectiveBinding(definitionId: string, signal?: AbortSignal): Promise<AuthorizationBinding>
   narrowCapabilityBinding(definitionId: string, selectedRoles: readonly RoleReference[], reason: string, signal?: AbortSignal): Promise<NarrowAuthorizationBindingResult>
   listStandingCatalogue(signal?: AbortSignal): Promise<readonly StandingDefinition[]>
+}
+
+export interface AccessHolder {
+  readonly partyId: string; readonly source: string; readonly grantId: string
+  readonly role: RoleReference | null; readonly granter: string; readonly scope: string
+  readonly effectiveFrom: string; readonly effectiveTo: string | null; readonly attributionFailure?: string
 }

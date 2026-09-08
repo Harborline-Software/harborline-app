@@ -1,0 +1,1 @@
+{"code":"authorization.permission_required","permission":"members:manage","title":"You do not have permission for this action.","detail":"The action was refused because a required permission is missing.","remediation":"Ask an administrator to grant the permission this action requires."}

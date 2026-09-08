@@ -2,6 +2,8 @@ namespace Harborline.App.Blazor.ReferenceHost.Admin.Authorization;
 
 public sealed class FixtureAuthorizationAdminClient : IAuthorizationAdminClient
 {
+    public Task<AccessHoldersResponse> ListHoldersAsync(CancellationToken cancellationToken = default) =>
+        throw new InvalidOperationException("Holders require a configured authorization service.");
     public static readonly IReadOnlyList<RoleDefinition> RoleDefinitions =
     [
         new(Guid.Parse("11111111-1111-1111-1111-111111111111"), new("sys.platform-roles", "administrator"), "Administrator", new("Platform", "harborline-platform"), true),

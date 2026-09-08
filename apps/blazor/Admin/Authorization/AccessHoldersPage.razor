@@ -1,0 +1,51 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Admin.Authorization
+@inject IAuthorizationAdminClient Client
+@implements IDisposable
+
+<section aria-labelledby="access-holders-heading" style="overflow-wrap:anywhere">
+    <h1 id="access-holders-heading">Holders</h1>
+    @if (error is not null)
+    {
+        <div role="alert"><p>@error</p><button type="button" @onclick="LoadAsync">Retry holders</button></div>
+    }
+    else if (holders is null) { <p role="status">Loading holders…</p> }
+    else if (holders.Count == 0) { <p>No active holders.</p> }
+    else
+    {
+        @foreach (var row in holders)
+        {
+            <article @key="row.GrantId" aria-label="@($"Grant {row.GrantId}")">
+                <dl>
+                    <dt>Party</dt><dd>@row.PartyId</dd><dt>Source</dt><dd>@row.Source</dd>
+                    @if (row.AttributionFailure is not null) { <dt>Attribution failure</dt><dd>@row.AttributionFailure</dd> }
+                    <dt>Role or grant</dt><dd>@(row.Role is null ? row.GrantId : $"{row.Role.Vocabulary} / {row.Role.Name}")</dd>
+                    <dt>Grant</dt><dd>@row.GrantId</dd><dt>Granter</dt><dd>@row.Granter</dd>
+                    <dt>Scope</dt><dd>@row.Scope</dd>
+                    <dt>Effective from</dt><dd><time datetime="@row.EffectiveFrom">@row.EffectiveFrom</time></dd>
+                    <dt>Effective to</dt><dd>@if (row.EffectiveTo is null) { <text>No end date</text> } else { <time datetime="@row.EffectiveTo">@row.EffectiveTo</time> }</dd>
+                </dl>
+            </article>
+        }
+    }
+</section>
+
+@code {
+    private IReadOnlyList<AccessHolder>? holders;
+    private string? error;
+    private readonly CancellationTokenSource cancellation = new();
+    protected override Task OnInitializedAsync() => LoadAsync();
+    private async Task LoadAsync()
+    {
+        holders = null; error = null;
+        try
+        {
+            holders = (await Client.ListHoldersAsync(cancellation.Token)).Holders
+                ?? throw new InvalidOperationException("The holders service returned an invalid response.");
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (AuthorizationAdminException failure) { error = $"{failure.Message} ({failure.Status}: {failure.Code})"; }
+        catch (Exception failure) when (failure is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException)
+        { error = failure.Message; }
+    }
+    public void Dispose() { cancellation.Cancel(); cancellation.Dispose(); }
+}
