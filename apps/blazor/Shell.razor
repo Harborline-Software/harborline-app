@@ -28,6 +28,7 @@
                   BrandText="Harborline"
                   Navigation="@(packNavigation ?? Navigation)"
                   NavigationState="@NavigationState"
+                  ResolveLabel="@ResolveLabel"
                   RoleVocabulary="@roleVocabulary"
                   HeldRoles="@HeldRoles"
                   ActiveItemId="@activeItemId"
@@ -36,7 +37,11 @@
                   OpenPanelIds="@OpenPanelIds"
                   OpenPanelIdsChanged="@SetOpenPanelIds"
                   PanelContent="@PanelContent">
-    @if (activeItemId == "admin-forms")
+    @if (activeItemId == "access.holders")
+    {
+        <main class="happ-page"><AccessHoldersPage /></main>
+    }
+    else if (activeItemId == "admin-forms")
     {
         <main class="happ-page">
             <FormsAdminPage />
@@ -82,6 +87,7 @@
 </HarborlineAppShell>
 
 @code {
+    private static string ResolveLabel(string key) => key switch { "access.workspace" => "Access", "access.holders" => "Holders", "access.details" or "access.details.footer" => "Access details", _ => key };
     private static readonly IReadOnlyList<ShellNavItem> NavigationItems =
     [
         new ShellNavItem("assets", "Assets"),
@@ -111,6 +117,7 @@
 
     private string ActiveLabel => activeItemId switch
     {
+        "access.holders" => "Holders",
         "run-report" => "Run report",
         "admin-forms" => "Forms",
         "admin-reports" => "Reports",
@@ -126,9 +133,9 @@
         : activeItemId == "assets" ? "Browse and manage the physical assets your organization tracks."
         : "This application surface is not available in this version.";
 
-    private RenderFragment PageHeaderFragment => @<nav aria-label="Breadcrumb" class="happ-breadcrumb">Harborline / Portfolio / @ActiveLabel</nav>;
+    private RenderFragment PageHeaderFragment => @<nav aria-label="Breadcrumb" class="happ-breadcrumb">@if (activeItemId == "access.holders") { <text>Harborline / Access / Holders</text> } else { <text>Harborline / Portfolio / @ActiveLabel</text> }</nav>;
     private IReadOnlyList<string> OpenPanelIds => openPanelIds;
-    private RenderFragment<PackPanelDeclaration> PanelContent => panel => @<section class="happ-pilot"><p>@(panel.Id == "pilot" ? $"Pilot sees what you see — Portfolio · {ActiveLabel}." : $"{panel.LabelKey ?? panel.Id}: This application surface is not available in this version.")</p></section>;
+    private RenderFragment<PackPanelDeclaration> PanelContent => panel => @<section class="happ-pilot"><p>@(panel.Id == "pilot" ? $"Pilot sees what you see — Portfolio · {ActiveLabel}." : $"{ResolveLabel(panel.LabelKey ?? panel.Id)}: This application surface is not available in this version.")</p></section>;
     private void SetOpenPanelIds(IReadOnlyList<string> ids) => openPanelIds = ids;
 
     private async Task LoadNavigationAsync()

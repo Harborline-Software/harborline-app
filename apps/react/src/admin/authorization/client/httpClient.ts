@@ -37,6 +37,7 @@ export function createHttpAuthorizationAdminClient(options: HttpAuthorizationAdm
   }
 
   return {
+    listHolders: signal => getJson('/api/local-node/authorization/holders', signal),
     listRoleVocabulary: signal => getJson<readonly RoleDefinition[]>('/api/local-node/authorization/role-vocabulary', signal),
     listCapabilityDefinitions: signal => getJson<readonly AuthorizationCapabilityDefinition[]>('/api/local-node/authorization/capability-definitions', signal),
     getEffectiveBinding: (definitionId, signal) => getJson<AuthorizationBinding>(

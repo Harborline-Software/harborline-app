@@ -63,6 +63,8 @@ const cloneDefinition = (definition: AuthorizationCapabilityDefinition): Authori
 export function createFixtureAuthorizationAdminClient(): AuthorizationAdminClient {
   const definitions = CAPABILITY_DEFINITIONS.map(cloneDefinition)
   return {
+    async listHolders() { throw new Error('Holders require a configured authorization service.') },
+
     async listRoleVocabulary() {
       return ROLE_DEFINITIONS.map(definition => ({ ...definition, role: cloneRole(definition.role), owner: { ...definition.owner } }))
     },
