@@ -89,6 +89,12 @@ jobs:
       # The whole gate, in the order the receipt records: boundaries, the three React lane steps,
       # dotnet-test, packages, host-manifest. On success it writes
       # .git/harborline-app-verify-receipt.json, which is the evidence uploaded below.
+      - name: Keep the pinned checkout out of the attested tree
+        # verify.sh refuses to record a receipt from a dirty tree; .platform is a checkout, not a change.
+        run: |
+          grep -qx '.platform/' .git/info/exclude 2>/dev/null || echo '.platform/' >> .git/info/exclude
+          git status --porcelain
+
       - name: eng/verify.sh
         run: bash eng/verify.sh
 
