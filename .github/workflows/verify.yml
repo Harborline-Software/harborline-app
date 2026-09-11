@@ -1,0 +1,105 @@
+# verify: eng/verify.sh on a self-hosted macOS runner, as a pull-request check and as the merge-queue
+# check. eng/verify.sh is this repository's gate — the same seven steps .githooks/pre-push requires a
+# receipt for — and it has never run in any automation: packages.yml runs four of the React lane's
+# steps on ubuntu and nothing else. Shape copied from harborline-api's verify.yml
+# (control: docs/velocity/landing.md).
+#
+# Fork safety: harborline-app is public and this job runs on our own machines. It runs only for pull
+# requests whose head lives in this repository, and for merge-queue groups (which are built from
+# already-reviewed heads). A fork PR gets the hosted checks only.
+name: verify
+
+on:
+  pull_request:
+  merge_group:
+
+concurrency:
+  group: verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: >-
+      vars.ACTIONS_ENABLED == 'true' &&
+      (github.event_name == 'merge_group' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 60
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DEVELOPER_DIR: /Library/Developer/CommandLineTools
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          clean: true
+
+      # No setup-node / setup-dotnet here, deliberately: the runner's PATH carries the host toolchain
+      # the Mac gates were measured with, and global.json pins the SDK. Printing the versions makes a
+      # host-versus-host disagreement attributable instead of a mystery.
+      - name: Host toolchain
+        run: |
+          for tool in node npm dotnet git jq; do
+            printf '%-8s %s\n' "$tool" "$(command -v "$tool" || echo MISSING)"
+          done
+          node -v; npm -v; dotnet --version
+
+      # Both lanes consume the platform as a PACKAGE from a local feed built out of a sibling platform
+      # checkout, and both .feed directories are gitignored — so eng/verify.sh refuses up front on a
+      # clean tree. The pin is checked out here rather than reused from a host-local lanes/ directory
+      # on purpose: harborline-api's verify job already rewrites lanes/platform-pin to ITS pin, and
+      # two jobs sharing that directory on one Mac would clobber each other.
+      - name: Read the recorded platform pin
+        id: platform_pin
+        run: echo "commit=$(jq -r '.commit' eng/platform-pin.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the pinned platform
+        uses: actions/checkout@v7
+        with:
+          repository: Harborline-Software/harborline-platform
+          ref: ${{ steps.platform_pin.outputs.commit }}
+          path: .platform
+
+      - name: Fail loudly when the checkout drifts from the recorded pin
+        run: |
+          pinned="$(jq -r '.commit' eng/platform-pin.json)"
+          actual="$(git -C .platform rev-parse HEAD)"
+          if [ "$pinned" != "$actual" ]; then
+            echo "eng/platform-pin.json records $pinned but the checkout is $actual." >&2
+            echo "The checkout ref is derived from the pin file; a mismatch means the checkout step changed." >&2
+            exit 1
+          fi
+          echo "platform pinned at $actual"
+
+      - name: Build the React local package feed
+        working-directory: apps/react
+        env:
+          HARBORLINE_PLATFORM_REPO: ${{ github.workspace }}/.platform
+        run: npm run feed
+
+      - name: Build the Blazor local package feed
+        working-directory: apps/blazor
+        env:
+          HARBORLINE_PLATFORM_REPO: ${{ github.workspace }}/.platform
+        run: node scripts/build-local-feed.mjs
+
+      # The whole gate, in the order the receipt records: boundaries, the three React lane steps,
+      # dotnet-test, packages, host-manifest. On success it writes
+      # .git/harborline-app-verify-receipt.json, which is the evidence uploaded below.
+      - name: eng/verify.sh
+        run: bash eng/verify.sh
+
+      - name: Evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: verify-evidence-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            .git/harborline-app-verify-receipt.json
+            apps/react/.feed/packed-version.props
+            apps/blazor/.feed/packed-version.props
