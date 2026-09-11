@@ -67,9 +67,19 @@ step react-typecheck   bash -c 'cd apps/react && npm ci && npm run typecheck'
 step react-test        bash -c 'cd apps/react && npm test'
 step react-build       bash -c 'cd apps/react && npm run build'
 
-step dotnet-test       dotnet test Harborline.App.slnx -c Release
+if [ "${HARBORLINE_GATE_COVERAGE:-}" = "1" ]; then
+  rm -rf artifacts/quality/coverage/dotnet
+  step dotnet-test       dotnet test Harborline.App.slnx -c Release --settings eng/coverage.runsettings --collect:"XPlat Code Coverage" --results-directory artifacts/quality/coverage/dotnet/results
+  step dotnet-coverage   node eng/coverage.mjs artifacts/quality/coverage/dotnet/results dotnet
+else
+  step dotnet-test       dotnet test Harborline.App.slnx -c Release
+fi
 step packages          bash eng/verify-packages.sh
 step host-manifest     bash -c 'cd hosts/react-native && npm run validate'
 
 printf '\n\033[32mAll %d steps passed in %dm%02ds\033[0m\n' "${#passed[@]}" "$(((SECONDS-started)/60))" "$(((SECONDS-started)%60))"
-node eng/verify-receipt.mjs --record "${passed[@]}"
+if [ "${HARBORLINE_GATE_COVERAGE:-}" = "1" ]; then
+  node eng/verify-receipt.mjs --record "${passed[@]}" --coverage-summary artifacts/quality/coverage/dotnet/coverage-summary.json
+else
+  node eng/verify-receipt.mjs --record "${passed[@]}"
+fi
