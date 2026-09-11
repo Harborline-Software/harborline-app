@@ -16,6 +16,7 @@
 import {execFileSync} from 'node:child_process'
 import {existsSync, readFileSync, writeFileSync} from 'node:fs'
 import path from 'node:path'
+import {coverageRecord, receiptCoverage} from './coverage-receipt.mjs'
 
 const REPOSITORY = 'harborline-app'
 const SCHEMA_VERSION = 1
@@ -28,6 +29,7 @@ export const requiredStepIds = [
   'react-test',
   'react-build',
   'dotnet-test',
+  'dotnet-coverage',
   'packages',
   'host-manifest',
 ]
@@ -50,18 +52,28 @@ if (process.argv.includes('--record')) {
     console.error(dirty.split(String.fromCharCode(10)).slice(0, 10).map(line => '  ' + line).join(String.fromCharCode(10)))
     process.exit(1)
   }
-  const passed = process.argv.slice(process.argv.indexOf('--record') + 1).filter(id => !id.startsWith('-'))
-  const missing = requiredStepIds.filter(id => !passed.includes(id))
+  const recordArgs = process.argv.slice(process.argv.indexOf('--record') + 1)
+  const optionIndex = recordArgs.findIndex(argument => argument.startsWith('--'))
+  const passed = (optionIndex < 0 ? recordArgs : recordArgs.slice(0, optionIndex))
+  const coverageEnabled = process.env.HARBORLINE_GATE_COVERAGE === '1'
+  const required = coverageEnabled ? requiredStepIds : requiredStepIds.filter(id => id !== 'dotnet-coverage')
+  const missing = required.filter(id => !passed.includes(id))
   if (missing.length > 0) {
     console.error(`refusing to record a receipt missing: ${missing.join(', ')}`)
     process.exit(1)
   }
+  const coverageSummaryIndex = recordArgs.indexOf('--coverage-summary')
+  const coverage = receiptCoverage({
+    enabled: coverageEnabled,
+    summary: coverageEnabled && coverageSummaryIndex >= 0 ? JSON.parse(readFileSync(recordArgs[coverageSummaryIndex + 1] ?? '', 'utf8')) : undefined,
+  })
   writeFileSync(receiptPath, JSON.stringify({
     schemaVersion: SCHEMA_VERSION,
     repository: REPOSITORY,
     baseHead: head,
     testedTree: tree,
     steps: passed,
+    ...(coverage ? {coverage} : {}),
     recordedAt: new Date().toISOString(),
   }, null, 2) + '\n')
   console.log(`recorded verification receipt for ${head.slice(0, 12)} (tree ${tree.slice(0, 12)})`)
@@ -95,7 +107,16 @@ if (receipt.baseHead !== head) {
   refuse(`the receipt attests to commit ${String(receipt.baseHead).slice(0, 12)}, but HEAD is ${head.slice(0, 12)}`)
 }
 
-const missing = requiredStepIds.filter(id => !(receipt.steps ?? []).includes(id))
+const required = process.env.HARBORLINE_GATE_COVERAGE === '1' ? requiredStepIds : requiredStepIds.filter(id => id !== 'dotnet-coverage')
+const missing = required.filter(id => !(receipt.steps ?? []).includes(id))
 if (missing.length > 0) refuse(`the receipt does not cover: ${missing.join(', ')}`)
+if (process.env.HARBORLINE_GATE_COVERAGE === '1') {
+  try {
+    if (!Array.isArray(receipt.coverage) || receipt.coverage.length === 0) throw new Error('receipt is missing coverage')
+    receipt.coverage.forEach(coverageRecord)
+  } catch (error) {
+    refuse(error instanceof Error ? error.message : String(error))
+  }
+}
 
 console.log(`${REPOSITORY}: verification receipt matches HEAD ${head.slice(0, 12)} — ${receipt.steps.length} steps`)

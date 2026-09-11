@@ -32,3 +32,4 @@ if [ -n "$content_matches" ] || [ -n "$path_matches" ]; then
 fi
 
 echo "Harborline App consumer-neutral boundary: PASS"
+node --test eng/tests/coverage.test.mjs
