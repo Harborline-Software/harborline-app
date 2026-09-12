@@ -12,7 +12,7 @@
 // attests to and could never match itself.
 //
 //   node eng/verify-receipt.mjs --record <step-id>...   # written by eng/verify.sh on success
-//   node eng/verify-receipt.mjs                         # verify; the pre-push hook calls this
+//   node eng/verify-receipt.mjs                         # verify a recorded receipt (evidence only)
 import {execFileSync} from 'node:child_process'
 import {existsSync, readFileSync, writeFileSync} from 'node:fs'
 import path from 'node:path'

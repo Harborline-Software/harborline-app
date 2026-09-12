@@ -5,7 +5,9 @@
 # .github/workflows/packages.yml): the org is on the free plan, private-repo minutes ran out on
 # 2026-08-24, and until these repositories are public the workflows only produce red checks that
 # never ran. This runs what those workflows ran, in the same order, and on success records a receipt
-# that .githooks/pre-push requires.
+# as per-run evidence. Nothing requires that receipt to push: the `verify` check on the self-hosted
+# runner is the required gate (app #9), and the pre-push refusal it fed was removed with the rest of
+# the retired landing mechanism (ticket 393 item 5).
 #
 # The step ids MUST stay in sync with requiredStepIds in eng/verify-receipt.mjs.
 #
@@ -15,15 +17,6 @@ set -uo pipefail
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
-
-# Wire the hooks path here, not only in the README. core.hooksPath is LOCAL config and git skips a
-# missing hooks path WITHOUT an error, so a fresh clone enforces nothing and does not say so — and
-# git cannot fix that: it deliberately never clones hooks or local config. What it CAN do is make
-# sure that anyone who has demonstrated intent to verify is wired from then on. Idempotent.
-if [ "$(git config core.hooksPath || true)" != ".githooks" ]; then
-  git config core.hooksPath .githooks
-  echo "wired core.hooksPath -> .githooks (pre-push will now require a receipt)"
-fi
 
 passed=()
 step() {
