@@ -5,7 +5,14 @@ This repository begins with a fresh public history as of September 2026. The ear
 
 > **Status: pre-release.** Harborline is under active development and is not ready for production use. APIs, schemas, storage formats and package names change without notice, and there are no supported installs yet. Source is licensed under [Apache-2.0](LICENSE); see [NOTICE](NOTICE) and the [trademark policy](TRADEMARKS.md).
 
-Harborline App is the reference app and an extension host for independently versioned product consumers. Its product interfaces are shared across React and Blazor; framework UI and native-device implementations stay inside their projections.
+Harborline App is the human interface to the Harborline API. It enables people to author domain
+models, perform enterprise work, and inspect the evidence supporting operational decisions and
+outcomes. Pilot assists users through the same governed interfaces. The App also hosts extensions
+for independently versioned product consumers. React and Blazor provide framework realizations of
+this human experience; framework UI and native-device implementations stay inside their projections.
+
+This is the product purpose, independent of which surfaces are currently implemented. The packages
+and host states below describe implementation progress.
 
 Current executable preview packages:
 
