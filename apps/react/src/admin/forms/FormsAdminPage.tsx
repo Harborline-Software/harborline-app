@@ -6,6 +6,7 @@ import type { FormDefinitionSummary, FormVersionSummary } from './client/types'
 import { FormDefinitionDetail } from './FormDefinitionDetail'
 import { useFormsAdminClient } from './FormsAdminClientContext'
 import { formatIt } from './it'
+import { firstRunEmptyStateCopy, firstRunObservationForList, firstRunObservationForListFailure } from '../firstRunState'
 
 export interface FormsAdminPageProps {
   readonly panelRailCapable?: boolean
@@ -16,6 +17,7 @@ export function FormsAdminPage({ panelRailCapable }: FormsAdminPageProps) {
   const canShowMasterDetail = useCanShowMasterDetail()
   const client = useFormsAdminClient()
   const [definitions, setDefinitions] = useState<readonly FormDefinitionSummary[] | null>(null)
+  const [firstRunObservation, setFirstRunObservation] = useState<ReturnType<typeof firstRunObservationForList> | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<FormDefinitionSummary | null>(null)
   const [versions, setVersions] = useState<readonly FormVersionSummary[] | null>(null)
@@ -24,7 +26,16 @@ export function FormsAdminPage({ panelRailCapable }: FormsAdminPageProps) {
   const [errorLine, setErrorLine] = useState<string | null>(null)
 
   useEffect(() => {
-    void client.listDefinitions().then(setDefinitions).catch((error: unknown) => {
+    void client.listDefinitions().then(rows => {
+      setDefinitions(rows)
+      setFirstRunObservation(firstRunObservationForList(rows))
+    }).catch((error: unknown) => {
+      const observation = firstRunObservationForListFailure(error)
+      if (observation) {
+        setDefinitions([])
+        setFirstRunObservation(observation)
+        return
+      }
       setLoadError(error instanceof Error ? error.message : String(error))
     })
   }, [client])
@@ -80,7 +91,7 @@ export function FormsAdminPage({ panelRailCapable }: FormsAdminPageProps) {
         rows={definitions}
         getRowId={definition => `${definition.formId}@${definition.version}`}
         zebra
-        empty="No form definitions for this tenant."
+        empty={firstRunEmptyStateCopy(firstRunObservation ?? firstRunObservationForList([]))}
         columns={columns}
       />
       {selected !== null && (

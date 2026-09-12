@@ -4,6 +4,7 @@ import type { DataGridCellContext, DataGridColumnDef } from '@harborline-softwar
 import type { ViewDefinitionDetail as ViewDefinitionDetailModel, ViewDefinitionSummary, ViewVersionList } from './client/types'
 import { ViewDefinitionDetail } from './ViewDefinitionDetail'
 import { useViewsAdminClient } from './ViewsAdminClientContext'
+import { firstRunEmptyStateCopy, firstRunObservationForList, firstRunObservationForListFailure } from '../firstRunState'
 
 export interface ViewsAdminPageProps {
   readonly panelRailCapable?: boolean
@@ -14,6 +15,7 @@ export function ViewsAdminPage({ panelRailCapable }: ViewsAdminPageProps) {
   const canShowMasterDetail = useCanShowMasterDetail()
   const client = useViewsAdminClient()
   const [definitions, setDefinitions] = useState<readonly ViewDefinitionSummary[] | null>(null)
+  const [firstRunObservation, setFirstRunObservation] = useState<ReturnType<typeof firstRunObservationForList> | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<ViewDefinitionSummary | null>(null)
   const [detail, setDetail] = useState<ViewDefinitionDetailModel | null>(null)
@@ -21,7 +23,16 @@ export function ViewsAdminPage({ panelRailCapable }: ViewsAdminPageProps) {
   const [errorLine, setErrorLine] = useState<string | null>(null)
 
   useEffect(() => {
-    void client.listDefinitions().then(setDefinitions).catch((error: unknown) => {
+    void client.listDefinitions().then(rows => {
+      setDefinitions(rows)
+      setFirstRunObservation(firstRunObservationForList(rows))
+    }).catch((error: unknown) => {
+      const observation = firstRunObservationForListFailure(error)
+      if (observation) {
+        setDefinitions([])
+        setFirstRunObservation(observation)
+        return
+      }
       setLoadError(error instanceof Error ? error.message : String(error))
     })
   }, [client])
@@ -66,7 +77,7 @@ export function ViewsAdminPage({ panelRailCapable }: ViewsAdminPageProps) {
         rows={definitions}
         getRowId={row => `${row.key}@${row.version}`}
         zebra
-        empty="No view definitions for this tenant."
+        empty={firstRunEmptyStateCopy(firstRunObservation ?? firstRunObservationForList([]))}
         columns={columns}
       />
       {selected !== null && (

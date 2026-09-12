@@ -6,6 +6,7 @@ import type { SchedulingDefinitionSummary, SchedulingDefinitionView } from './cl
 import { formatUtc } from './format'
 import { SchedulingDefinitionDetail } from './SchedulingDefinitionDetail'
 import { useSchedulingAdminClient } from './SchedulingAdminClientContext'
+import { firstRunEmptyStateCopy, firstRunObservationForList, firstRunObservationForListFailure } from '../firstRunState'
 
 export interface SchedulingAdminPageProps {
   readonly panelRailCapable?: boolean
@@ -16,6 +17,7 @@ export function SchedulingAdminPage({ panelRailCapable }: SchedulingAdminPagePro
   const canShowMasterDetail = useCanShowMasterDetail()
   const client = useSchedulingAdminClient()
   const [definitions, setDefinitions] = useState<readonly SchedulingDefinitionSummary[] | null>(null)
+  const [firstRunObservation, setFirstRunObservation] = useState<ReturnType<typeof firstRunObservationForList> | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<SchedulingDefinitionSummary | null>(null)
   const [view, setView] = useState<SchedulingDefinitionView | null>(null)
@@ -25,7 +27,16 @@ export function SchedulingAdminPage({ panelRailCapable }: SchedulingAdminPagePro
   const [errorLine, setErrorLine] = useState<string | null>(null)
 
   useEffect(() => {
-    void client.listDefinitions().then(setDefinitions).catch((error: unknown) => {
+    void client.listDefinitions().then(rows => {
+      setDefinitions(rows)
+      setFirstRunObservation(firstRunObservationForList(rows))
+    }).catch((error: unknown) => {
+      const observation = firstRunObservationForListFailure(error)
+      if (observation) {
+        setDefinitions([])
+        setFirstRunObservation(observation)
+        return
+      }
       setLoadError(error instanceof Error ? error.message : String(error))
     })
   }, [client])
@@ -98,7 +109,7 @@ export function SchedulingAdminPage({ panelRailCapable }: SchedulingAdminPagePro
         rows={definitions}
         getRowId={definition => `${definition.id}@${definition.revision}`}
         zebra
-        empty="No scheduling definitions for this tenant."
+        empty={firstRunEmptyStateCopy(firstRunObservation ?? firstRunObservationForList([]))}
         columns={columns}
       />
       {selected !== null && (

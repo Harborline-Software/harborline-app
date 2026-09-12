@@ -1,4 +1,5 @@
 @namespace Harborline.App.Blazor.ReferenceHost.Admin.DataExchange
+@using Harborline.App.Blazor.ReferenceHost.Admin
 @using Microsoft.AspNetCore.Components
 @using Harborline.UIAdapters.Blazor.Components.DataDisplay
 @using Harborline.UIAdapters.Blazor.Components.Layout
@@ -25,7 +26,7 @@ else
                       Columns="@columns"
                       Zebra="true"
                       AccessibleLabel="Data exchange definitions"
-                      Empty="No data exchange definitions for this tenant." />
+                      Empty="@FirstRunEmptyState.Copy(firstRunObservation ?? FirstRunEmptyState.FromList(0))" />
 }
 
 @if (selected is not null)
@@ -44,6 +45,7 @@ else
 
 @code {
     private IReadOnlyList<DataExchangeDefinitionSummary>? definitions;
+    private FirstRunObservation? firstRunObservation;
     private string? loadError;
     private DataExchangeDefinitionSummary? selected;
     private DataExchangeDefinitionDetail? detail;
@@ -79,10 +81,16 @@ else
         try
         {
             definitions = await Client.ListDefinitionsAsync();
+            firstRunObservation = FirstRunEmptyState.FromList(definitions.Count);
         }
         catch (DataExchangeAdminException exception)
         {
-            loadError = exception.Message;
+            if (FirstRunEmptyState.TryFromListFailure(exception.Status, out var observation))
+            {
+                definitions = [];
+                firstRunObservation = observation;
+            }
+            else loadError = exception.Message;
         }
     }
 

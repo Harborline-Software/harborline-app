@@ -4,6 +4,7 @@ import type { DataGridCellContext, DataGridColumnDef } from '@harborline-softwar
 import type { ReportDefinitionDetail as ReportDefinitionDetailModel, ReportDefinitionSummary, ReportVersionList } from './client/types'
 import { ReportDefinitionDetail } from './ReportDefinitionDetail'
 import { useReportsAdminClient } from './ReportsAdminClientContext'
+import { firstRunEmptyStateCopy, firstRunObservationForList, firstRunObservationForListFailure } from '../firstRunState'
 
 export interface ReportsAdminPageProps {
   readonly panelRailCapable?: boolean
@@ -14,6 +15,7 @@ export function ReportsAdminPage({ panelRailCapable }: ReportsAdminPageProps) {
   const canShowMasterDetail = useCanShowMasterDetail()
   const client = useReportsAdminClient()
   const [definitions, setDefinitions] = useState<readonly ReportDefinitionSummary[] | null>(null)
+  const [firstRunObservation, setFirstRunObservation] = useState<ReturnType<typeof firstRunObservationForList> | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<ReportDefinitionSummary | null>(null)
   const [detail, setDetail] = useState<ReportDefinitionDetailModel | null>(null)
@@ -21,7 +23,16 @@ export function ReportsAdminPage({ panelRailCapable }: ReportsAdminPageProps) {
   const [errorLine, setErrorLine] = useState<string | null>(null)
 
   useEffect(() => {
-    void client.listDefinitions().then(setDefinitions).catch((error: unknown) => {
+    void client.listDefinitions().then(rows => {
+      setDefinitions(rows)
+      setFirstRunObservation(firstRunObservationForList(rows))
+    }).catch((error: unknown) => {
+      const observation = firstRunObservationForListFailure(error)
+      if (observation) {
+        setDefinitions([])
+        setFirstRunObservation(observation)
+        return
+      }
       setLoadError(error instanceof Error ? error.message : String(error))
     })
   }, [client])
@@ -66,7 +77,7 @@ export function ReportsAdminPage({ panelRailCapable }: ReportsAdminPageProps) {
         rows={definitions}
         getRowId={row => `${row.key}@${row.version}`}
         zebra
-        empty="No report definitions for this tenant."
+        empty={firstRunEmptyStateCopy(firstRunObservation ?? firstRunObservationForList([]))}
         columns={columns}
       />
       {selected !== null && (
