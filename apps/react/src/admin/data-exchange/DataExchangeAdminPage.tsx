@@ -4,6 +4,7 @@ import type { DataGridCellContext, DataGridColumnDef } from '@harborline-softwar
 import type { DataExchangeDefinitionDetail as DataExchangeDefinitionDetailModel, DataExchangeDefinitionSummary, DataExchangeVersionList } from './client/types'
 import { DataExchangeDefinitionDetail } from './DataExchangeDefinitionDetail'
 import { useDataExchangeAdminClient } from './DataExchangeAdminClientContext'
+import { firstRunEmptyStateCopy, firstRunObservationForList, firstRunObservationForListFailure } from '../firstRunState'
 
 export interface DataExchangeAdminPageProps {
   readonly panelRailCapable?: boolean
@@ -14,6 +15,7 @@ export function DataExchangeAdminPage({ panelRailCapable }: DataExchangeAdminPag
   const canShowMasterDetail = useCanShowMasterDetail()
   const client = useDataExchangeAdminClient()
   const [definitions, setDefinitions] = useState<readonly DataExchangeDefinitionSummary[] | null>(null)
+  const [firstRunObservation, setFirstRunObservation] = useState<ReturnType<typeof firstRunObservationForList> | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<DataExchangeDefinitionSummary | null>(null)
   const [detail, setDetail] = useState<DataExchangeDefinitionDetailModel | null>(null)
@@ -21,7 +23,16 @@ export function DataExchangeAdminPage({ panelRailCapable }: DataExchangeAdminPag
   const [errorLine, setErrorLine] = useState<string | null>(null)
 
   useEffect(() => {
-    void client.listDefinitions().then(setDefinitions).catch((error: unknown) => {
+    void client.listDefinitions().then(rows => {
+      setDefinitions(rows)
+      setFirstRunObservation(firstRunObservationForList(rows))
+    }).catch((error: unknown) => {
+      const observation = firstRunObservationForListFailure(error)
+      if (observation) {
+        setDefinitions([])
+        setFirstRunObservation(observation)
+        return
+      }
       setLoadError(error instanceof Error ? error.message : String(error))
     })
   }, [client])
@@ -66,7 +77,7 @@ export function DataExchangeAdminPage({ panelRailCapable }: DataExchangeAdminPag
         rows={definitions}
         getRowId={row => `${row.key}@${row.version}`}
         zebra
-        empty="No data exchange definitions for this tenant."
+        empty={firstRunEmptyStateCopy(firstRunObservation ?? firstRunObservationForList([]))}
         columns={columns}
       />
       {selected !== null && (
