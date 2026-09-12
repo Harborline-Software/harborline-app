@@ -1,7 +1,6 @@
 # verify: eng/verify.sh on a self-hosted macOS runner, as a pull-request check and as the merge-queue
-# check. eng/verify.sh is this repository's gate — the same seven steps .githooks/pre-push requires a
-# receipt for — and it has never run in any automation: packages.yml runs four of the React lane's
-# steps on ubuntu and nothing else. Shape copied from harborline-api's verify.yml
+# check. eng/verify.sh is this repository's gate, and before this workflow it had never run in any
+# automation: packages.yml runs four of the React lane's steps on ubuntu and nothing else. Shape copied from harborline-api's verify.yml
 # (control: docs/velocity/landing.md).
 #
 # Fork safety: harborline-app is public and this job runs on our own machines. It runs only for pull
