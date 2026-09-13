@@ -15,6 +15,25 @@ namespace Harborline.App.Blazor.Tests;
 public sealed class PackNavigationTests : BunitContext
 {
     [Fact]
+    public void Seeded_workshop_workspace_has_a_user_facing_label()
+    {
+        const string fixture = """
+            {"configured":true,"pack":{"packId":"harborline.active-pack-composition","seedWorkspaces":[{"id":"workshop","labelKey":"workshop.workspace","groups":[]}],"panelSet":[]}}
+            """;
+        Services.AddHarborlineUiAdapters();
+        Services.AddSingleton<IMediaQueryObserver>(new Media());
+        Services.AddSingleton<IAuthorizationAdminClient>(new FixtureAuthorizationAdminClient());
+        Services.AddSingleton<IPackNavigationClient>(new HttpPackNavigationClient(
+            new HttpClient(new Handler(fixture)) { BaseAddress = new Uri("http://localhost:7308/") }));
+        JSInterop.Mode = JSRuntimeMode.Loose;
+
+        var shell = Render<Shell>();
+
+        shell.WaitForAssertion(() => Assert.Equal("Workshop",
+            shell.Find("a[href='/workspaces/workshop']").TextContent.Trim()));
+    }
+
+    [Fact]
     public void Shared_declaration_renders_Access_and_panels_removal_removes_them_and_a_refused_read_retries()
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
