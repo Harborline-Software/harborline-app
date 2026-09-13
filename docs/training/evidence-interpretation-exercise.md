@@ -34,6 +34,8 @@ Neither record includes an authenticated submitter, submission timestamp, permis
 
 The codes are illustrative. A reason code identifies a category; the pointer identifies a field. Neither supplies the missing facts.
 
+Source evidence identifies the inspected revision. Release evidence identifies the selected release, its scope and an observed acceptance result.
+
 ## Part 1: Identify what you have
 
 **1.** Classify the packet items as pack, record definition, form definition, view definition, implementation library, record instance, authorization refusal or validation refusal. Which items carry reusable domain meaning, and which implement behavior?
@@ -44,7 +46,7 @@ Pause here if needed.
 
 **2.** Give three statements about what Record A contains and three things it does not establish. Distinguish the named inspector and stated inspection time from the authenticated submitter and submission time. Identify the definition version you would retain when interpreting it.
 
-**3.** Can this packet establish that `pump-17` is safe to operate? Name missing observations, context and decision authority. Explain why the packet cannot define a sufficient minimum for that decision. Then write a two-sentence handoff describing the recorded uncertainty and the pending decision.
+**3.** Can this packet establish that `pump-17` is safe to operate? Name missing observations, context and decision authority. Explain why the packet cannot define a sufficient minimum for that decision. Then write a two-sentence handoff separating the recorded uncertainty from any operating decision, without recommending an operating action.
 
 **4.** What does the attention view add? Does Record B’s `present` value and photo reference prove the photo is accessible, depicts the stated asset at the stated time, or establishes operating safety?
 

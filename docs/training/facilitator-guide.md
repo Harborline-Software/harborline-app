@@ -24,7 +24,7 @@ It does not establish who submitted the record, the submission time, the accurac
 
 The packet cannot establish safe operation or define the minimum sufficient evidence. An answer should identify missing observations and relevant context, plus the organization’s policy and assigned decision authority. Do not require a learner to invent a safety policy.
 
-An acceptable handoff is: “The record lists guard status as unknown, includes a note stating the access panel was locked and supplies no photo reference. The packet contains no operating decision; its sufficiency needs review under the organization’s applicable policy by the assigned decision maker.”
+An acceptable handoff is: “The record lists guard status as unknown, includes a note stating the access panel was locked and supplies no photo reference. No operating decision is included; if one is required, the organization’s assigned decision maker must apply its policy and any additional evidence.”
 
 In real work, staff follow their workplace procedures. The exercise’s evidential limit is not an instruction to ignore a possible hazard.
 
@@ -44,7 +44,7 @@ Body validity remains unknown. No supplied audit identifier means no trace can b
 
 Inspect the rejected value at `/guardStatus` against the governing definition. The packet omits that value, so it cannot justify a specific replacement.
 
-Correct a transcription or omission only from available evidence. Preserve `unknown` when that is truthful and allowed; if the definition cannot represent known facts, pause for authorized review of the model. Do not invent an observation or request broader access to make validation pass. A model revision needs an explicit meaning, version and review of affected uses; it cannot retroactively validate the refused attempt.
+Correct a transcription or omission only from available evidence. Preserve `unknown` when that is truthful and allowed; if the definition cannot represent known facts, pause the record submission and seek authorized review of the model, following workplace procedures separately. Do not invent an observation or request broader access to make validation pass. A model revision needs an explicit meaning, version and review of affected uses; it cannot retroactively validate the refused attempt.
 
 For the optional rewrite, “guard status unknown; I could not observe it” preserves uncertainty. Add a reason only if actually known.
 

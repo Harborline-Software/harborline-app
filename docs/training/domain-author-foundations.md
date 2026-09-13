@@ -44,7 +44,7 @@ Interpret retained records using the definition that governed their capture. A n
 
 Treat `unknown`, `not observed` and `not applicable` as distinct when the definition distinguishes them. An inaccessible guard is not evidence of an absent guard. A photo reference is not proof that the photo is available, depicts the right asset or was taken at the stated time.
 
-If the available form cannot express what you know truthfully, pause and seek review of the definition. Do not choose a convenient value merely to pass validation. If you discover a mistake after submission, use the environment’s documented correction path and preserve the original evidence; seek help when no such path is available. This lesson does not promise a particular correction feature.
+If the available form cannot express what you know truthfully, pause the record submission, follow workplace procedures separately and ask the assigned model owner to review the definition. Do not choose a convenient value merely to pass validation. If you discover a mistake after submission, use the environment’s documented correction path and preserve the original evidence; seek help when no such path is available. This lesson does not promise a particular correction feature.
 
 A justified definition change establishes a new meaning and version and requires review of affected uses. Relaxing a check to admit one inconvenient entry does not retroactively validate a refused attempt or supply missing evidence.
 
