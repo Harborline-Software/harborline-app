@@ -29,7 +29,10 @@ function row(entry: CatalogueEntry): ViewRuntimeRow {
 }
 
 async function readJson<T>(path: string, signal: AbortSignal): Promise<T> {
-  const origin = import.meta.env.VITE_FORMS_API_ORIGIN?.replace(/\/$/, '') ?? ''
+  // During development the Vite proxy owns the node hop and attaches the bearer token. Keeping
+  // this request same-origin is therefore part of the authentication boundary, not just a CORS
+  // convenience. A built bundle has no proxy and uses the explicitly configured origin.
+  const origin = import.meta.env.DEV ? '' : (import.meta.env.VITE_FORMS_API_ORIGIN?.replace(/\/$/, '') ?? '')
   const response = await fetch(`${origin}${path}`, { credentials: 'include', signal })
   if (!response.ok) throw new Error(`Workshop catalogue request failed (${response.status}).`)
   return await response.json() as T
