@@ -5,14 +5,9 @@ This repository begins with a fresh public history as of September 2026. The ear
 
 > **Status: pre-release.** Harborline is under active development and is not ready for production use. APIs, schemas, storage formats and package names change without notice, and there are no supported installs yet. Source is licensed under [Apache-2.0](LICENSE); see [NOTICE](NOTICE) and the [trademark policy](TRADEMARKS.md).
 
-Harborline App is the human interface to the Harborline API. It enables people to author domain
-models, perform enterprise work, and inspect the evidence supporting operational decisions and
-outcomes. Pilot assists users through the same governed interfaces. The App also hosts extensions
-for independently versioned product consumers. React and Blazor provide framework realizations of
-this human experience; framework UI and native-device implementations stay inside their projections.
+Harborline App is the human interface to the Harborline API. It enables people to author domain models, perform enterprise work, and inspect the evidence supporting operational decisions and outcomes. Pilot assists users through the same governed interfaces. The App also hosts extensions for independently versioned product consumers. React and Blazor provide framework realizations of this human experience; framework UI and native-device implementations stay inside their projections.
 
-This is the product purpose, independent of which surfaces are currently implemented. The packages
-and host states below describe implementation progress.
+This is the product purpose, independent of which surfaces are currently implemented. The packages and host states below describe implementation progress.
 
 Current executable preview packages:
 
@@ -69,24 +64,14 @@ dotnet run --project apps/blazor
 
 Identical on macOS, Linux and Windows. It is a Blazor Server application using interactive server rendering, so it serves over HTTP and needs no client-side build step.
 
-The host now carries `Properties/launchSettings.json`, which pins **`http://localhost:5321`** and sets
-`ASPNETCORE_ENVIRONMENT=Development`. Both matter:
+The host now carries `Properties/launchSettings.json`, which pins **`http://localhost:5321`** and sets `ASPNETCORE_ENVIRONMENT=Development`. Both matter:
 
-- **The port** avoids the default 5000, which collides often — on macOS because AirPlay Receiver
-  listens there. Override with `--urls "http://localhost:PORT"` if 5321 is taken.
-- **The environment is load-bearing, not a preference.** Static web assets — the framework
-  `_framework/blazor.web.js`, the shell's scoped CSS under `_content/`, and the host's own
-  `.styles.css` — are only mapped from the static-web-assets manifest in `Development`. Run this
-  host in `Production` from a build output and every one of those returns **500**, leaving an
-  unstyled page with no interactivity. `dotnet publish` materialises a real `wwwroot` and does not
-  have this problem; running from `bin/` does.
+- **The port** avoids the default 5000, which collides often — on macOS because AirPlay Receiver listens there. Override with `--urls "http://localhost:PORT"` if 5321 is taken.
+- **The environment is load-bearing, not a preference.** Static web assets — the framework `_framework/blazor.web.js`, the shell's scoped CSS under `_content/`, and the host's own `.styles.css` — are only mapped from the static-web-assets manifest in `Development`. Run this host in `Production` from a build output and every one of those returns **500**, leaving an unstyled page with no interactivity. `dotnet publish` materialises a real `wwwroot` and does not have this problem; running from `bin/` does.
 
-Then open the URL the process prints — it logs `Now listening on: <url>` at startup. `/` serves the
-application shell. Stop it with `Ctrl+C`.
+Then open the URL the process prints — it logs `Now listening on: <url>` at startup. `/` serves the application shell. Stop it with `Ctrl+C`.
 
-If `/` returns **404** while static files still return 200, the routable page is missing: the host
-(or some component in the assembly) must carry a `@page` directive, or `MapRazorComponents<App>()`
-discovers no route and matches nothing.
+If `/` returns **404** while static files still return 200, the routable page is missing: the host (or some component in the assembly) must carry a `@page` directive, or `MapRazorComponents<App>()` discovers no route and matches nothing.
 
 To run in another environment, override it explicitly — and expect the asset behaviour above:
 
@@ -98,35 +83,21 @@ ASPNETCORE_ENVIRONMENT=Production dotnet run --project apps/blazor   # macOS, Li
 $env:ASPNETCORE_ENVIRONMENT="Production"; dotnet run --project apps/blazor   # Windows PowerShell
 ```
 
-Outside `Development` the Forms admin client must also be configured, or startup fails loudly
-with a configuration error (ticket 153 — the fixture is an explicit opt-in, never a silent
-fallback). Either set `FormsAdmin:BaseUrl` (env: `FormsAdmin__BaseUrl`) to the local node
-origin, or opt in to the serverless fixture with the boolean `FormsAdmin:UseFixture=true`
-(env: `FormsAdmin__UseFixture=true`); `appsettings.Development.json` sets the opt-in for
-Development. The React lane's equivalents are `VITE_FORMS_API_ORIGIN` and
-`VITE_FORMS_FIXTURE`, which accepts exactly `1` or `true`.
+Outside `Development` the Forms admin client must also be configured, or startup fails loudly with a configuration error (ticket 153 — the fixture is an explicit opt-in, never a silent fallback). Either set `FormsAdmin:BaseUrl` (env: `FormsAdmin__BaseUrl`) to the local node origin, or opt in to the serverless fixture with the boolean `FormsAdmin:UseFixture=true` (env: `FormsAdmin__UseFixture=true`); `appsettings.Development.json` sets the opt-in for Development. The React lane's equivalents are `VITE_FORMS_API_ORIGIN` and `VITE_FORMS_FIXTURE`, which accepts exactly `1` or `true`.
 
 The reference host does not configure an HTTPS endpoint, so `dotnet dev-certs https --trust` is not needed. If you add one, note that `--trust` is supported on Windows and macOS but not on most Linux distributions, where the certificate must be trusted manually.
 
 ## Verify
 
-`eng/verify.sh` is this repository's gate. It runs as the required `verify` check on a self-hosted
-macOS runner, on pull requests and on merge-queue groups (`.github/workflows/verify.yml`), and it is
-the same script you run locally:
+`eng/verify.sh` is this repository's gate. It runs as the required `verify` check on a self-hosted macOS runner, on pull requests and on merge-queue groups (`.github/workflows/verify.yml`), and it is the same script you run locally:
 
 ```sh
 bash eng/verify.sh                    # run on a clean tree; the receipt attests to HEAD
 ```
 
-On success it records a receipt as per-run evidence. Nothing requires that receipt to push: the
-required check is what decides whether a change lands, and the `.githooks/pre-push` refusal that
-used to demand a local receipt was removed with the rest of the retired landing mechanism (control
-ticket 393 item 5). Landing is `gh pr merge --auto`; the merge queue builds and judges the tree it
-lands.
+On success it records a receipt as per-run evidence. Nothing requires that receipt to push: the required check is what decides whether a change lands, and the `.githooks/pre-push` refusal that used to demand a local receipt was removed with the rest of the retired landing mechanism (control ticket 393 item 5). Landing is `gh pr merge --auto`; the merge queue builds and judges the tree it lands.
 
-The receipt is refused if the working tree is dirty: it attests to HEAD, while `eng/verify.sh` runs
-against the working tree, so on a dirty tree it would vouch for code the run never saw. Commit
-first, then verify.
+The receipt is refused if the working tree is dirty: it attests to HEAD, while `eng/verify.sh` runs against the working tree, so on a dirty tree it would vouch for code the run never saw. Commit first, then verify.
 
 Individual steps, to run one on its own:
 
