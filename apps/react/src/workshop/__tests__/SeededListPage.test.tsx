@@ -206,8 +206,12 @@ describe('seeded Workshop list', () => {
     expect(JSON.parse(String(request('/asset-registry/entities').init?.body))).toEqual({
       type: 'acme.asset', displayName: 'Dock asset', values: { title: 'Dock asset', count: 2 },
     })
-    expect(request('/packs/verify').init?.body).toBeInstanceOf(Blob)
-    expect(request('/packs/install').init?.body).toBeInstanceOf(Blob)
+    const verifyBody = request('/packs/verify').init?.body as Blob
+    const installBody = request('/packs/install').init?.body as Blob
+    expect({ size: verifyBody.size, type: verifyBody.type }).toEqual({ size: 4, type: 'application/octet-stream' })
+    expect(Array.from(new Uint8Array(await verifyBody.arrayBuffer()))).toEqual([1, 2, 3, 4])
+    expect({ size: installBody.size, type: installBody.type }).toEqual({ size: 4, type: 'application/octet-stream' })
+    expect(Array.from(new Uint8Array(await installBody.arrayBuffer()))).toEqual([1, 2, 3, 4])
 
     fireEvent.click(screen.getByRole('button', { name: 'Go live' }))
     await screen.findByText(/Activation completed with projection refusals/)
