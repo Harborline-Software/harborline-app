@@ -92,7 +92,15 @@
 </HarborlineAppShell>
 
 @code {
-    private static string ResolveLabel(string key) => key switch { "access.workspace" => "Access", "access.holders" => "Holders", "access.details" or "access.details.footer" => "Access details", _ => key };
+    private static string ResolveLabel(string key) => key switch
+    {
+        "access.workspace" => "Access", "access.holders" => "Holders",
+        "access.details" or "access.details.footer" => "Access details",
+        "workshop.workspace" => "Workshop", "workshop.definitions" => "Definitions",
+        _ when key.StartsWith("workshop.", StringComparison.Ordinal)
+            && WorkshopLabels.TryGetValue(key["workshop.".Length..], out var label) => label,
+        _ => key,
+    };
     private static readonly IReadOnlyDictionary<string, string> WorkshopLabels = new Dictionary<string, string>
     {
         ["asset-types"] = "Record types", ["forms"] = "Forms", ["workflows"] = "Workflows", ["standards"] = "Standards",

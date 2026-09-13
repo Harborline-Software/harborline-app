@@ -1,5 +1,7 @@
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Harborline.UIAdapters.Blazor.Components.DataDisplay;
 
 namespace Harborline.App.Blazor.ReferenceHost.Workshop;
@@ -8,6 +10,11 @@ public interface IWorkshopCatalogueClient
 {
     Task<WorkshopCatalogueEntry> ReadViewAsync(string itemId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<WorkshopCatalogueEntry>> ListAsync(string kind, CancellationToken cancellationToken = default);
+    Task<WorkshopCatalogueEntry> ReadFormAsync(string id, string? version = null, CancellationToken cancellationToken = default);
+    Task<JsonElement> ReadJsonAsync(string path, CancellationToken cancellationToken = default);
+    Task<JsonElement> PostJsonAsync(string path, object body, CancellationToken cancellationToken = default);
+    Task<JsonElement> PostArtifactAsync(string path, byte[] artifact, CancellationToken cancellationToken = default);
+    Task<byte[]> ExportAsync(JsonElement candidate, CancellationToken cancellationToken = default);
 }
 
 public sealed record WorkshopLocalizedText(string DefaultLocale, IReadOnlyDictionary<string, string> Values);
@@ -18,14 +25,74 @@ public sealed record WorkshopCatalogueEntry(
     string Status,
     WorkshopLocalizedText? Title,
     JsonElement Body,
-    ViewRenderPlan? RenderPlan);
+    ViewRenderPlan? RenderPlan)
+{
+    [JsonIgnore] public JsonElement CompiledBindings { get; init; }
+}
+
+public sealed class WorkshopRequestException(int statusCode, string responseBody)
+    : HttpRequestException($"Request failed ({statusCode}): {responseBody}")
+{
+    public string ResponseBody { get; } = responseBody;
+}
 
 public sealed class HttpWorkshopCatalogueClient(HttpClient httpClient) : IWorkshopCatalogueClient
 {
     public async Task<WorkshopCatalogueEntry> ReadViewAsync(string itemId, CancellationToken cancellationToken = default) =>
-        await httpClient.GetFromJsonAsync<WorkshopCatalogueEntry>(
-            $"api/local-node/catalogue/definitions/ViewDefinition/platform.list.{Uri.EscapeDataString(itemId)}", cancellationToken)
-        ?? throw new InvalidOperationException("The seeded Workshop view returned no definition.");
+        await ReadEntryAsync($"api/local-node/catalogue/definitions/ViewDefinition/platform.list.{Uri.EscapeDataString(itemId)}", cancellationToken);
+
+    public Task<WorkshopCatalogueEntry> ReadFormAsync(string id, string? version = null, CancellationToken cancellationToken = default) =>
+        ReadEntryAsync($"api/local-node/catalogue/definitions/FormDefinition/{Uri.EscapeDataString(id)}"
+            + (version is null ? string.Empty : $"?version={Uri.EscapeDataString(version)}"), cancellationToken);
+
+    private async Task<WorkshopCatalogueEntry> ReadEntryAsync(string path, CancellationToken cancellationToken)
+    {
+        var json = await ReadJsonAsync(path, cancellationToken);
+        var entry = json.Deserialize<WorkshopCatalogueEntry>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
+            ?? throw new JsonException("The catalogue returned no definition.");
+        return entry with { CompiledBindings = json.TryGetProperty("renderPlan", out var plan)
+            && plan.ValueKind == JsonValueKind.Object && plan.TryGetProperty("bindings", out var bindings)
+                ? bindings.Clone() : default };
+    }
+
+    public async Task<JsonElement> ReadJsonAsync(string path, CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.GetAsync(path, cancellationToken);
+        return await ReadResponseAsync(response, cancellationToken);
+    }
+
+    public async Task<JsonElement> PostJsonAsync(string path, object body, CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsJsonAsync(path, body, cancellationToken);
+        return await ReadResponseAsync(response, cancellationToken);
+    }
+
+    public async Task<JsonElement> PostArtifactAsync(string path, byte[] artifact, CancellationToken cancellationToken = default)
+    {
+        using var content = new ByteArrayContent(artifact);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        using var response = await httpClient.PostAsync(path, content, cancellationToken);
+        return await ReadResponseAsync(response, cancellationToken);
+    }
+
+    public async Task<byte[]> ExportAsync(JsonElement candidate, CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsJsonAsync("api/local-node/packs/export", candidate, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadAsByteArrayAsync(cancellationToken);
+    }
+
+    private static async Task<JsonElement> ReadResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+    }
+
+    private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (!response.IsSuccessStatusCode)
+            throw new WorkshopRequestException((int)response.StatusCode, await response.Content.ReadAsStringAsync(cancellationToken));
+    }
 
     public async Task<IReadOnlyList<WorkshopCatalogueEntry>> ListAsync(string kind, CancellationToken cancellationToken = default) =>
         (await httpClient.GetFromJsonAsync<WorkshopCatalogueList>(

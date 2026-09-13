@@ -1,6 +1,7 @@
 @namespace Harborline.App.Blazor.ReferenceHost.Workshop
 @using System.Text.Json
 @using Harborline.UIAdapters.Blazor.Components.DataDisplay
+@using Harborline.UIAdapters.Blazor.Components.Forms
 @inject IWorkshopCatalogueClient CatalogueClient
 @implements IDisposable
 
@@ -12,9 +13,29 @@ else if (plan is null)
 {
     <p role="status">Loading Workshop list…</p>
 }
-else
+else if (supported)
 {
-    <HarborlineViewRuntime Plan="@plan" Rows="@rows" Empty="No definitions." OnRowActivate="@((string rowId) => SelectRow(rowId))" />
+    <fieldset disabled="@workflow!.Busy" style="border:0;padding:0;margin:0">
+        <HarborlineViewRuntime Plan="@plan" Rows="@rows" Empty="No definitions." OnRowActivate="@((string rowId) => SelectRow(rowId))" OnAction="@(EventCallback.Factory.Create<string>(this, ActivateActionAsync))" />
+    </fieldset>
+    @if (workflow.Form is not null)
+    {
+        <HarborlineSchemaForm @key="workflow.Form" View="@workflow.Form" Values="@workflow.Values"
+            OnValuesChange="@workflow.ChangeValues" Disabled="@workflow.Busy"
+            Strings="@(new SchemaFormStrings { Submit = workflow.FormLabel! })" OnSubmit="@SubmitAsync" />
+    }
+    @if (workflow.DownloadUrl is not null)
+    {
+        <a href="@workflow.DownloadUrl" download="@workflow.DownloadName">@workflow.DownloadLabel</a>
+    }
+    @if (workflow.Error is not null)
+    {
+        <section role="alert"><p>@workflow.Error</p></section>
+    }
+    @if (workflow.ResultText is not null)
+    {
+        <section aria-label="@workflow.ResultLabel" aria-live="polite"><h2>@workflow.ResultLabel</h2><pre>@workflow.ResultText</pre></section>
+    }
     @if (selected is not null)
     {
         <aside aria-label="Definition inspector"><h2>@DisplayTitle(selected)</h2><pre>@JsonSerializer.Serialize(selected.Values, JsonOptions)</pre></aside>
@@ -37,17 +58,23 @@ else
     private IReadOnlyList<ViewRuntimeRow> rows = [];
     private ViewRuntimeRow? selected;
     private string? error;
+    private WorkshopWorkflow? workflow;
+    private bool supported;
 
     protected override async Task OnParametersSetAsync()
     {
-        plan = null; rows = []; selected = null; error = null;
+        plan = null; rows = []; selected = null; error = null; supported = false;
+        workflow = new WorkshopWorkflow(CatalogueClient);
         if (!Kinds.TryGetValue(ItemId, out var kind)) { error = "This Workshop list is not declared by the platform pack."; return; }
         try
         {
             var viewTask = CatalogueClient.ReadViewAsync(ItemId, cancellation.Token);
             var rowsTask = CatalogueClient.ListAsync(kind, cancellation.Token);
             await Task.WhenAll(viewTask, rowsTask);
-            plan = (await viewTask).RenderPlan ?? throw new InvalidOperationException("The seeded view has no active compiled render plan.");
+            var view = await viewTask;
+            plan = view.RenderPlan ?? throw new InvalidOperationException("The seeded view has no active compiled render plan.");
+            workflow.Bind(view);
+            supported = WorkshopWorkflow.Supports(view);
             rows = (await rowsTask).Select(ToRow).ToArray();
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
@@ -75,5 +102,26 @@ else
         (title.Values.TryGetValue(title.DefaultLocale, out var localized) || title.Values.TryGetValue("en", out localized)) ? localized : entry.Id;
     private static string DisplayTitle(ViewRuntimeRow row) => row.Values.TryGetValue("title", out var title) ? title?.ToString() ?? row.Id : row.Id;
     private void SelectRow(string rowId) => selected = rows.FirstOrDefault(row => row.Id == rowId);
+    private async Task ActivateActionAsync(string actionId)
+    {
+        var operation = workflow!.ActivateActionAsync(actionId, cancellation.Token);
+        try
+        {
+            if (await operation)
+                rows = (await CatalogueClient.ListAsync(Kinds[ItemId], cancellation.Token)).Select(ToRow).ToArray();
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or JsonException)
+        {
+            error = exception.Message;
+        }
+    }
+    private async ValueTask<SchemaFormValidationResult?> SubmitAsync(IReadOnlyDictionary<string, object?> values)
+    {
+        var operation = workflow!.SubmitAsync(values, cancellation.Token);
+        StateHasChanged();
+        try { return await operation; }
+        finally { StateHasChanged(); }
+    }
     public void Dispose() { cancellation.Cancel(); cancellation.Dispose(); }
 }

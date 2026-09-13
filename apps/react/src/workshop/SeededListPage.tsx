@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ViewRuntime, type ViewRenderPlan, type ViewRuntimeRow } from '@harborline-software/ui-react'
+import { type ViewRenderPlan, type ViewRuntimeRow } from '@harborline-software/ui-react'
+import { WorkshopWorkflow } from './WorkshopWorkflow'
 
 const KINDS: Readonly<Record<string, string>> = {
   'asset-types': 'AssetTypeDefinition', forms: 'FormDefinition', workflows: 'WorkflowDefinition',
@@ -28,7 +29,7 @@ function row(entry: CatalogueEntry): ViewRuntimeRow {
   return { id: `${entry.id}@${entry.version}`, ...entry.body, formId: entry.id, title: title(entry), version: entry.version, status: entry.status }
 }
 
-async function readJson<T>(path: string, signal: AbortSignal): Promise<T> {
+async function readJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   // During development the Vite proxy owns the node hop and attaches the bearer token. Keeping
   // this request same-origin is therefore part of the authentication boundary, not just a CORS
   // convenience. A built bundle has no proxy and uses the explicitly configured origin.
@@ -59,7 +60,15 @@ export function SeededListPage({ itemId }: { readonly itemId: string }) {
   }, [itemId])
   if (error) return <section role="alert"><p>{error}</p></section>
   if (!state) return <p role="status">Loading Workshop list…</p>
-  return <><ViewRuntime plan={state.plan} rows={state.rows} empty="No definitions." onRowActivate={id => setSelected(state.rows.find(candidate => candidate.id === id) ?? null)} />
+  const refreshRows = async () => {
+    const kind = KINDS[itemId]
+    if (!kind) return
+    const list = await readJson<CatalogueList>(`/api/local-node/catalogue/definitions?kind=${encodeURIComponent(kind)}`)
+    setState(current => current?.plan.definitionId === `platform.list.${itemId}`
+      ? { ...current, rows: list.entries.map(row) }
+      : current)
+  }
+  return <><WorkshopWorkflow key={`${state.plan.definitionKind}:${state.plan.definitionId}@${state.plan.definitionVersion}:${state.plan.definitionHash}`} plan={state.plan} rows={state.rows} onRowActivate={id => setSelected(state.rows.find(candidate => candidate.id === id) ?? null)} onActivated={refreshRows} />
     {selected && <aside aria-label="Definition inspector"><h2>{String(selected.title ?? selected.id)}</h2><pre>{JSON.stringify(selected, null, 2)}</pre></aside>}
   </>
 }
