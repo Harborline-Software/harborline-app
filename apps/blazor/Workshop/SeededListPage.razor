@@ -14,7 +14,7 @@ else if (plan is null)
 }
 else
 {
-    <HarborlineViewRuntime Plan="@plan" Rows="@rows" Empty="No definitions." OnRowActivate="SelectRow" />
+    <HarborlineViewRuntime Plan="@plan" Rows="@rows" Empty="No definitions." OnRowActivate="@((string rowId) => SelectRow(rowId))" />
     @if (selected is not null)
     {
         <aside aria-label="Definition inspector"><h2>@DisplayTitle(selected)</h2><pre>@JsonSerializer.Serialize(selected.Values, JsonOptions)</pre></aside>
@@ -74,6 +74,6 @@ else
     private static string EntryTitle(WorkshopCatalogueEntry entry) => entry.Title is { } title &&
         (title.Values.TryGetValue(title.DefaultLocale, out var localized) || title.Values.TryGetValue("en", out localized)) ? localized : entry.Id;
     private static string DisplayTitle(ViewRuntimeRow row) => row.Values.TryGetValue("title", out var title) ? title?.ToString() ?? row.Id : row.Id;
-    private void SelectRow(DataGridRowActivation activation) => selected = rows.FirstOrDefault(row => row.Id == activation.RowId);
+    private void SelectRow(string rowId) => selected = rows.FirstOrDefault(row => row.Id == rowId);
     public void Dispose() { cancellation.Cancel(); cancellation.Dispose(); }
 }
