@@ -7,6 +7,7 @@ using Harborline.App.Blazor.ReferenceHost.Admin.Views;
 using Harborline.App.Blazor.ReferenceHost.Admin.DataExchange;
 using Harborline.App.Blazor.ReferenceHost.Admin.Scheduling;
 using Harborline.App.Blazor.ReferenceHost.Admin.Authorization;
+using Harborline.App.Blazor.ReferenceHost.Workshop;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
@@ -35,6 +36,17 @@ void ConfigureNodeClient(HttpClient client, string baseUrl)
 // impossible to ship unnoticed. appsettings.Development.json opts in for standalone dev runs;
 // a non-Development host without a BaseUrl fails loudly at startup.
 var formsAdminBaseUrl = builder.Configuration["FormsAdmin:BaseUrl"];
+var workshopBaseUrl = builder.Configuration["Workshop:BaseUrl"] ?? formsAdminBaseUrl;
+if (!string.IsNullOrWhiteSpace(workshopBaseUrl))
+{
+    builder.Services.AddHttpClient<IWorkshopCatalogueClient, HttpWorkshopCatalogueClient>(
+        client => ConfigureNodeClient(client, workshopBaseUrl));
+}
+else
+{
+    throw new InvalidOperationException(
+        "Workshop catalogue client is not configured: set Workshop:BaseUrl (env: Workshop__BaseUrl) to the local node origin.");
+}
 if (!string.IsNullOrWhiteSpace(formsAdminBaseUrl))
 {
     builder.Services.AddHttpClient<IFormsAdminClient, HttpFormsAdminClient>(

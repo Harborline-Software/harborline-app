@@ -8,6 +8,7 @@
 @using Harborline.Contracts.Authorization
 @inject IAuthorizationAdminClient AuthorizationClient
 @using Harborline.App.Blazor.ReferenceHost.Navigation
+@using Harborline.App.Blazor.ReferenceHost.Workshop
 @inject IPackNavigationClient PackNavigationClient
 @implements IDisposable
 
@@ -77,6 +78,10 @@
             <AuthorizationAdminPage />
         </main>
     }
+    else if (WorkshopItems.Contains(activeItemId))
+    {
+        <main class="happ-page"><h1>@ActiveLabel</h1><SeededListPage ItemId="@activeItemId" /></main>
+    }
     else
     {
         <main class="happ-page">
@@ -88,6 +93,14 @@
 
 @code {
     private static string ResolveLabel(string key) => key switch { "access.workspace" => "Access", "access.holders" => "Holders", "access.details" or "access.details.footer" => "Access details", _ => key };
+    private static readonly IReadOnlyDictionary<string, string> WorkshopLabels = new Dictionary<string, string>
+    {
+        ["asset-types"] = "Record types", ["forms"] = "Forms", ["workflows"] = "Workflows", ["standards"] = "Standards",
+        ["defaults"] = "Defaults", ["terminology"] = "Terminology", ["documents"] = "Documents", ["taxonomies"] = "Taxonomies",
+        ["reports"] = "Reports", ["data-exchanges"] = "Data exchanges", ["standing-rules"] = "Standing rules",
+        ["schedules"] = "Schedules", ["views"] = "Views",
+    };
+    private static readonly IReadOnlySet<string> WorkshopItems = WorkshopLabels.Keys.ToHashSet();
     private static readonly IReadOnlyList<ShellNavItem> NavigationItems =
     [
         new ShellNavItem("assets", "Assets"),
@@ -126,6 +139,7 @@
         "admin-scheduling" => "Scheduling",
         "admin-authorization" => "Settings › System",
         "assets" => "Assets",
+        _ when WorkshopLabels.TryGetValue(activeItemId, out var label) => label,
         _ => activeItemId,
     };
     private string ActiveDescription => activeItemId == "run-report"

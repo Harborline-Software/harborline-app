@@ -21,6 +21,7 @@ import { createSchedulingAdminClient } from './admin/scheduling/client'
 import { AuthorizationAdminPage } from './admin/authorization/AuthorizationAdminPage'
 import { AuthorizationAdminClientProvider } from './admin/authorization/AuthorizationAdminClientContext'
 import { createAuthorizationAdminClient, type AuthorizationAdminClient } from './admin/authorization/client'
+import { SeededListPage } from './workshop/SeededListPage'
 
 // Composed from the platform's hlp.ui.app-shell module rather than hand-written chrome, and kept
 // deliberately identical to apps/blazor/Shell.razor: same workspace, same item ids, same labels,
@@ -82,8 +83,16 @@ const NAVIGATION: PackNavigationDeclaration = {
   ],
   panelSet: [{ id: 'pilot', labelKey: 'Pilot', binding: 'panels.pilot.toggle', shortcut: 'mod+shift+p', defaultWidth: 400, minimumHeight: 300, defaultOpen: false }],
 }
+const workshopLabels: Record<string, string> = {
+  'workshop.workspace': 'Workshop', 'workshop.definitions': 'Definitions', 'workshop.asset-types': 'Record types',
+  'workshop.forms': 'Forms', 'workshop.workflows': 'Workflows', 'workshop.standards': 'Standards',
+  'workshop.defaults': 'Defaults', 'workshop.terminology': 'Terminology', 'workshop.documents': 'Documents',
+  'workshop.taxonomies': 'Taxonomies', 'workshop.reports': 'Reports', 'workshop.data-exchanges': 'Data exchanges',
+  'workshop.standing-rules': 'Standing rules', 'workshop.schedules': 'Schedules', 'workshop.views': 'Views',
+}
 const accessLabels: Record<string, string> = { 'access.workspace': 'Access', 'access.holders': 'Holders', 'access.details': 'Access details', 'access.details.footer': 'Access details' }
-const resolveLabel = (key: string) => accessLabels[key] ?? key
+const resolveLabel = (key: string) => ({ ...accessLabels, ...workshopLabels })[key] ?? key
+const WORKSHOP_ITEM_IDS = new Set(['asset-types', 'forms', 'workflows', 'standards', 'defaults', 'terminology', 'documents', 'taxonomies', 'reports', 'data-exchanges', 'standing-rules', 'schedules', 'views'])
 
 const NAVIGATION_STATE: ShellNavigationState = {
   items: Object.fromEntries(NAV_ITEMS.map(item => [item.id, item])),
@@ -132,7 +141,7 @@ export function App() {
   const [navigationError, setNavigationError] = useState<string | null>(null)
   const [navigationAttempt, setNavigationAttempt] = useState(0)
   const [roleVocabulary, setRoleVocabulary] = useState(EMPTY_ROLE_VOCABULARY)
-  const body = BODY[activeItemId] ?? { title: activeItemId, description: 'This application surface is not available in this version.' }
+  const body = BODY[activeItemId] ?? { title: resolveLabel(`workshop.${activeItemId}`), description: 'Definitions supplied by the active platform pack.' }
 
   useEffect(() => {
     if (authorizationAdminClient === null || formsAdminClient === null) return
@@ -206,6 +215,8 @@ export function App() {
       onOpenPanelIdsChange={setOpenPanelIds}
       panelContent={panel => <section className="happ-pilot"><p>{panel.id === 'pilot' ? `Pilot sees what you see — Portfolio · ${body.title}.` : `${resolveLabel(panel.labelKey ?? panel.id)}: This application surface is not available in this version.`}</p></section>}
       body={activeItemId === 'access.holders' ? <main className="happ-page"><AccessHoldersPage /></main>
+        : WORKSHOP_ITEM_IDS.has(activeItemId)
+        ? <main className="happ-page"><h1>{body.title}</h1><SeededListPage itemId={activeItemId} /></main>
         : activeItemId === 'admin-forms'
         ? <main className="happ-page"><FormsAdminPage /></main>
         : activeItemId === 'admin-reports'

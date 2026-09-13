@@ -1,0 +1,79 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Workshop
+@using System.Text.Json
+@using Harborline.UIAdapters.Blazor.Components.DataDisplay
+@inject IWorkshopCatalogueClient CatalogueClient
+@implements IDisposable
+
+@if (error is not null)
+{
+    <section role="alert"><p>@error</p></section>
+}
+else if (plan is null)
+{
+    <p role="status">Loading Workshop list…</p>
+}
+else
+{
+    <HarborlineViewRuntime Plan="@plan" Rows="@rows" Empty="No definitions." OnRowActivate="SelectRow" />
+    @if (selected is not null)
+    {
+        <aside aria-label="Definition inspector"><h2>@DisplayTitle(selected)</h2><pre>@JsonSerializer.Serialize(selected.Values, JsonOptions)</pre></aside>
+    }
+}
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly IReadOnlyDictionary<string, string> Kinds = new Dictionary<string, string>
+    {
+        ["asset-types"] = "AssetTypeDefinition", ["forms"] = "FormDefinition", ["workflows"] = "WorkflowDefinition",
+        ["standards"] = "StandardsCatalog", ["defaults"] = "CascadeDefaults", ["terminology"] = "TerminologyOverride",
+        ["documents"] = "TemplateDefinition", ["taxonomies"] = "TaxonomyDefinition", ["reports"] = "ReportDefinition",
+        ["data-exchanges"] = "DataExchangeDefinition", ["standing-rules"] = "StandingRuleDefinition",
+        ["schedules"] = "ScheduleDefinition", ["views"] = "ViewDefinition",
+    };
+    [Parameter, EditorRequired] public string ItemId { get; set; } = string.Empty;
+    private readonly CancellationTokenSource cancellation = new();
+    private ViewRenderPlan? plan;
+    private IReadOnlyList<ViewRuntimeRow> rows = [];
+    private ViewRuntimeRow? selected;
+    private string? error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        plan = null; rows = []; selected = null; error = null;
+        if (!Kinds.TryGetValue(ItemId, out var kind)) { error = "This Workshop list is not declared by the platform pack."; return; }
+        try
+        {
+            var viewTask = CatalogueClient.ReadViewAsync(ItemId, cancellation.Token);
+            var rowsTask = CatalogueClient.ListAsync(kind, cancellation.Token);
+            await Task.WhenAll(viewTask, rowsTask);
+            plan = (await viewTask).RenderPlan ?? throw new InvalidOperationException("The seeded view has no active compiled render plan.");
+            rows = (await rowsTask).Select(ToRow).ToArray();
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or JsonException)
+        {
+            error = exception.Message;
+        }
+    }
+
+    private static ViewRuntimeRow ToRow(WorkshopCatalogueEntry entry)
+    {
+        var values = entry.Body.ValueKind == JsonValueKind.Object
+            ? entry.Body.EnumerateObject().ToDictionary(property => property.Name, property => (object?)JsonValue(property.Value))
+            : new Dictionary<string, object?>();
+        values["formId"] = entry.Id; values["title"] = EntryTitle(entry); values["version"] = entry.Version; values["status"] = entry.Status;
+        return new ViewRuntimeRow($"{entry.Id}@{entry.Version}", values);
+    }
+
+    private static object? JsonValue(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString(), JsonValueKind.Number when value.TryGetInt64(out var number) => number,
+        JsonValueKind.True => true, JsonValueKind.False => false, JsonValueKind.Null => null, _ => value.GetRawText(),
+    };
+    private static string EntryTitle(WorkshopCatalogueEntry entry) => entry.Title is { } title &&
+        (title.Values.TryGetValue(title.DefaultLocale, out var localized) || title.Values.TryGetValue("en", out localized)) ? localized : entry.Id;
+    private static string DisplayTitle(ViewRuntimeRow row) => row.Values.TryGetValue("title", out var title) ? title?.ToString() ?? row.Id : row.Id;
+    private void SelectRow(DataGridRowActivation activation) => selected = rows.FirstOrDefault(row => row.Id == activation.RowId);
+    public void Dispose() { cancellation.Cancel(); cancellation.Dispose(); }
+}
