@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "repository": "Harborline-Software/harborline-platform",
-  "commit": "d0ea2e2a7374e07ba1d94e32c495391656623619",
-  "recordedAt": "2026-09-13 (M4 compiled Workshop view runtime)",
+  "commit": "4ac0310872316d8151a587ae2fa5b24181277f77",
+  "recordedAt": "2026-09-13 (M4 compiled Workshop actions and shell navigation)",
   "why": [
     "Both app lanes consume the platform's UI packages from a local feed built out of a sibling",
     "platform checkout. The feed directories are gitignored, so a clean CI runner had no package",
