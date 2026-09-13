@@ -45,3 +45,12 @@ The startup evidence must cover the signed live-roster member, installer-establi
 For each lane, record the release identifier, App/API/Platform pins from release notes, operating system, browser, exact starting page, action labels used and whether the final record and explanation were visible. Do not include the password hash, session token, root seed, personal data or record body.
 
 Report confusing steps, broken public links and sanitized errors in [GitHub Issues](https://github.com/Harborline-Software/harborline-app/issues). Functional M4 defects remain with the implementation task; documentation observations should describe the point of confusion without silently changing the acceptance sequence.
+
+## Training pilot
+
+
+**Status: awaiting participant responses.** The product owner has offered to try the paper exercise. Record baseline familiarity before deciding whether that run meets the unfamiliar-reader criterion; no completed human pilot is recorded yet.
+
+After a real pilot, record the date, selected release identity (not applicable for paper-only delivery), delivery mode, learner role without personal data, completion time, task-by-task observations, misconceptions in the learner's own words, facilitator observations, document changes, and a link to the approved evidence record.
+
+Do not replace the status above with "passed" until the reader actually completes the exercise and the recorded revisions are present in the training material.

@@ -1,93 +1,69 @@
 # Domain-author foundations
 
-> **Source-reviewed candidate draft:** this lesson describes concepts and surfaces present in the current source, but the selected M4 candidate has not completed its person-driven React and Blazor acceptance run.
+Learn to tell what a form entry supports, what it leaves unknown, and what to check when an entry is refused. Domain authors use these distinctions to design models that other people can understand; people who enter or review records use them to avoid reading more into a result than it establishes.
 
-Use this lesson before the [evidence interpretation exercise](evidence-interpretation-exercise.md); allow about 20 minutes for the lesson and 30 minutes for the exercise.
+> **Learning scope:** The example is synthetic. It does not define equipment-operating policy or claim that its model ships in Harborline. App demonstrations require the evidence listed in [documentation readiness](../release-readiness.md).
 
-## What a domain author is deciding
+This is a paper lesson in interpretation. Creating a working form requires the separate [candidate setup and first-use flow](../getting-started.md).
 
-A domain author gives shared names and structure to work so that two people, two screens, and two releases mean the same thing when they read the same data.
+## Start with shared meaning
 
-Authoring does not make a business conclusion true; it defines what can be captured, how it can be presented, and which later decision has enough evidence to proceed.
+A domain author names the information a team needs and defines how to capture and interpret it. For an equipment inspection, that might mean giving “guard present,” “guard absent” and “not observed” distinct meanings so staff do not have to guess what a blank cell means.
 
-## Five distinctions
+| Term | Meaning in this lesson |
+|---|---|
+| Definition | Reusable rules and meaning, such as the fields of an inspection record. |
+| Record | One instance of captured information under a definition. |
+| Form | The means of entering information; its definition specifies the capture behavior. |
+| View | A presentation of records for a task, such as an attention list. |
+| Pack | A versioned package of domain definitions. |
+| Library | Reusable implementation that interprets or renders those definitions. |
+| Provenance | Information about where something came from, who or what produced it, and which version governed it. |
 
-### Definition and record
+A form, record and view have different jobs. A view can select records for attention without creating a new observation. A library can render a form without owning the business meaning of its fields. Installing a library does not establish that a domain pack is active.
 
-A **definition** is versioned reusable meaning, such as the fields and constraints of an equipment inspection, while a **record** is one captured instance, such as inspection `inspection-1042` for asset `pump-17` at a stated time.
+## Follow one inspection
 
-Changing a definition does not rewrite the meaning of an older record, so keep the definition identity and version available when interpreting retained evidence.
+A synthetic pack, `facility-safety@2.4.0`, groups a record definition, a form definition and a review-view definition. The record definition requires an asset identifier, stated inspection time, inspector identifier and guard status. The form also allows a photo reference and note.
 
-The current Forms surface can list form definitions, show published and historical versions, and create a new draft derived from a chosen version; its confirmation explicitly says that history is not modified and nothing is published ([React Forms surface](../../apps/react/src/admin/forms/FormsAdminPage.tsx)).
+One record names `pump-17` and `operator-8`, states an inspection time, sets guard status to `unknown`, and contains the note “access panel was locked.” No photo reference is supplied.
 
-### Pack and library
+That record contains an assertion about a locked panel. Its fields alone do not prove who submitted it, when it was entered, whether the note is accurate, or whether the guard was inspected. A stated inspection time and a system-recorded submission time answer different questions. Successful permission and validation checks need their own runtime evidence.
 
-A **pack** carries declarative domain content that can be identified and versioned, such as record, form, and view definitions for a line of work.
+The record does not establish whether the pump is safe to operate. That conclusion needs the organization’s applicable policy, observations and authorized decision maker. This lesson does not ask you to decide what to do with real equipment; follow your workplace procedures in real work.
 
-A **library** carries reusable implementation that understands a general contract, such as the code that renders a form or grid; a library is not the tenant's domain model and installing code is not evidence that a particular domain definition is active.
+## Keep responsibilities explicit
 
-When reviewing a screen, ask which pack and definition supplied the meaning, then which library rendered it; those are different provenance questions.
+The person defining a form, the person entering observations, the reviewer, the business decision maker and the person managing access have different responsibilities. An organization assigns those responsibilities. One person may hold several, but permission to write a record does not by itself authorize the consequential business action described by that record.
 
-### Capture and interpretation
+A small team may assign all of them to its owner. Ownership alone does not supply runtime permission. That owner still needs to distinguish “I entered this,” “I checked this,” and “I authorized this decision.”
 
-A form **captures** values into a record under a definition, while a view **presents** selected recorded values for a task.
+## Preserve meaning and uncertainty
 
-An interpretation is a separate conclusion drawn from those values, and it must name its rule, threshold, human judgement, or other authority rather than borrowing confidence from the form's successful submission.
+Interpret retained records using the definition that governed their capture. A newer definition may change the meaning of a field; do not assume it applies to older evidence.
 
-The current Views surface exposes a view's key, version, kind, cascade layer, parameters, provenance, and version history, but it does not turn the displayed rows into a domain conclusion ([React Views surface](../../apps/react/src/admin/views/ViewDefinitionDetail.tsx)).
+Treat `unknown`, `not observed` and `not applicable` as distinct when the definition distinguishes them. An inaccessible guard is not evidence of an absent guard. A photo reference is not proof that the photo is available, depicts the right asset or was taken at the stated time.
 
-### Permission and validation
+If the available form cannot express what you know truthfully, pause and seek review of the definition. Do not choose a convenient value merely to pass validation. If you discover a mistake after submission, use the environment’s documented correction path and preserve the original evidence; seek help when no such path is available. This lesson does not promise a particular correction feature.
 
-**Permission** answers whether this caller may attempt an operation in this scope, while **validation** answers whether the submitted information satisfies the active definition.
+A justified definition change establishes a new meaning and version and requires review of affected uses. Relaxing a check to admit one inconvenient entry does not retroactively validate a refused attempt or supply missing evidence.
 
-Permission is checked before record-body validation on the supported record-write path, so an authorization refusal does not establish whether the hidden body was valid or invalid.
+## Understand a refusal
 
-A valid body can still be refused for lack of permission, and a permitted caller can still receive a validation refusal with a reason code and pointers to failing members.
+**Permission** asks whether the person or service making a request may perform the operation in its scope. **Validation** asks whether the submitted values satisfy the governing checks. A permitted request may contain invalid values; a valid-looking body may come from a caller without permission.
 
-### Evidence and conclusion
+The source-reviewed candidate record-write path checks permission before body validation. An authorization refusal therefore does not establish whether the submitted body would validate. Release support still requires candidate acceptance evidence.
 
-Captured evidence establishes only what its provenance, fields, timestamps, signatures, and validation result actually support.
+When a refusal appears:
 
-A saved value does not by itself prove that the value was observed accurately, that omitted facts were false, that conditions have not changed, that one event caused another, or that a consequential action is safe.
+1. Identify whether it concerns permission or submitted values. Keep the supplied reason code.
+2. For a permission refusal, confirm the intended operation, caller and scope before requesting any access change. The correct outcome may be to leave access unchanged.
+3. For a validation refusal, inspect the named field and the applicable definition. A JSON Pointer such as `/guardStatus` names that field; it does not tell you the truthful replacement value.
+4. Open a linked explanation only if the result supplies an audit identifier and your session can read it. Preserve “unavailable” or “incomplete” as the result; do not reconstruct a missing explanation.
+5. Correct only an established error using available evidence and the documented interface. A later success does not make the earlier attempt valid.
 
-Treat `unknown`, `not observed`, and `not applicable` as meanings rather than empty space when the definition distinguishes them; do not convert a blank or unavailable value into `no`.
+An audit identifier links to a recorded decision. It is not an approval number for every business conclusion someone might draw from the record.
 
-## Synthetic worked example
+## Practice
 
-The names and values in this example are synthetic training material and are not shipped Harborline definitions.
-
-Pack `facility-safety@2.4.0` carries record definition `equipment-inspection@1.2.0`, form definition `daily-inspection@3.0.0`, and view definition `inspection-review@1.1.0`; the rendering libraries know how to present the form and view without owning those facility-specific meanings.
-
-The form requires `assetId`, `inspectedAt`, `inspectorId`, and `guardStatus`, where `guardStatus` is one of `present`, `absent`, or `unknown`; `photoReference` and `note` are optional.
-
-Record `inspection-1042` contains `assetId=pump-17`, `inspectedAt=2026-09-12T14:10:00Z`, `inspectorId=operator-8`, `guardStatus=unknown`, no photo reference, and `note="access panel was locked"`.
-
-The record establishes that a permitted caller captured a definition-valid inspection record with an explicit unknown guard status and a note at the stated time, assuming the retained provenance identifies the governing definition version.
-
-The record does not establish that the guard was present, absent, or defective; it also does not establish that the pump was safe to operate, because the observer could not inspect the relevant area and no separate safety decision is present.
-
-The review view may correctly display this record in an "attention needed" list, but that presentation still does not prove why the guard was unknown or authorize an operational response.
-
-A rule that automatically stops the pump, a workflow that assigns an investigator, a calculation that scores risk, or a schedule that repeats the inspection is **conceptual in this lesson** and must not be represented as selected-release behavior without separate release evidence.
-
-## Inspect a refusal without over-reading it
-
-1. Record the operation, UTC time, tenant or scope, and the visible stable reason code without copying secrets or the refused record body.
-2. Decide whether the refusal is authorization or validation before changing data: `authorization.permission_required` describes authority, while an entity-validation code and JSON pointers describe the submitted shape.
-3. If the app shows a linked **Why can I do this?** disclosure, open it and read the recorded act, roles in force, standings, verdict, and deciding grant; the disclosure appears only when the response carries an audit id ([authorization trace](../../apps/react/src/authorization/AuthorizationTrace.tsx)).
-4. If no audit id is linked, do not claim that a trace exists; if the trace says it was not recorded, is incomplete or unsupported, or cannot be read with the current permission, preserve that exact limitation.
-5. Correct only the problem the refusal establishes, retry through the same supported interface, and keep the original refusal as evidence rather than turning a later success into proof that the original attempt was acceptable.
-
-The app's admin clients render a stable error code plus named detail values when the node supplies them and fall back to the HTTP status text when it does not ([admin error envelope](../../apps/react/src/admin/adminErrorEnvelope.ts)).
-
-## Current surface boundary
-
-The source-reviewed React Forms surface lists definitions and histories and offers **Restore as draft**, while the source-reviewed Views surface is read-only and lists definition detail and history.
-
-Fixture-backed behavior is training or development evidence only; the repository's release banner says there are no supported installs yet, and a successful fixture action does not establish a working connected integration ([release status](../../README.md)).
-
-General definition creation, progressive capture, automatic evidence completion, workflow execution, risk calculations, and scheduled follow-up are outside this lesson unless the selected release's acceptance evidence names them.
-
-## Check your understanding
-
-You are ready for the exercise when you can explain why a form submission can be valid but inconclusive, why a view cannot create evidence that the underlying record lacks, and why permission and validation refusals require different remedies.
+The [paper exercise](evidence-interpretation-exercise.md) asks you to distinguish reusable definitions from entries, separate recorded claims from verified observations, and choose checks before changing data or permissions. It requires no login. The [facilitator guide](facilitator-guide.md) contains answers and demonstration boundaries.
