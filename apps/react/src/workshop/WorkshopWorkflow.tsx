@@ -303,7 +303,11 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
   const lifetime = useRef(new AbortController())
   const formView = useMemo(() => activeForm?.entry.renderPlan ? formViewFromPlan(activeForm.entry.renderPlan) : null, [activeForm])
 
-  useEffect(() => () => lifetime.current.abort(), [])
+  useEffect(() => {
+    const controller = new AbortController()
+    lifetime.current = controller
+    return () => controller.abort()
+  }, [])
   useEffect(() => () => { if (workflow.download) URL.revokeObjectURL(workflow.download.href) }, [workflow.download])
 
   const append = (action: WorkshopAction, value: unknown, fallback = 'Completed.') => {

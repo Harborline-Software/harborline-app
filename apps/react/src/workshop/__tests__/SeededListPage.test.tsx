@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SeededListPage } from '../SeededListPage'
 
@@ -81,6 +82,22 @@ afterEach(() => {
 })
 
 describe('seeded Workshop list', () => {
+  it('loads the declared author form after StrictMode replays mount effects', async () => {
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (init?.signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError')
+      if (input.includes('/ViewDefinition/')) return Response.json({ renderPlan: actionPlan })
+      if (input.endsWith('/FormDefinition/platform.pack.author')) return Response.json(authorForm)
+      return Response.json({ entries: [], kindsUnavailable: [] })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<StrictMode><SeededListPage itemId="forms" /></StrictMode>)
+    await screen.findByRole('grid')
+    fireEvent.click(screen.getByRole('button', { name: 'Draft check' }))
+
+    expect(await screen.findByRole('textbox', { name: 'Pack document' })).toBeInTheDocument()
+  })
+
   it('renders the compiled Forms plan and forwards its inspect action', async () => {
     const plan = { definitionHash: 'hash', definitionId: 'platform.list.forms', definitionVersion: '1.0.0', packKey: 'harborline.platform', packVersion: '1.0.0', definitionKind: 'ViewDefinition', bindings: { viewKind: 'views.entity-list/grid', parameters: { fields: [{ id: 'formId', label: 'Key' }, { id: 'title', label: 'Title' }, { id: 'version', label: 'Version' }, { id: 'cascadeLayer', label: 'Cascade layer' }] } } }
     const fetchMock = vi.fn(async (input: string) => new Response(JSON.stringify(input.includes('/ViewDefinition/')
