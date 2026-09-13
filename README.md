@@ -4,6 +4,10 @@
 
 Harborline App is the human interface to the Harborline API. People use it to author domain models, perform enterprise work and inspect the evidence supporting operational outcomes. Pilot assists through the same governed interfaces. React and Blazor implement the human experience, with native-device behavior inside the appropriate host adapters.
 
+For the product model, first-release candidate status and role-based entry paths, read the [Harborline solution overview](docs/solution-overview.md). To evaluate the active M4 candidate from source, continue with the [first-use guide](docs/getting-started.md); it distinguishes source-reviewed preparation from acceptance evidence that is still pending.
+
+Domain authors can start with [domain-author foundations](docs/training/domain-author-foundations.md) and the [evidence interpretation exercise](docs/training/evidence-interpretation-exercise.md). For non-sensitive usage questions and bug reports, read [SUPPORT.md](SUPPORT.md); suspected vulnerabilities belong in [SECURITY.md](SECURITY.md).
+
 ## Find the right implementation
 
 [Application sources](apps/) contain the executable applications; [shared app modules](src/) provide session, navigation, extension and host contracts. The [host manifest](hosts/host-manifest.json) records intended targets and host status. A registered host is not necessarily runnable: consult its source and host instructions before choosing a deployment target.
