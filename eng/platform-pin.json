@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repository": "Harborline-Software/harborline-platform",
-  "commit": "924e2cf220caa58cf91381c111d300214c752e21",
+  "commit": "d0ea2e2a7374e07ba1d94e32c495391656623619",
   "recordedAt": "2026-09-13 (M4 compiled Workshop view runtime)",
   "why": [
     "Both app lanes consume the platform's UI packages from a local feed built out of a sibling",
