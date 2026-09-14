@@ -4,6 +4,7 @@ using Harborline.App.Blazor.ReferenceHost.Workshop;
 using Harborline.UIAdapters.Blazor;
 using Harborline.UIAdapters.Blazor.Browser;
 using Harborline.UIAdapters.Blazor.Components.DataDisplay;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Harborline.App.Blazor.Tests;
@@ -57,14 +58,17 @@ public sealed class SeededListPageTests : BunitContext
     }
 
     [Fact]
-    public void Forms_uses_the_seeded_compiled_view_and_forwards_its_row_action()
+    public void Forms_uses_the_seeded_compiled_view_and_lifts_its_row_activation_to_the_shell()
     {
         Services.AddSingleton<IWorkshopCatalogueClient>(new FixtureWorkshopCatalogueClient());
         Services.AddHarborlineUiAdapters();
         Services.AddSingleton<IMediaQueryObserver>(new StubMediaQueryObserver());
         JSInterop.Mode = JSRuntimeMode.Loose;
 
-        var cut = Render<SeededListPage>(parameters => parameters.Add(page => page.ItemId, "forms"));
+        ViewRuntimeRow? activated = null;
+        var cut = Render<SeededListPage>(parameters => parameters
+            .Add(page => page.ItemId, "forms")
+            .Add(page => page.RowActivated, EventCallback.Factory.Create<ViewRuntimeRow>(this, row => activated = row)));
 
         cut.WaitForAssertion(() =>
         {
@@ -76,7 +80,8 @@ public sealed class SeededListPageTests : BunitContext
         });
 
         cut.Find("[data-row-id='inspection@1.0.0']").DoubleClick();
-        cut.WaitForAssertion(() => Assert.Equal("Inspection", cut.Find("aside[aria-label='Definition inspector'] h2").TextContent.Trim()));
+        cut.WaitForAssertion(() => Assert.Equal("inspection@1.0.0", activated!.Id));
+        Assert.Empty(cut.FindAll("aside[aria-label='Definition inspector']"));
     }
 
     private sealed class FixtureWorkshopCatalogueClient : IWorkshopCatalogueClient

@@ -5,15 +5,96 @@ using Bunit;
 using Harborline.App.Blazor.ReferenceHost;
 using Harborline.App.Blazor.ReferenceHost.Admin.Authorization;
 using Harborline.App.Blazor.ReferenceHost.Navigation;
+using Harborline.App.Blazor.ReferenceHost.Workshop;
 using Harborline.UIAdapters.Blazor;
 using Harborline.UIAdapters.Blazor.Browser;
+using Harborline.UIAdapters.Blazor.Components.DataDisplay;
 using Harborline.UIAdapters.Blazor.Components.Layout;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Harborline.App.Blazor.Tests;
 
 public sealed class PackNavigationTests : BunitContext
 {
+    private const string WorkshopFixture = """
+        {"configured":true,"pack":{"seedWorkspaces":[{"id":"workshop","labelKey":"workshop.workspace","groups":[{"id":"workshop-definitions","labelKey":"workshop.definitions","itemIds":["forms"]}]}],"panelSet":[{"id":"inspector","labelKey":"Inspector","binding":"panels.inspector.toggle","shortcut":"mod+shift+i","defaultWidth":400,"minimumHeight":300,"defaultOpen":false,"traits":["Scoped"]}]}}
+        """;
+
+    [Fact]
+    public void Addressed_workshop_forms_renders_its_seeded_grid_and_lifts_a_row_into_the_declared_inspector_panel()
+    {
+        Services.AddHarborlineUiAdapters();
+        Services.AddSingleton<IMediaQueryObserver>(new Media());
+        Services.AddSingleton<IAuthorizationAdminClient>(new FixtureAuthorizationAdminClient());
+        Services.AddSingleton<IWorkshopCatalogueClient>(new FormsCatalogueClient());
+        Services.AddSingleton<IPackNavigationClient>(new HttpPackNavigationClient(
+            new HttpClient(new Handler(WorkshopFixture)) { BaseAddress = new Uri("http://localhost:7308/") }));
+        JSInterop.Mode = JSRuntimeMode.Loose;
+
+        var shell = Render<Shell>();
+
+        shell.WaitForAssertion(() => shell.Find("a[href='/workspaces/workshop']").Click());
+        shell.WaitForAssertion(() => shell.Find("a[href='/workspaces/forms']").Click());
+        shell.WaitForAssertion(() =>
+        {
+            Assert.Equal("Forms", shell.Find("main h1").TextContent.Trim());
+            Assert.Equal(["Key", "Title", "Version", "Cascade layer"], shell.FindAll("[role=columnheader]").Select(cell => cell.TextContent.Trim()));
+            Assert.DoesNotContain("Browse and manage the physical assets", shell.Markup, StringComparison.Ordinal);
+        });
+
+        shell.Find("[data-row-id='inspection@1.0.0']").DoubleClick();
+        shell.WaitForAssertion(() =>
+        {
+            var inspector = shell.Find("[data-shell-panel-id='inspector']");
+            Assert.Contains("Inspection", inspector.TextContent, StringComparison.Ordinal);
+            Assert.Contains("Pack", inspector.TextContent, StringComparison.Ordinal);
+            Assert.Empty(shell.FindAll("main aside[aria-label='Definition inspector']"));
+            Assert.EndsWith("?item=forms&selected=inspection%401.0.0&panels=inspector", Services.GetRequiredService<NavigationManager>().Uri, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void Explicit_address_restores_the_declared_workshop_item_selection_and_inspector()
+    {
+        Services.AddHarborlineUiAdapters();
+        Services.AddSingleton<IMediaQueryObserver>(new Media());
+        Services.AddSingleton<IAuthorizationAdminClient>(new FixtureAuthorizationAdminClient());
+        Services.AddSingleton<IWorkshopCatalogueClient>(new FormsCatalogueClient());
+        Services.AddSingleton<IPackNavigationClient>(new HttpPackNavigationClient(
+            new HttpClient(new Handler(WorkshopFixture)) { BaseAddress = new Uri("http://localhost:7308/") }));
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        Services.GetRequiredService<NavigationManager>().NavigateTo("http://localhost/?item=forms&selected=inspection%401.0.0&panels=inspector");
+
+        var shell = Render<Shell>();
+
+        shell.WaitForAssertion(() =>
+        {
+            Assert.Equal("Forms", shell.Find("main h1").TextContent.Trim());
+            Assert.Contains("Inspection", shell.Find("[data-shell-panel-id='inspector']").TextContent, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void Unaddressed_session_preserves_the_legacy_assets_body()
+    {
+        Services.AddHarborlineUiAdapters();
+        Services.AddSingleton<IMediaQueryObserver>(new Media());
+        Services.AddSingleton<IAuthorizationAdminClient>(new FixtureAuthorizationAdminClient());
+        Services.AddSingleton<IPackNavigationClient>(new HttpPackNavigationClient(
+            new HttpClient(new Handler(WorkshopFixture)) { BaseAddress = new Uri("http://localhost:7308/") }));
+        JSInterop.Mode = JSRuntimeMode.Loose;
+
+        var shell = Render<Shell>();
+
+        shell.WaitForAssertion(() =>
+        {
+            Assert.Equal("Assets", shell.Find("main h1").TextContent.Trim());
+            Assert.Contains("Browse and manage the physical assets", shell.Markup, StringComparison.Ordinal);
+            Assert.Equal("http://localhost/", Services.GetRequiredService<NavigationManager>().Uri);
+        });
+    }
+
     [Fact]
     public void Seeded_workshop_workspace_has_a_user_facing_label()
     {
@@ -90,5 +171,25 @@ public sealed class PackNavigationTests : BunitContext
             public bool Matches => !query.Contains("max-width", StringComparison.Ordinal);
             public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class FormsCatalogueClient : IWorkshopCatalogueClient
+    {
+        private static readonly ViewRenderPlan Plan = new(
+            "sha256:test", "platform.list.forms", "1.0.0", "harborline.platform", "1.0.0", "ViewDefinition",
+            new ViewRenderPlanBindings("views.entity-list/grid", new ViewRenderPlanParameters([
+                new("formId", "Key"), new("title", "Title"), new("version", "Version"), new("cascadeLayer", "Cascade layer")] )));
+        private static readonly JsonElement Body = JsonElement.Parse("""{"cascadeLayer":"Pack"}""");
+        private static readonly WorkshopCatalogueEntry Entry = new("inspection", "1.0.0", "Active", new WorkshopLocalizedText("en", new Dictionary<string, string> { ["en"] = "Inspection" }), Body, null);
+
+        public Task<WorkshopCatalogueEntry> ReadViewAsync(string itemId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Entry with { Id = $"platform.list.{itemId}", RenderPlan = Plan });
+        public Task<IReadOnlyList<WorkshopCatalogueEntry>> ListAsync(string kind, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<WorkshopCatalogueEntry>>([Entry]);
+        public Task<WorkshopCatalogueEntry> ReadFormAsync(string id, string? version = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<JsonElement> ReadJsonAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<JsonElement> PostJsonAsync(string path, object body, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<JsonElement> PostArtifactAsync(string path, byte[] artifact, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<byte[]> ExportAsync(JsonElement candidate, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }
