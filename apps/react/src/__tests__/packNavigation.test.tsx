@@ -5,6 +5,13 @@ import workshop from '../../../../tests/fixtures/workshop-navigation.json'
 
 const media = window.matchMedia
 const innerWidth = window.innerWidth
+const workshopItems = [
+  ['asset-types', 'Asset types'], ['forms', 'Forms'], ['workflows', 'Workflows'], ['standards', 'Standards'],
+  ['defaults', 'Defaults'], ['terminology', 'Terminology'], ['documents', 'Documents'], ['taxonomies', 'Taxonomies'],
+  ['reports', 'Reports'], ['data-exchanges', 'Data exchanges'], ['standing-rules', 'Standing rules'],
+  ['schedules', 'Schedules'], ['views', 'Views'],
+] as const
+const workshopKeys = ['workshop.workspace', 'workshop.definitions', ...workshopItems.map(([id]) => `workshop.${id}`)]
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -85,16 +92,21 @@ it.each([[480, 'compact', 'bottom-sheet'], [720, 'medium', 'side-sheet'], [1024,
   const workspace = workshop.pack.seedWorkspaces[0]
   const group = workspace.groups[0]
   const panel = workshop.pack.panelSet[0]
+  expect([workspace.id, workspace.labelKey]).toEqual(['workshop', 'workshop.workspace'])
+  expect([group.id, group.labelKey, group.itemIds]).toEqual(['definitions', 'workshop.definitions', workshopItems.map(([id]) => id)])
+  expect(group.items.map(item => [item.id, item.labelKey, item.label])).toEqual(workshopItems.map(([id, label]) => [id, `workshop.${id}`, label]))
   const labels: Record<string, string> = { 'workshop.workspace': 'Workshop', 'workshop.definitions': 'Definitions', 'panels.inspector': 'Inspector' }
-  const rail = screen.getByRole('link', { name: labels[workspace.labelKey] }).closest('[data-shell-region="rail"]')!
+  const rail = screen.getByRole('link', { name: 'Workshop' }).closest('[data-shell-region="rail"]')!
+  fireEvent.click(screen.getByRole('button', { name: 'Show 6 more' }))
   expect([...rail.querySelectorAll('a')].map(link => [link.getAttribute('href'), link.textContent?.trim()])).toEqual([
-    [`/workspaces/${workspace.id}`, labels[workspace.labelKey]],
-    ...group.items.map(item => [`/workspaces/${item.id}`, item.label]),
+    ['/workspaces/workshop', 'Workshop'],
+    ...workshopItems.map(([id, label]) => [`/workspaces/${id}`, label]),
   ])
-  expect(rail).toHaveTextContent(labels[group.labelKey])
-  expect(rail).toHaveTextContent(group.items[0].label)
-  expect(rail.textContent!.indexOf(labels[group.labelKey])).toBeLessThan(rail.textContent!.indexOf(group.items[0].label))
-  expect(screen.getByRole('link', { name: group.items[0].label })).toHaveAttribute('aria-current', 'page')
+  expect(rail).toHaveTextContent('Definitions')
+  expect(rail).toHaveTextContent('Asset types')
+  expect(rail.textContent!.indexOf('Definitions')).toBeLessThan(rail.textContent!.indexOf('Asset types'))
+  for (const key of workshopKeys) expect(rail).not.toHaveTextContent(key)
+  expect(screen.getByRole('link', { name: 'Forms' })).toHaveAttribute('aria-current', 'page')
   fireEvent.click(screen.getByRole('button', { name: 'Panels' }))
   expect([...view.container.querySelectorAll('[data-action-id]')].map(control => control.getAttribute('data-action-id'))).toEqual(workshop.pack.panelSet.map(declared => declared.id))
   expect(screen.getByRole('menuitem', { name: labels[panel.labelKey] })).toBeInTheDocument()
@@ -140,7 +152,7 @@ it.each([[480, 'compact', 'bottom-sheet'], [720, 'medium', 'side-sheet'], [1024,
   expect(new URLSearchParams(window.location.search).get('panels')).toBe(panel.id)
 }, 120_000)
 
-it.each(['missing', 'assets', 'views'])('clears a stale selected row when the addressed item %s cannot restore Workshop', async item => {
+it.each(['missing', 'assets', 'unavailable'])('clears a stale selected row when the addressed item %s cannot restore Workshop', async item => {
   vi.stubEnv('VITE_FORMS_FIXTURE', '1')
   vi.stubEnv('VITE_AUTHORIZATION_FIXTURE', '1')
   vi.stubEnv('VITE_AUTHORIZATION_API_ORIGIN', 'http://localhost:7308')

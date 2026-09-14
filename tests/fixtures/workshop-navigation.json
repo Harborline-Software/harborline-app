@@ -15,9 +15,23 @@
             "labelKey": "workshop.definitions",
             "destinationQueryRef": null,
             "countQueryRef": null,
-            "itemIds": ["forms"],
+            "itemIds": ["asset-types", "forms", "workflows", "standards", "defaults", "terminology", "documents", "taxonomies", "reports", "data-exchanges", "standing-rules", "schedules", "views"],
             "addAction": null,
-            "items": [{ "id": "forms", "labelKey": "workshop.forms", "label": "Forms" }]
+            "items": [
+              { "id": "asset-types", "labelKey": "workshop.asset-types", "label": "Asset types" },
+              { "id": "forms", "labelKey": "workshop.forms", "label": "Forms" },
+              { "id": "workflows", "labelKey": "workshop.workflows", "label": "Workflows" },
+              { "id": "standards", "labelKey": "workshop.standards", "label": "Standards" },
+              { "id": "defaults", "labelKey": "workshop.defaults", "label": "Defaults" },
+              { "id": "terminology", "labelKey": "workshop.terminology", "label": "Terminology" },
+              { "id": "documents", "labelKey": "workshop.documents", "label": "Documents" },
+              { "id": "taxonomies", "labelKey": "workshop.taxonomies", "label": "Taxonomies" },
+              { "id": "reports", "labelKey": "workshop.reports", "label": "Reports" },
+              { "id": "data-exchanges", "labelKey": "workshop.data-exchanges", "label": "Data exchanges" },
+              { "id": "standing-rules", "labelKey": "workshop.standing-rules", "label": "Standing rules" },
+              { "id": "schedules", "labelKey": "workshop.schedules", "label": "Schedules" },
+              { "id": "views", "labelKey": "workshop.views", "label": "Views" }
+            ]
           }
         ],
         "createActions": [],

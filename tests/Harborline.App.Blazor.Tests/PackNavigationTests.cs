@@ -20,6 +20,21 @@ namespace Harborline.App.Blazor.Tests;
 public sealed class PackNavigationTests : BunitContext
 {
     private static string WorkshopFixture => ReadFixture("workshop-navigation.json");
+    private static readonly (string Id, string Label)[] WorkshopItems =
+    [
+        ("asset-types", "Asset types"), ("forms", "Forms"), ("workflows", "Workflows"),
+        ("standards", "Standards"), ("defaults", "Defaults"), ("terminology", "Terminology"),
+        ("documents", "Documents"), ("taxonomies", "Taxonomies"), ("reports", "Reports"),
+        ("data-exchanges", "Data exchanges"), ("standing-rules", "Standing rules"),
+        ("schedules", "Schedules"), ("views", "Views"),
+    ];
+    private static readonly string[] WorkshopKeys =
+    [
+        "workshop.workspace", "workshop.definitions", "workshop.asset-types", "workshop.forms",
+        "workshop.workflows", "workshop.standards", "workshop.defaults", "workshop.terminology",
+        "workshop.documents", "workshop.taxonomies", "workshop.reports", "workshop.data-exchanges",
+        "workshop.standing-rules", "workshop.schedules", "workshop.views",
+    ];
 
     private static string ReadFixture(string name)
     {
@@ -90,24 +105,27 @@ public sealed class PackNavigationTests : BunitContext
         var workspace = Assert.Single(declaration.SeedWorkspaces);
         var group = Assert.Single(workspace.Groups!);
         var panel = Assert.Single(declaration.PanelSet!);
-        var labels = new Dictionary<string, string>
-        {
-            ["workshop.workspace"] = "Workshop", ["workshop.definitions"] = "Definitions",
-            ["panels.inspector"] = "Inspector",
-        };
+        Assert.Equal(("workshop", "workshop.workspace"), (workspace.Id, workspace.LabelKey));
+        Assert.Equal(("definitions", "workshop.definitions"), (group.Id, group.LabelKey));
+        Assert.Equal(WorkshopItems.Select(item => item.Id), group.ItemIds);
+        Assert.Equal(WorkshopItems.Select(item => (item.Id, $"workshop.{item.Id}", item.Label)),
+            group.Items!.Select(item => (item.Id, item.LabelKey, item.Label)));
+        const string inspectorLabel = "Inspector";
         if (width < 840) shell.Find("button[aria-label='Navigation'][aria-controls]").Click();
         var rail = shell.Find("[data-shell-region='rail']");
-        Assert.Equal(new[] { ($"/workspaces/{workspace.Id}", labels[workspace.LabelKey]) }
-            .Concat(group.Items!.Select(item => ($"/workspaces/{item.Id}", item.Label!))),
+        shell.Find("button.hl-app-shell__show-more").Click();
+        Assert.Equal(new[] { ("/workspaces/workshop", "Workshop") }
+            .Concat(WorkshopItems.Select(item => ($"/workspaces/{item.Id}", item.Label))),
             rail.QuerySelectorAll("a").Select(link => (link.GetAttribute("href")!, link.TextContent.Trim())));
-        Assert.Contains(labels[group.LabelKey], rail.TextContent, StringComparison.Ordinal);
-        Assert.Contains(group.Items![0].Label!, rail.TextContent, StringComparison.Ordinal);
-        Assert.True(rail.TextContent.IndexOf(labels[group.LabelKey], StringComparison.Ordinal)
-            < rail.TextContent.IndexOf(group.Items[0].Label!, StringComparison.Ordinal));
+        Assert.Contains("Definitions", rail.TextContent, StringComparison.Ordinal);
+        Assert.Contains("Asset types", rail.TextContent, StringComparison.Ordinal);
+        Assert.True(rail.TextContent.IndexOf("Definitions", StringComparison.Ordinal)
+            < rail.TextContent.IndexOf("Asset types", StringComparison.Ordinal));
+        Assert.All(WorkshopKeys, key => Assert.DoesNotContain(key, rail.TextContent, StringComparison.Ordinal));
         Assert.Equal("page", shell.Find("a[href='/workspaces/forms']").GetAttribute("aria-current"));
         shell.Find("button[aria-label='Panels']").Click();
         Assert.Equal(declaration.PanelSet!.Select(item => item.Id), shell.FindAll("[data-action-id]").Select(control => control.GetAttribute("data-action-id")));
-        Assert.Equal(labels[panel.LabelKey!], shell.Find("[data-action-id='inspector'] [role='menuitem']").TextContent.Trim());
+        Assert.Equal(inspectorLabel, shell.Find("[data-action-id='inspector'] [role='menuitem']").TextContent.Trim());
         Assert.Equal($"panels.{panel.Id}.toggle", panel.Binding);
         Assert.Null(declaration.ModeSwitch);
         Assert.Empty(shell.FindAll("[data-shell-zone='mode']"));
@@ -145,7 +163,7 @@ public sealed class PackNavigationTests : BunitContext
     [Theory]
     [InlineData("missing")]
     [InlineData("assets")]
-    [InlineData("views")]
+    [InlineData("unavailable")]
     public void Address_without_a_workshop_item_clears_stale_selection_and_undeclared_panels(string item)
     {
         Services.AddHarborlineUiAdapters();
