@@ -17,7 +17,7 @@
             "countQueryRef": null,
             "itemIds": ["forms"],
             "addAction": null,
-            "items": [{ "id": "forms", "labelKey": "workshop.forms" }]
+            "items": [{ "id": "forms", "labelKey": "workshop.forms", "label": "Forms" }]
           }
         ],
         "createActions": [],

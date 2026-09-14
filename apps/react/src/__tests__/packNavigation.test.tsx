@@ -85,14 +85,16 @@ it.each([[480, 'compact', 'bottom-sheet'], [720, 'medium', 'side-sheet'], [1024,
   const workspace = workshop.pack.seedWorkspaces[0]
   const group = workspace.groups[0]
   const panel = workshop.pack.panelSet[0]
-  const labels: Record<string, string> = { 'workshop.workspace': 'Workshop', 'workshop.definitions': 'Definitions', 'workshop.forms': 'Forms', 'panels.inspector': 'Inspector' }
+  const labels: Record<string, string> = { 'workshop.workspace': 'Workshop', 'workshop.definitions': 'Definitions', 'panels.inspector': 'Inspector' }
   const rail = screen.getByRole('link', { name: labels[workspace.labelKey] }).closest('[data-shell-region="rail"]')!
   expect([...rail.querySelectorAll('a')].map(link => [link.getAttribute('href'), link.textContent?.trim()])).toEqual([
     [`/workspaces/${workspace.id}`, labels[workspace.labelKey]],
-    ...group.items.map(item => [`/workspaces/${item.id}`, labels[item.labelKey]]),
+    ...group.items.map(item => [`/workspaces/${item.id}`, item.label]),
   ])
-  expect(rail.textContent!.indexOf(labels[group.labelKey])).toBeLessThan(rail.textContent!.indexOf(labels[group.items[0].labelKey]))
-  expect(screen.getByRole('link', { name: 'Forms' })).toHaveAttribute('aria-current', 'page')
+  expect(rail).toHaveTextContent(labels[group.labelKey])
+  expect(rail).toHaveTextContent(group.items[0].label)
+  expect(rail.textContent!.indexOf(labels[group.labelKey])).toBeLessThan(rail.textContent!.indexOf(group.items[0].label))
+  expect(screen.getByRole('link', { name: group.items[0].label })).toHaveAttribute('aria-current', 'page')
   fireEvent.click(screen.getByRole('button', { name: 'Panels' }))
   expect([...view.container.querySelectorAll('[data-action-id]')].map(control => control.getAttribute('data-action-id'))).toEqual(workshop.pack.panelSet.map(declared => declared.id))
   expect(screen.getByRole('menuitem', { name: labels[panel.labelKey] })).toBeInTheDocument()

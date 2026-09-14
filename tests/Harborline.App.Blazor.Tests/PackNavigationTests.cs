@@ -93,15 +93,17 @@ public sealed class PackNavigationTests : BunitContext
         var labels = new Dictionary<string, string>
         {
             ["workshop.workspace"] = "Workshop", ["workshop.definitions"] = "Definitions",
-            ["workshop.forms"] = "Forms", ["panels.inspector"] = "Inspector",
+            ["panels.inspector"] = "Inspector",
         };
         if (width < 840) shell.Find("button[aria-label='Navigation'][aria-controls]").Click();
         var rail = shell.Find("[data-shell-region='rail']");
         Assert.Equal(new[] { ($"/workspaces/{workspace.Id}", labels[workspace.LabelKey]) }
-            .Concat(group.Items!.Select(item => ($"/workspaces/{item.Id}", labels[item.LabelKey!]))),
+            .Concat(group.Items!.Select(item => ($"/workspaces/{item.Id}", item.Label!))),
             rail.QuerySelectorAll("a").Select(link => (link.GetAttribute("href")!, link.TextContent.Trim())));
+        Assert.Contains(labels[group.LabelKey], rail.TextContent, StringComparison.Ordinal);
+        Assert.Contains(group.Items![0].Label!, rail.TextContent, StringComparison.Ordinal);
         Assert.True(rail.TextContent.IndexOf(labels[group.LabelKey], StringComparison.Ordinal)
-            < rail.TextContent.IndexOf(labels[group.Items![0].LabelKey!], StringComparison.Ordinal));
+            < rail.TextContent.IndexOf(group.Items[0].Label!, StringComparison.Ordinal));
         Assert.Equal("page", shell.Find("a[href='/workspaces/forms']").GetAttribute("aria-current"));
         shell.Find("button[aria-label='Panels']").Click();
         Assert.Equal(declaration.PanelSet!.Select(item => item.Id), shell.FindAll("[data-action-id]").Select(control => control.GetAttribute("data-action-id")));
