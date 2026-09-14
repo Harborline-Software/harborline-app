@@ -9,7 +9,11 @@
 @inject IAuthorizationAdminClient AuthorizationClient
 @using Harborline.App.Blazor.ReferenceHost.Navigation
 @using Harborline.App.Blazor.ReferenceHost.Workshop
+@using Harborline.UIAdapters.Blazor.Components.DataDisplay
+@using System.Text.Json
+@using Microsoft.AspNetCore.WebUtilities
 @inject IPackNavigationClient PackNavigationClient
+@inject NavigationManager BrowserNavigation
 @implements IDisposable
 
 @* Composed from the platform's hlp.ui.app-shell module rather than hand-written chrome. This
@@ -33,10 +37,12 @@
                   RoleVocabulary="@roleVocabulary"
                   HeldRoles="@HeldRoles"
                   ActiveItemId="@activeItemId"
-                  Navigated="@(item => activeItemId = item.Id)"
+                  Navigated="@NavigateAsync"
+                  InspectorCommand="@OpenInspectorAsync"
                   PageHeader="@PageHeaderFragment"
                   OpenPanelIds="@OpenPanelIds"
-                  OpenPanelIdsChanged="@SetOpenPanelIds"
+                  OpenPanelIdsChanged="@SetOpenPanelIdsAsync"
+                  PanelToolbar="@PanelToolbar"
                   PanelContent="@PanelContent">
     @if (activeItemId == "access.holders")
     {
@@ -80,7 +86,7 @@
     }
     else if (WorkshopItems.Contains(activeItemId))
     {
-        <main class="happ-page"><h1>@ActiveLabel</h1><SeededListPage ItemId="@activeItemId" /></main>
+        <main class="happ-page"><h1>@ActiveLabel</h1><SeededListPage ItemId="@activeItemId" SelectedRowId="@selectedRowId" RowActivated="@SelectDefinitionAsync" /></main>
     }
     else
     {
@@ -130,11 +136,14 @@
 
     private string activeItemId = "assets";
     private IReadOnlyList<string> openPanelIds = [];
+    private string? selectedRowId;
+    private ViewRuntimeRow? selectedDefinition;
     private PackNavigationDeclaration? packNavigation;
     private string? navigationError;
     private readonly CancellationTokenSource navigationCancellation = new();
     private RoleVocabulary roleVocabulary = RoleVocabulary.FromApi([]);
     private static readonly HeldRoleSet HeldRoles = new([]);
+    private static readonly JsonSerializerOptions InspectorJsonOptions = new() { WriteIndented = true };
 
     private string ActiveLabel => activeItemId switch
     {
@@ -157,8 +166,63 @@
 
     private RenderFragment PageHeaderFragment => @<nav aria-label="Breadcrumb" class="happ-breadcrumb">@if (activeItemId == "access.holders") { <text>Harborline / Access / Holders</text> } else { <text>Harborline / Portfolio / @ActiveLabel</text> }</nav>;
     private IReadOnlyList<string> OpenPanelIds => openPanelIds;
-    private RenderFragment<PackPanelDeclaration> PanelContent => panel => @<section class="happ-pilot"><p>@(panel.Id == "pilot" ? $"Pilot sees what you see — Portfolio · {ActiveLabel}." : $"{ResolveLabel(panel.LabelKey ?? panel.Id)}: This application surface is not available in this version.")</p></section>;
-    private void SetOpenPanelIds(IReadOnlyList<string> ids) => openPanelIds = ids;
+    private RenderFragment<PackPanelDeclaration> PanelToolbar => panel => @<span>
+        @if (panel.Id == "inspector")
+        {
+            <p>@(selectedDefinition is null ? "No selection · follows selection" : $"{DisplayTitle(selectedDefinition)} · follows selection")</p>
+        }
+    </span>;
+    private RenderFragment<PackPanelDeclaration> PanelContent => panel => @<section class="happ-pilot">
+        @if (panel.Id == "inspector")
+        {
+            <section aria-label="Definition inspector">
+                @if (selectedDefinition is null)
+                {
+                    <p>Select a Workshop definition to inspect it.</p>
+                }
+                else
+                {
+                    <h2>@DisplayTitle(selectedDefinition)</h2>
+                    <pre>@JsonSerializer.Serialize(selectedDefinition.Values, InspectorJsonOptions)</pre>
+                }
+            </section>
+        }
+        else
+        {
+            <p>@(panel.Id == "pilot" ? $"Pilot sees what you see — Portfolio · {ActiveLabel}." : $"{ResolveLabel(panel.LabelKey ?? panel.Id)}: This application surface is not available in this version.")</p>
+        }
+    </section>;
+
+    private async Task NavigateAsync(ShellNavItem item)
+    {
+        activeItemId = item.Id;
+        selectedRowId = null;
+        selectedDefinition = null;
+        ReplaceAddress();
+        await Task.CompletedTask;
+    }
+
+    private async Task SetOpenPanelIdsAsync(IReadOnlyList<string> ids)
+    {
+        openPanelIds = ids;
+        ReplaceAddress();
+        await Task.CompletedTask;
+    }
+
+    private async Task OpenInspectorAsync()
+    {
+        if (!DeclaredPanels().Contains("inspector", StringComparer.Ordinal)) return;
+        if (!openPanelIds.Contains("inspector", StringComparer.Ordinal)) openPanelIds = [.. openPanelIds, "inspector"];
+        ReplaceAddress();
+        await Task.CompletedTask;
+    }
+
+    private async Task SelectDefinitionAsync(ViewRuntimeRow row)
+    {
+        selectedDefinition = row;
+        selectedRowId = row.Id;
+        await OpenInspectorAsync();
+    }
 
     private async Task LoadNavigationAsync()
     {
@@ -166,8 +230,15 @@
         try
         {
             packNavigation = await PackNavigationClient.ReadAsync(navigationCancellation.Token);
-            openPanelIds = (packNavigation ?? Navigation).PanelSet?.Where(panel => panel.DefaultOpen).Select(panel => panel.Id).ToArray() ?? [];
-            activeItemId = "assets";
+            var navigation = packNavigation ?? Navigation;
+            var address = ReadAddress();
+            openPanelIds = address.HasPanelState
+                ? address.OpenPanelIds.Where(DeclaredPanels(navigation).Contains).ToArray()
+                : navigation.PanelSet?.Where(panel => panel.DefaultOpen).Select(panel => panel.Id).ToArray() ?? [];
+            activeItemId = address.ItemId is { } itemId && (itemId == "assets" || DeclaredItemIds(navigation).Contains(itemId, StringComparer.Ordinal))
+                ? itemId : "assets";
+            selectedRowId = WorkshopItems.Contains(activeItemId) ? address.SelectedRowId : null;
+            selectedDefinition = null;
         }
         catch (OperationCanceledException) when (navigationCancellation.IsCancellationRequested) { }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException)
@@ -203,5 +274,38 @@
             // route itself remains server-fenced and its page owns the visible load/retry error.
             roleVocabulary = RoleVocabulary.FromApi([]);
         }
+    }
+
+    private IReadOnlyList<string> DeclaredPanels() => DeclaredPanels(packNavigation ?? Navigation);
+    private static IReadOnlyList<string> DeclaredPanels(PackNavigationDeclaration navigation) => navigation.PanelSet?.Select(panel => panel.Id).ToArray() ?? [];
+    private static IReadOnlyList<string> DeclaredItemIds(PackNavigationDeclaration navigation) => navigation.SeedWorkspaces
+        .SelectMany(workspace => workspace.Groups ?? [])
+        .SelectMany(group => group.ItemIds)
+        .ToArray();
+    private static string DisplayTitle(ViewRuntimeRow row) => row.Values.TryGetValue("title", out var title) ? title?.ToString() ?? row.Id : row.Id;
+
+    private sealed record ChromeAddress(string? ItemId, string? SelectedRowId, IReadOnlyList<string> OpenPanelIds, bool HasPanelState);
+
+    private ChromeAddress ReadAddress()
+    {
+        var query = QueryHelpers.ParseQuery(BrowserNavigation.ToAbsoluteUri(BrowserNavigation.Uri).Query);
+        return new(
+            query.TryGetValue("item", out var item) ? item.ToString() : null,
+            query.TryGetValue("selected", out var selected) ? selected.ToString() : null,
+            query.TryGetValue("panels", out var panels) ? panels.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries) : [],
+            query.ContainsKey("panels"));
+    }
+
+    private void ReplaceAddress()
+    {
+        var uri = BrowserNavigation.ToAbsoluteUri(BrowserNavigation.Uri);
+        var retained = QueryHelpers.ParseQuery(uri.Query)
+            .Where(pair => pair.Key is not ("item" or "selected" or "panels"))
+            .SelectMany(pair => pair.Value, (pair, value) => $"{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(value!)}")
+            .ToList();
+        retained.Add($"item={Uri.EscapeDataString(activeItemId)}");
+        if (selectedRowId is not null) retained.Add($"selected={Uri.EscapeDataString(selectedRowId)}");
+        if (openPanelIds.Count > 0) retained.Add($"panels={Uri.EscapeDataString(string.Join(',', openPanelIds))}");
+        BrowserNavigation.NavigateTo($"{uri.GetLeftPart(UriPartial.Path)}?{string.Join('&', retained)}{uri.Fragment}", replace: true);
     }
 }
