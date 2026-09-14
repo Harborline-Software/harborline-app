@@ -1,8 +1,8 @@
 import { AccessHoldersPage } from './admin/authorization/AccessHoldersPage'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { readPackNavigation } from './navigation/packNavigation'
 import { RoleVocabulary, type HeldRoleSet } from '@harborline-software/contracts/authorization'
-import { AppShell, type PackNavigationDeclaration, type ShellNavigationState, type ShellNavItem } from '@harborline-software/ui-react'
+import { AppShell, type PackNavigationDeclaration, type ShellNavigationState, type ShellNavItem, type ViewRuntimeRow } from '@harborline-software/ui-react'
 import { FormsAdminPage } from './admin/forms/FormsAdminPage'
 import { FormsAdminClientProvider } from './admin/forms/FormsAdminClientContext'
 import { createFormsAdminClient, type FormsAdminClient } from './admin/forms/client'
@@ -134,9 +134,35 @@ const BODY: Record<string, { title: string; description: string }> = {
   },
 }
 
+interface ChromeAddress {
+  readonly activeItemId: string
+  readonly hasItemState: boolean
+  readonly selectedRowId: string | null
+  readonly openPanelIds: readonly string[]
+  readonly hasPanelState: boolean
+}
+
+function readChromeAddress(): ChromeAddress {
+  const parameters = new URLSearchParams(window.location.search)
+  return {
+    activeItemId: parameters.get('item') ?? 'assets',
+    hasItemState: parameters.has('item'),
+    selectedRowId: parameters.get('selected'),
+    openPanelIds: parameters.get('panels')?.split(',').filter(Boolean) ?? [],
+    hasPanelState: parameters.has('panels'),
+  }
+}
+
+function declaredItemIds(navigation: PackNavigationDeclaration): readonly string[] {
+  return navigation.seedWorkspaces.flatMap(workspace => (workspace.groups ?? []).flatMap(group => group.itemIds))
+}
+
 export function App() {
-  const [activeItemId, setActiveItemId] = useState('assets')
-  const [openPanelIds, setOpenPanelIds] = useState<readonly string[]>([])
+  const [initialAddress] = useState(readChromeAddress)
+  const [activeItemId, setActiveItemId] = useState(initialAddress.activeItemId)
+  const [openPanelIds, setOpenPanelIds] = useState<readonly string[]>(initialAddress.openPanelIds)
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(initialAddress.selectedRowId)
+  const [selectedDefinition, setSelectedDefinition] = useState<ViewRuntimeRow | null>(null)
   const [packNavigation, setPackNavigation] = useState<PackNavigationDeclaration | null>(null)
   const [navigationError, setNavigationError] = useState<string | null>(null)
   const [navigationAttempt, setNavigationAttempt] = useState(0)
@@ -150,13 +176,30 @@ export function App() {
     void readPackNavigation(abort.signal).then(declaration => {
       if (abort.signal.aborted) return
       setPackNavigation(declaration)
-      setOpenPanelIds((declaration ?? NAVIGATION).panelSet?.filter(panel => panel.defaultOpen).map(panel => panel.id) ?? [])
-      setActiveItemId('assets')
+      const navigation = declaration ?? NAVIGATION
+      const panelIds = new Set(navigation.panelSet?.map(panel => panel.id) ?? [])
+      setOpenPanelIds(current => initialAddress.hasPanelState
+        ? current.filter(id => panelIds.has(id))
+        : navigation.panelSet?.filter(panel => panel.defaultOpen).map(panel => panel.id) ?? [])
+      setActiveItemId(current => {
+        if (!initialAddress.hasItemState) return current
+        const itemIds = declaredItemIds(navigation)
+        return itemIds.includes(current) ? current : 'assets'
+      })
     }).catch((error: unknown) => {
       if (!abort.signal.aborted) setNavigationError(error instanceof Error ? error.message : 'Unable to load application navigation.')
     })
     return () => abort.abort()
   }, [navigationAttempt])
+
+  useEffect(() => {
+    const parameters = new URLSearchParams(window.location.search)
+    parameters.set('item', activeItemId)
+    if (selectedRowId) parameters.set('selected', selectedRowId); else parameters.delete('selected')
+    if (openPanelIds.length) parameters.set('panels', openPanelIds.join(',')); else parameters.delete('panels')
+    const query = parameters.toString()
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`)
+  }, [activeItemId, openPanelIds, selectedRowId])
 
   useEffect(() => {
     const abort = new AbortController()
@@ -166,6 +209,21 @@ export function App() {
         .catch(() => setRoleVocabulary(EMPTY_ROLE_VOCABULARY))
     }
     return () => abort.abort()
+  }, [])
+
+  const openInspector = useCallback(() => {
+    if (!(packNavigation ?? NAVIGATION).panelSet?.some(panel => panel.id === 'inspector')) return
+    setOpenPanelIds(current => current.includes('inspector') ? current : [...current, 'inspector'])
+  }, [packNavigation])
+  const inspectDefinition = useCallback((row: ViewRuntimeRow) => {
+    setSelectedDefinition(row)
+    setSelectedRowId(row.id)
+    openInspector()
+  }, [openInspector])
+  const navigate = useCallback((item: ShellNavItem) => {
+    setActiveItemId(item.id)
+    setSelectedRowId(null)
+    setSelectedDefinition(null)
   }, [])
 
   // The constant-per-bundle configuration failure, rendered ON SCREEN (never a white page).
@@ -205,7 +263,8 @@ export function App() {
       roleVocabulary={roleVocabulary}
       heldRoles={EMPTY_HELD_ROLES}
       activeItemId={activeItemId}
-      onNavigate={(item: ShellNavItem) => setActiveItemId(item.id)}
+      onNavigate={navigate}
+      onInspectorCommand={openInspector}
       pageHeader={
         <nav aria-label="Breadcrumb" className="happ-breadcrumb">
           {activeItemId === 'access.holders' ? <>Harborline / Access / Holders</> : <>Harborline / Portfolio / {body.title}</>}
@@ -213,10 +272,15 @@ export function App() {
       }
       openPanelIds={openPanelIds}
       onOpenPanelIdsChange={setOpenPanelIds}
-      panelContent={panel => <section className="happ-pilot"><p>{panel.id === 'pilot' ? `Pilot sees what you see — Portfolio · ${body.title}.` : `${resolveLabel(panel.labelKey ?? panel.id)}: This application surface is not available in this version.`}</p></section>}
+      panelToolbar={panel => panel.id === 'inspector' ? <p>{selectedDefinition ? `${String(selectedDefinition.title ?? selectedDefinition.id)} · follows selection` : 'No selection · follows selection'}</p> : null}
+      panelContent={panel => panel.id === 'inspector'
+        ? <section aria-label="Definition inspector">{selectedDefinition
+          ? <><h2>{String(selectedDefinition.title ?? selectedDefinition.id)}</h2><pre>{JSON.stringify(selectedDefinition, null, 2)}</pre></>
+          : <p>Select a Workshop definition to inspect it.</p>}</section>
+        : <section className="happ-pilot"><p>{panel.id === 'pilot' ? `Pilot sees what you see — Portfolio · ${body.title}.` : `${resolveLabel(panel.labelKey ?? panel.id)}: This application surface is not available in this version.`}</p></section>}
       body={activeItemId === 'access.holders' ? <main className="happ-page"><AccessHoldersPage /></main>
         : WORKSHOP_ITEM_IDS.has(activeItemId)
-        ? <main className="happ-page"><h1>{body.title}</h1><SeededListPage itemId={activeItemId} /></main>
+        ? <main className="happ-page"><h1>{body.title}</h1><SeededListPage itemId={activeItemId} selectedRowId={selectedRowId} onRowActivate={inspectDefinition} /></main>
         : activeItemId === 'admin-forms'
         ? <main className="happ-page"><FormsAdminPage /></main>
         : activeItemId === 'admin-reports'

@@ -103,8 +103,9 @@ describe('seeded Workshop list', () => {
     const fetchMock = vi.fn(async (input: string) => new Response(JSON.stringify(input.includes('/ViewDefinition/')
       ? { renderPlan: plan }
       : { entries: [{ id: 'work-order', version: '1.0.0', status: 'Published', title: { defaultLocale: 'en', values: { en: 'Work order' } }, body: { cascadeLayer: 'Tenant' } }], kindsUnavailable: [] }), { status: 200 }))
+    const activated = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
-    render(<SeededListPage itemId="forms" />)
+    render(<SeededListPage itemId="forms" onRowActivate={activated} />)
     expect(await screen.findByRole('grid')).toHaveAttribute('aria-label', 'View results')
     expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
       '/api/local-node/catalogue/definitions/ViewDefinition/platform.list.forms',
@@ -113,7 +114,7 @@ describe('seeded Workshop list', () => {
     expect(screen.getAllByRole('columnheader').map(node => node.textContent)).toEqual(['Key', 'Title', 'Version', 'Cascade layer'])
     expect(screen.getByText('work-order')).toBeInTheDocument()
     fireEvent.doubleClick(document.querySelector('[data-row-id="work-order@1.0.0"]')!)
-    await waitFor(() => expect(screen.getByRole('complementary', { name: 'Definition inspector' })).toHaveTextContent('Work order'))
+    await waitFor(() => expect(activated).toHaveBeenCalledWith(expect.objectContaining({ id: 'work-order@1.0.0', title: 'Work order', cascadeLayer: 'Tenant' })))
   })
 
   it('executes only seed-declared commands through the full pack and record workflow', async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { type ViewRenderPlan, type ViewRuntimeRow } from '@harborline-software/ui-react'
 import { WorkshopWorkflow } from './WorkshopWorkflow'
 
@@ -39,14 +39,20 @@ async function readJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return await response.json() as T
 }
 
-export function SeededListPage({ itemId }: { readonly itemId: string }) {
+export interface SeededListPageProps {
+  readonly itemId: string
+  readonly selectedRowId?: string | null
+  readonly onRowActivate?: (row: ViewRuntimeRow) => void
+}
+
+export function SeededListPage({ itemId, selectedRowId, onRowActivate }: SeededListPageProps) {
   const [state, setState] = useState<{ plan: ViewRenderPlan; rows: readonly ViewRuntimeRow[] } | null>(null)
-  const [selected, setSelected] = useState<ViewRuntimeRow | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const resolvedSelection = useRef<string | null>(null)
   useEffect(() => {
     const kind = KINDS[itemId]
     const abort = new AbortController()
-    setState(null); setSelected(null); setError(null)
+    setState(null); setError(null)
     if (!kind) { setError('This Workshop list is not declared by the platform pack.'); return () => abort.abort() }
     void Promise.all([
       readJson<CatalogueEntry>(`/api/local-node/catalogue/definitions/ViewDefinition/platform.list.${itemId}`, abort.signal),
@@ -58,6 +64,16 @@ export function SeededListPage({ itemId }: { readonly itemId: string }) {
     }).catch((reason: unknown) => { if (!abort.signal.aborted) setError(reason instanceof Error ? reason.message : 'Unable to load Workshop list.') })
     return () => abort.abort()
   }, [itemId])
+  useEffect(() => {
+    if (!state || !selectedRowId || !onRowActivate) return
+    const selectionKey = `${itemId}:${selectedRowId}`
+    if (resolvedSelection.current === selectionKey) return
+    const restored = state.rows.find(candidate => candidate.id === selectedRowId)
+    if (restored) {
+      resolvedSelection.current = selectionKey
+      onRowActivate(restored)
+    }
+  }, [itemId, onRowActivate, selectedRowId, state])
   if (error) return <section role="alert"><p>{error}</p></section>
   if (!state) return <p role="status">Loading Workshop list…</p>
   const refreshRows = async () => {
@@ -68,7 +84,8 @@ export function SeededListPage({ itemId }: { readonly itemId: string }) {
       ? { ...current, rows: list.entries.map(row) }
       : current)
   }
-  return <><WorkshopWorkflow key={`${state.plan.definitionKind}:${state.plan.definitionId}@${state.plan.definitionVersion}:${state.plan.definitionHash}`} plan={state.plan} rows={state.rows} onRowActivate={id => setSelected(state.rows.find(candidate => candidate.id === id) ?? null)} onActivated={refreshRows} />
-    {selected && <aside aria-label="Definition inspector"><h2>{String(selected.title ?? selected.id)}</h2><pre>{JSON.stringify(selected, null, 2)}</pre></aside>}
-  </>
+  return <WorkshopWorkflow key={`${state.plan.definitionKind}:${state.plan.definitionId}@${state.plan.definitionVersion}:${state.plan.definitionHash}`} plan={state.plan} rows={state.rows} onRowActivate={id => {
+    const activated = state.rows.find(candidate => candidate.id === id)
+    if (activated) onRowActivate?.(activated)
+  }} onActivated={refreshRows} />
 }
