@@ -84,6 +84,7 @@ const NAVIGATION: PackNavigationDeclaration = {
   panelSet: [{ id: 'pilot', labelKey: 'Pilot', binding: 'panels.pilot.toggle', shortcut: 'mod+shift+p', defaultWidth: 400, minimumHeight: 300, defaultOpen: false }],
 }
 const workshopLabels: Record<string, string> = {
+  'panels.inspector': 'Inspector', 'panels.inspector.footerClaim': 'Follows selection',
   'workshop.workspace': 'Workshop', 'workshop.definitions': 'Definitions', 'workshop.asset-types': 'Record types',
   'workshop.forms': 'Forms', 'workshop.workflows': 'Workflows', 'workshop.standards': 'Standards',
   'workshop.defaults': 'Defaults', 'workshop.terminology': 'Terminology', 'workshop.documents': 'Documents',
@@ -193,6 +194,13 @@ export function App() {
   }, [navigationAttempt])
 
   useEffect(() => {
+    if (!WORKSHOP_ITEM_IDS.has(activeItemId)) {
+      setSelectedRowId(null)
+      setSelectedDefinition(null)
+    }
+  }, [activeItemId])
+
+  useEffect(() => {
     const parameters = new URLSearchParams(window.location.search)
     parameters.set('item', activeItemId)
     if (selectedRowId) parameters.set('selected', selectedRowId); else parameters.delete('selected')
@@ -255,6 +263,7 @@ export function App() {
       <AuthorizationAdminClientProvider client={authorizationClient}>
       {navigationError && <section role="alert"><p>{navigationError}</p><button type="button" onClick={() => setNavigationAttempt(value => value + 1)}>Retry navigation</button></section>}
       <AppShell
+      key={packNavigation === null ? 'fallback' : 'configured'}
       shellId="harborline-app"
       brandText="Harborline"
       navigation={packNavigation ?? NAVIGATION}
@@ -280,7 +289,7 @@ export function App() {
         : <section className="happ-pilot"><p>{panel.id === 'pilot' ? `Pilot sees what you see — Portfolio · ${body.title}.` : `${resolveLabel(panel.labelKey ?? panel.id)}: This application surface is not available in this version.`}</p></section>}
       body={activeItemId === 'access.holders' ? <main className="happ-page"><AccessHoldersPage /></main>
         : WORKSHOP_ITEM_IDS.has(activeItemId)
-        ? <main className="happ-page"><h1>{body.title}</h1><SeededListPage itemId={activeItemId} selectedRowId={selectedRowId} onRowActivate={inspectDefinition} /></main>
+        ? <main className="happ-page"><h1>{body.title}</h1><SeededListPage itemId={activeItemId} selectedRowId={selectedRowId} onRowActivate={inspectDefinition} onSelectionRestored={setSelectedDefinition} /></main>
         : activeItemId === 'admin-forms'
         ? <main className="happ-page"><FormsAdminPage /></main>
         : activeItemId === 'admin-reports'

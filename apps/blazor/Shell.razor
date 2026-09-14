@@ -29,7 +29,7 @@
 {
     <section role="alert"><p>@navigationError</p><button type="button" @onclick="LoadNavigationAsync">Retry navigation</button></section>
 }
-<HarborlineAppShell ShellId="harborline-app"
+<HarborlineAppShell @key="@(packNavigation is not null)" ShellId="harborline-app"
                   BrandText="Harborline"
                   Navigation="@(packNavigation ?? Navigation)"
                   NavigationState="@NavigationState"
@@ -86,7 +86,7 @@
     }
     else if (WorkshopItems.Contains(activeItemId))
     {
-        <main class="happ-page"><h1>@ActiveLabel</h1><SeededListPage ItemId="@activeItemId" SelectedRowId="@selectedRowId" RowActivated="@SelectDefinitionAsync" /></main>
+        <main class="happ-page"><h1>@ActiveLabel</h1><SeededListPage ItemId="@activeItemId" SelectedRowId="@selectedRowId" RowActivated="@SelectDefinitionAsync" SelectionRestored="@(row => selectedDefinition = row)" /></main>
     }
     else
     {
@@ -100,6 +100,7 @@
 @code {
     private static string ResolveLabel(string key) => key switch
     {
+        "panels.inspector" => "Inspector", "panels.inspector.footerClaim" => "Follows selection",
         "access.workspace" => "Access", "access.holders" => "Holders",
         "access.details" or "access.details.footer" => "Access details",
         "workshop.workspace" => "Workshop", "workshop.definitions" => "Definitions",
@@ -239,6 +240,7 @@
                 ? itemId : "assets";
             selectedRowId = WorkshopItems.Contains(activeItemId) ? address.SelectedRowId : null;
             selectedDefinition = null;
+            if (address.ItemId is not null || address.SelectedRowId is not null || address.HasPanelState) ReplaceAddress();
         }
         catch (OperationCanceledException) when (navigationCancellation.IsCancellationRequested) { }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException)

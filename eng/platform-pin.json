@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "repository": "Harborline-Software/harborline-platform",
-  "commit": "0b7068307a3f955d670b74fd4108b609487ffebb",
-  "recordedAt": "2026-09-13 (T-228 shell navigation declaration fidelity and Inspector composition)",
+  "commit": "cc904158f0f2716c9c5e86664041dcca4991c191",
+  "recordedAt": "2026-09-14 (T-430 adaptive shell and T-431 cross-lane copied-address acceptance)",
   "why": [
     "Both app lanes consume the platform's UI packages from a local feed built out of a sibling",
     "platform checkout. The feed directories are gitignored, so a clean CI runner had no package",
