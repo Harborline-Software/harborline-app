@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Bunit;
+using Bunit.TestDoubles;
 using Harborline.App.Blazor.ReferenceHost;
 using Harborline.App.Blazor.ReferenceHost.Admin.Authorization;
 using Harborline.App.Blazor.ReferenceHost.Navigation;
@@ -161,6 +162,36 @@ public sealed class PackNavigationTests : BunitContext
     }
 
     [Theory]
+    [InlineData("http://localhost/?item=forms")]
+    [InlineData("http://localhost/?item=forms&selected=inspection%401.0.0&panels=inspector")]
+    [InlineData("http://localhost/?source=shared%20link&item=forms&selected=inspection%401.0.0&panels=inspector#details")]
+    public void Canonical_workshop_address_loads_without_replacing_navigation(string address)
+    {
+        Services.AddHarborlineUiAdapters();
+        Services.AddSingleton<IMediaQueryObserver>(new Media());
+        Services.AddSingleton<IAuthorizationAdminClient>(new FixtureAuthorizationAdminClient());
+        Services.AddSingleton<IWorkshopCatalogueClient>(new FormsCatalogueClient());
+        Services.AddSingleton<IPackNavigationClient>(new HttpPackNavigationClient(
+            new HttpClient(new Handler(WorkshopFixture)) { BaseAddress = new Uri("http://localhost:7308/") }));
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var navigation = Assert.IsType<BunitNavigationManager>(Services.GetRequiredService<NavigationManager>());
+        navigation.NavigateTo(address);
+        var initialHistory = navigation.History.ToArray();
+
+        var shell = Render<Shell>();
+
+        shell.WaitForAssertion(() =>
+        {
+            Assert.Equal("Forms", shell.Find("main h1").TextContent.Trim());
+            Assert.NotEmpty(shell.FindAll("[role=grid]"));
+            if (address.Contains("panels=inspector", StringComparison.Ordinal))
+                Assert.Contains("Inspection", shell.Find("[data-shell-panel-id='inspector']").TextContent, StringComparison.Ordinal);
+            Assert.Equal(address, navigation.Uri);
+            Assert.Equal(initialHistory, navigation.History);
+        });
+    }
+
+    [Theory]
     [InlineData("missing")]
     [InlineData("assets")]
     [InlineData("unavailable")]
@@ -172,7 +203,7 @@ public sealed class PackNavigationTests : BunitContext
         Services.AddSingleton<IPackNavigationClient>(new HttpPackNavigationClient(
             new HttpClient(new Handler(WorkshopFixture)) { BaseAddress = new Uri("http://localhost:7308/") }));
         JSInterop.Mode = JSRuntimeMode.Loose;
-        var navigation = Services.GetRequiredService<NavigationManager>();
+        var navigation = Assert.IsType<BunitNavigationManager>(Services.GetRequiredService<NavigationManager>());
         navigation.NavigateTo($"http://localhost/?item={item}&selected=inspection%401.0.0&panels=pilot");
         var shell = Render<Shell>();
         shell.WaitForAssertion(() =>
@@ -182,6 +213,9 @@ public sealed class PackNavigationTests : BunitContext
             Assert.Equal("assets", address["item"].ToString());
             Assert.False(address.ContainsKey("selected"));
             Assert.False(address.ContainsKey("panels"));
+            var replacement = Assert.Single(navigation.History);
+            Assert.Equal("http://localhost/?item=assets", replacement.Uri);
+            Assert.True(replacement.Options.ReplaceHistoryEntry);
         });
     }
 
