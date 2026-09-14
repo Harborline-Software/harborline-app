@@ -32,8 +32,9 @@ public sealed class AccessHoldersTests(ITestOutputHelper output) : BunitContext
         result.WaitForAssertion(() => Assert.Contains("Access", result.Markup, StringComparison.Ordinal));
         result.Find("a[href='/workspaces/access']").Click();
         result.FindAll("a").Single(link => link.TextContent.Trim() == "Access").Click();
-        result.WaitForAssertion(() => Assert.Contains("access.holders", result.Markup, StringComparison.Ordinal));
-        result.FindAll("button, a").Single(button => button.TextContent.Trim() == "access.holders").Click();
+        var item = result.Find("a[href='/workspaces/access.holders']");
+        Assert.Equal("Holders", item.TextContent.Trim());
+        item.Click();
         return result;
     }
     [Fact]

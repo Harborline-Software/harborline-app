@@ -18,8 +18,9 @@ async function mount(request: typeof fetch) {
   const result = render(<App />)
   await waitFor(() => expect(result.container.textContent).toContain('Access'))
   await act(async () => screen.getByRole('link', { name: 'Access' }).click())
-  const item = await screen.findByText('access.holders')
-  await act(async () => item.closest<HTMLElement>('button, a')!.click())
+  const item = await screen.findByRole('link', { name: 'Holders' })
+  expect(item).toHaveAttribute('href', '/workspaces/access.holders')
+  await act(async () => item.click())
   return result
 }
 function replay(body: unknown, status = 200): typeof fetch {
