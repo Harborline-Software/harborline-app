@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "repository": "Harborline-Software/harborline-platform",
-  "commit": "cc904158f0f2716c9c5e86664041dcca4991c191",
-  "recordedAt": "2026-09-14 (T-430 adaptive shell and T-431 cross-lane copied-address acceptance)",
+  "commit": "9fcddd1848747556adf41989fc5213cf846576ea",
+  "recordedAt": "2026-09-14 (M5 Blazor shell lifecycle and declared navigation label fixes)",
   "why": [
     "Both app lanes consume the platform's UI packages from a local feed built out of a sibling",
     "platform checkout. The feed directories are gitignored, so a clean CI runner had no package",

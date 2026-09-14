@@ -308,6 +308,8 @@
         retained.Add($"item={Uri.EscapeDataString(activeItemId)}");
         if (selectedRowId is not null) retained.Add($"selected={Uri.EscapeDataString(selectedRowId)}");
         if (openPanelIds.Count > 0) retained.Add($"panels={Uri.EscapeDataString(string.Join(',', openPanelIds))}");
-        BrowserNavigation.NavigateTo($"{uri.GetLeftPart(UriPartial.Path)}?{string.Join('&', retained)}{uri.Fragment}", replace: true);
+        var target = new Uri($"{uri.GetLeftPart(UriPartial.Path)}?{string.Join('&', retained)}{uri.Fragment}");
+        if (Uri.Compare(uri, target, UriComponents.AbsoluteUri, UriFormat.UriEscaped, StringComparison.Ordinal) == 0) return;
+        BrowserNavigation.NavigateTo(target.AbsoluteUri, replace: true);
     }
 }
