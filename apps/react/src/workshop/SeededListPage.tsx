@@ -43,9 +43,10 @@ export interface SeededListPageProps {
   readonly itemId: string
   readonly selectedRowId?: string | null
   readonly onRowActivate?: (row: ViewRuntimeRow) => void
+  readonly onSelectionRestored?: (row: ViewRuntimeRow) => void
 }
 
-export function SeededListPage({ itemId, selectedRowId, onRowActivate }: SeededListPageProps) {
+export function SeededListPage({ itemId, selectedRowId, onRowActivate, onSelectionRestored }: SeededListPageProps) {
   const [state, setState] = useState<{ plan: ViewRenderPlan; rows: readonly ViewRuntimeRow[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const resolvedSelection = useRef<string | null>(null)
@@ -65,15 +66,15 @@ export function SeededListPage({ itemId, selectedRowId, onRowActivate }: SeededL
     return () => abort.abort()
   }, [itemId])
   useEffect(() => {
-    if (!state || !selectedRowId || !onRowActivate) return
+    if (!state || !selectedRowId || !onSelectionRestored) return
     const selectionKey = `${itemId}:${selectedRowId}`
     if (resolvedSelection.current === selectionKey) return
     const restored = state.rows.find(candidate => candidate.id === selectedRowId)
     if (restored) {
       resolvedSelection.current = selectionKey
-      onRowActivate(restored)
+      onSelectionRestored(restored)
     }
-  }, [itemId, onRowActivate, selectedRowId, state])
+  }, [itemId, onSelectionRestored, selectedRowId, state])
   if (error) return <section role="alert"><p>{error}</p></section>
   if (!state) return <p role="status">Loading Workshop list…</p>
   const refreshRows = async () => {

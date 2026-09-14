@@ -50,6 +50,7 @@ else if (supported)
     [Parameter, EditorRequired] public string ItemId { get; set; } = string.Empty;
     [Parameter] public string? SelectedRowId { get; set; }
     [Parameter] public EventCallback<ViewRuntimeRow> RowActivated { get; set; }
+    [Parameter] public EventCallback<ViewRuntimeRow> SelectionRestored { get; set; }
     private readonly CancellationTokenSource cancellation = new();
     private ViewRenderPlan? plan;
     private IReadOnlyList<ViewRuntimeRow> rows = [];
@@ -106,7 +107,7 @@ else if (supported)
         var restored = rows.FirstOrDefault(row => row.Id == SelectedRowId);
         if (restored is null) return;
         restoredSelection = selectionKey;
-        await RowActivated.InvokeAsync(restored);
+        await SelectionRestored.InvokeAsync(restored);
     }
 
     private Task SelectRowAsync(string rowId)

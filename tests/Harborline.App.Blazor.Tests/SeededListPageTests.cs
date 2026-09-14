@@ -58,7 +58,7 @@ public sealed class SeededListPageTests : BunitContext
     }
 
     [Fact]
-    public void Forms_uses_the_seeded_compiled_view_and_lifts_its_row_activation_to_the_shell()
+    public void Selection_restoration_does_not_activate_but_explicit_inspection_of_the_same_row_does()
     {
         Services.AddSingleton<IWorkshopCatalogueClient>(new FixtureWorkshopCatalogueClient());
         Services.AddHarborlineUiAdapters();
@@ -66,8 +66,11 @@ public sealed class SeededListPageTests : BunitContext
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         ViewRuntimeRow? activated = null;
+        ViewRuntimeRow? restored = null;
         var cut = Render<SeededListPage>(parameters => parameters
             .Add(page => page.ItemId, "forms")
+            .Add(page => page.SelectedRowId, "inspection@1.0.0")
+            .Add(page => page.SelectionRestored, EventCallback.Factory.Create<ViewRuntimeRow>(this, row => restored = row))
             .Add(page => page.RowActivated, EventCallback.Factory.Create<ViewRuntimeRow>(this, row => activated = row)));
 
         cut.WaitForAssertion(() =>
@@ -79,6 +82,8 @@ public sealed class SeededListPageTests : BunitContext
             Assert.Contains("platform.list.forms", cut.Find("[data-definition-source]").GetAttribute("data-definition-source"), StringComparison.Ordinal);
         });
 
+        cut.WaitForAssertion(() => Assert.Equal("inspection@1.0.0", restored!.Id));
+        Assert.Null(activated);
         cut.Find("[data-row-id='inspection@1.0.0']").DoubleClick();
         cut.WaitForAssertion(() => Assert.Equal("inspection@1.0.0", activated!.Id));
         Assert.Empty(cut.FindAll("aside[aria-label='Definition inspector']"));

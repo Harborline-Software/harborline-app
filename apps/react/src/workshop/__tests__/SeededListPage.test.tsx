@@ -98,14 +98,15 @@ describe('seeded Workshop list', () => {
     expect(await screen.findByRole('textbox', { name: 'Pack document' })).toBeInTheDocument()
   })
 
-  it('renders the compiled Forms plan and forwards its inspect action', async () => {
+  it('restores selection without activation, then forwards an explicit inspect action on the same row', async () => {
     const plan = { definitionHash: 'hash', definitionId: 'platform.list.forms', definitionVersion: '1.0.0', packKey: 'harborline.platform', packVersion: '1.0.0', definitionKind: 'ViewDefinition', bindings: { viewKind: 'views.entity-list/grid', parameters: { fields: [{ id: 'formId', label: 'Key' }, { id: 'title', label: 'Title' }, { id: 'version', label: 'Version' }, { id: 'cascadeLayer', label: 'Cascade layer' }] } } }
     const fetchMock = vi.fn(async (input: string) => new Response(JSON.stringify(input.includes('/ViewDefinition/')
       ? { renderPlan: plan }
       : { entries: [{ id: 'work-order', version: '1.0.0', status: 'Published', title: { defaultLocale: 'en', values: { en: 'Work order' } }, body: { cascadeLayer: 'Tenant' } }], kindsUnavailable: [] }), { status: 200 }))
     const activated = vi.fn()
+    const restored = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
-    render(<SeededListPage itemId="forms" onRowActivate={activated} />)
+    render(<SeededListPage itemId="forms" selectedRowId="work-order@1.0.0" onRowActivate={activated} onSelectionRestored={restored} />)
     expect(await screen.findByRole('grid')).toHaveAttribute('aria-label', 'View results')
     expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
       '/api/local-node/catalogue/definitions/ViewDefinition/platform.list.forms',
@@ -113,6 +114,8 @@ describe('seeded Workshop list', () => {
     ])
     expect(screen.getAllByRole('columnheader').map(node => node.textContent)).toEqual(['Key', 'Title', 'Version', 'Cascade layer'])
     expect(screen.getByText('work-order')).toBeInTheDocument()
+    await waitFor(() => expect(restored).toHaveBeenCalledWith(expect.objectContaining({ id: 'work-order@1.0.0' })))
+    expect(activated).not.toHaveBeenCalled()
     fireEvent.doubleClick(document.querySelector('[data-row-id="work-order@1.0.0"]')!)
     await waitFor(() => expect(activated).toHaveBeenCalledWith(expect.objectContaining({ id: 'work-order@1.0.0', title: 'Work order', cascadeLayer: 'Tenant' })))
   })

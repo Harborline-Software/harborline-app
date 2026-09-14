@@ -11,15 +11,22 @@ using Harborline.UIAdapters.Blazor.Browser;
 using Harborline.UIAdapters.Blazor.Components.DataDisplay;
 using Harborline.UIAdapters.Blazor.Components.Layout;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Harborline.App.Blazor.Tests;
 
 public sealed class PackNavigationTests : BunitContext
 {
-    private const string WorkshopFixture = """
-        {"configured":true,"pack":{"seedWorkspaces":[{"id":"workshop","labelKey":"workshop.workspace","groups":[{"id":"workshop-definitions","labelKey":"workshop.definitions","itemIds":["forms"]}]}],"panelSet":[{"id":"inspector","labelKey":"Inspector","binding":"panels.inspector.toggle","shortcut":"mod+shift+i","defaultWidth":400,"minimumHeight":300,"defaultOpen":false,"traits":["Scoped"]}]}}
-        """;
+    private static string WorkshopFixture => ReadFixture("workshop-navigation.json");
+
+    private static string ReadFixture(string name)
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "Harborline.App.slnx"))) root = root.Parent;
+        return File.ReadAllText(Path.Combine(root!.FullName, "tests/fixtures", name));
+    }
 
     [Fact]
     public void Addressed_workshop_forms_renders_its_seeded_grid_and_lifts_a_row_into_the_declared_inspector_panel()
@@ -54,17 +61,23 @@ public sealed class PackNavigationTests : BunitContext
         });
     }
 
-    [Fact]
-    public void Explicit_address_restores_the_declared_workshop_item_selection_and_inspector()
+    [Theory]
+    [InlineData(480, "compact", "bottom-sheet")]
+    [InlineData(720, "medium", "side-sheet")]
+    [InlineData(1024, "expanded", "side-sheet")]
+    public void Shared_workshop_address_restores_the_same_frame_and_command_census(int width, string breakpoint, string containerKind)
     {
         Services.AddHarborlineUiAdapters();
-        Services.AddSingleton<IMediaQueryObserver>(new Media());
+        Services.AddSingleton<IMediaQueryObserver>(new Media(width));
         Services.AddSingleton<IAuthorizationAdminClient>(new FixtureAuthorizationAdminClient());
         Services.AddSingleton<IWorkshopCatalogueClient>(new FormsCatalogueClient());
         Services.AddSingleton<IPackNavigationClient>(new HttpPackNavigationClient(
             new HttpClient(new Handler(WorkshopFixture)) { BaseAddress = new Uri("http://localhost:7308/") }));
         JSInterop.Mode = JSRuntimeMode.Loose;
-        Services.GetRequiredService<NavigationManager>().NavigateTo("http://localhost/?item=forms&selected=inspection%401.0.0&panels=inspector");
+        JSInterop.SetupModule("./_content/Harborline.UIAdapters.Blazor/dock-divider.js")
+            .Setup<double>("measureInlineSize", _ => true).SetResult(width);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("http://localhost/?item=forms&selected=inspection%401.0.0&panels=inspector,pilot");
 
         var shell = Render<Shell>();
 
@@ -72,6 +85,83 @@ public sealed class PackNavigationTests : BunitContext
         {
             Assert.Equal("Forms", shell.Find("main h1").TextContent.Trim());
             Assert.Contains("Inspection", shell.Find("[data-shell-panel-id='inspector']").TextContent, StringComparison.Ordinal);
+        });
+        var declaration = JsonSerializer.Deserialize<PackNavigationResponse>(WorkshopFixture, new JsonSerializerOptions(JsonSerializerDefaults.Web))!.Pack!;
+        var workspace = Assert.Single(declaration.SeedWorkspaces);
+        var group = Assert.Single(workspace.Groups!);
+        var panel = Assert.Single(declaration.PanelSet!);
+        var labels = new Dictionary<string, string>
+        {
+            ["workshop.workspace"] = "Workshop", ["workshop.definitions"] = "Definitions",
+            ["workshop.forms"] = "Forms", ["panels.inspector"] = "Inspector",
+        };
+        if (width < 840) shell.Find("button[aria-label='Navigation'][aria-controls]").Click();
+        var rail = shell.Find("[data-shell-region='rail']");
+        Assert.Equal(new[] { ($"/workspaces/{workspace.Id}", labels[workspace.LabelKey]) }
+            .Concat(group.Items!.Select(item => ($"/workspaces/{item.Id}", labels[item.LabelKey!]))),
+            rail.QuerySelectorAll("a").Select(link => (link.GetAttribute("href")!, link.TextContent.Trim())));
+        Assert.True(rail.TextContent.IndexOf(labels[group.LabelKey], StringComparison.Ordinal)
+            < rail.TextContent.IndexOf(labels[group.Items![0].LabelKey!], StringComparison.Ordinal));
+        Assert.Equal("page", shell.Find("a[href='/workspaces/forms']").GetAttribute("aria-current"));
+        shell.Find("button[aria-label='Panels']").Click();
+        Assert.Equal(declaration.PanelSet!.Select(item => item.Id), shell.FindAll("[data-action-id]").Select(control => control.GetAttribute("data-action-id")));
+        Assert.Equal(labels[panel.LabelKey!], shell.Find("[data-action-id='inspector'] [role='menuitem']").TextContent.Trim());
+        Assert.Equal($"panels.{panel.Id}.toggle", panel.Binding);
+        Assert.Null(declaration.ModeSwitch);
+        Assert.Empty(shell.FindAll("[data-shell-zone='mode']"));
+        var inspector = shell.Find("[data-shell-panel-id='inspector']");
+        var address = QueryHelpers.ParseQuery(new Uri(navigation.Uri).Query);
+        // One implicit facet and one open record: the selected definition in this bounded fixture.
+        Assert.Equal((workspace.Id, breakpoint, (string?)null, "inspection@1.0.0", "default", panel.Id, containerKind),
+            (shell.Find("a[href='/workspaces/workshop']").GetAttribute("aria-current") == "page" ? workspace.Id : null,
+             shell.Find("[data-shell-breakpoint]").GetAttribute("data-shell-breakpoint"),
+             address.TryGetValue("mode", out var mode) ? mode.ToString() : null,
+             address["selected"].ToString(), inspector.QuerySelector("[role='tablist']") is null ? "default" : null,
+             Assert.Single(shell.FindAll("[data-shell-panel-id]")).GetAttribute("data-shell-panel-id"),
+             inspector.GetAttribute("data-shell-container-kind")));
+        Assert.Equal(new[] { "inspection@1.0.0" }, inspector.QuerySelectorAll("h2").Select(heading => heading.TextContent == "Inspection" ? "inspection@1.0.0" : null));
+        Assert.Equal(panel.Id, address["panels"].ToString());
+        var beforeUndeclared = navigation.Uri;
+        shell.Find("[data-shell-id]").KeyDown(new KeyboardEventArgs { Key = "p", MetaKey = true, ShiftKey = true });
+        Assert.Equal(beforeUndeclared, navigation.Uri);
+        Assert.Empty(shell.FindAll("[data-action-id='pilot'], [data-shell-panel-id='pilot'], button[aria-label='Pilot']"));
+        shell.Find("button[aria-label='Close inspector']").Click();
+        Assert.Empty(shell.FindAll("[data-shell-panel-id]"));
+        Assert.False(QueryHelpers.ParseQuery(new Uri(navigation.Uri).Query).ContainsKey("panels"));
+        shell.Find("[data-action-id='inspector'] button").Click();
+        Assert.Equal(panel.Id, QueryHelpers.ParseQuery(new Uri(navigation.Uri).Query)["panels"].ToString());
+        shell.Find("button[aria-label='Close inspector']").Click();
+        shell.Find("[data-shell-id]").KeyDown(new KeyboardEventArgs
+        {
+            Key = panel.Shortcut.Split('+')[^1], MetaKey = panel.Shortcut.Contains("mod", StringComparison.Ordinal),
+            ShiftKey = panel.Shortcut.Contains("shift", StringComparison.Ordinal),
+        });
+        Assert.Contains("Inspection", shell.Find("[data-shell-panel-id='inspector']").TextContent, StringComparison.Ordinal);
+        Assert.Equal(panel.Id, QueryHelpers.ParseQuery(new Uri(navigation.Uri).Query)["panels"].ToString());
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("assets")]
+    [InlineData("views")]
+    public void Address_without_a_workshop_item_clears_stale_selection_and_undeclared_panels(string item)
+    {
+        Services.AddHarborlineUiAdapters();
+        Services.AddSingleton<IMediaQueryObserver>(new Media());
+        Services.AddSingleton<IAuthorizationAdminClient>(new FixtureAuthorizationAdminClient());
+        Services.AddSingleton<IPackNavigationClient>(new HttpPackNavigationClient(
+            new HttpClient(new Handler(WorkshopFixture)) { BaseAddress = new Uri("http://localhost:7308/") }));
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo($"http://localhost/?item={item}&selected=inspection%401.0.0&panels=pilot");
+        var shell = Render<Shell>();
+        shell.WaitForAssertion(() =>
+        {
+            Assert.Equal("Assets", shell.Find("main h1").TextContent.Trim());
+            var address = QueryHelpers.ParseQuery(new Uri(navigation.Uri).Query);
+            Assert.Equal("assets", address["item"].ToString());
+            Assert.False(address.ContainsKey("selected"));
+            Assert.False(address.ContainsKey("panels"));
         });
     }
 
@@ -98,9 +188,7 @@ public sealed class PackNavigationTests : BunitContext
     [Fact]
     public void Seeded_workshop_workspace_has_a_user_facing_label()
     {
-        const string fixture = """
-            {"configured":true,"pack":{"packId":"harborline.active-pack-composition","seedWorkspaces":[{"id":"workshop","labelKey":"workshop.workspace","groups":[]}],"panelSet":[]}}
-            """;
+        var fixture = WorkshopFixture;
         Services.AddHarborlineUiAdapters();
         Services.AddSingleton<IMediaQueryObserver>(new Media());
         Services.AddSingleton<IAuthorizationAdminClient>(new FixtureAuthorizationAdminClient());
@@ -162,13 +250,15 @@ public sealed class PackNavigationTests : BunitContext
             return Task.FromResult(new HttpResponseMessage(Status) { Content = new StringContent(Json, Encoding.UTF8, "application/json") });
         }
     }
-    private sealed class Media : IMediaQueryObserver
+    private sealed class Media(int width = 1600) : IMediaQueryObserver
     {
-        public ValueTask<IMediaQuerySubscription> ObserveAsync(string query, Func<MediaQueryChange, ValueTask> changed, CancellationToken cancellationToken = default) => new(new Subscription(query));
-        private sealed class Subscription(string query) : IMediaQuerySubscription
+        public ValueTask<IMediaQuerySubscription> ObserveAsync(string query, Func<MediaQueryChange, ValueTask> changed, CancellationToken cancellationToken = default) => new(new Subscription(query, width));
+        private sealed class Subscription(string query, int width) : IMediaQuerySubscription
         {
             public string Query => query;
-            public bool Matches => !query.Contains("max-width", StringComparison.Ordinal);
+            public bool Matches => System.Text.RegularExpressions.Regex.Matches(query, @"(min|max)-width:\s*(\d+)px")
+                .All(match => match.Groups[1].Value == "min" ? width >= int.Parse(match.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture)
+                    : width <= int.Parse(match.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture));
             public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         }
     }

@@ -1,0 +1,45 @@
+{
+  "configured": true,
+  "pack": {
+    "packId": "harborline.active-pack-composition",
+    "seedWorkspaces": [
+      {
+        "id": "workshop",
+        "labelKey": "workshop.workspace",
+        "icon": null,
+        "destinationQueryRef": null,
+        "countQueryRef": null,
+        "groups": [
+          {
+            "id": "definitions",
+            "labelKey": "workshop.definitions",
+            "destinationQueryRef": null,
+            "countQueryRef": null,
+            "itemIds": ["forms"],
+            "addAction": null,
+            "items": [{ "id": "forms", "labelKey": "workshop.forms" }]
+          }
+        ],
+        "createActions": [],
+        "documentSpine": [],
+        "defaultForPersonas": null
+      }
+    ],
+    "modeSwitch": null,
+    "panelSet": [
+      {
+        "id": "inspector",
+        "labelKey": "panels.inspector",
+        "binding": "panels.inspector.toggle",
+        "shortcut": "mod+shift+i",
+        "defaultWidth": 360,
+        "minimumHeight": 180,
+        "defaultOpen": false,
+        "headerForm": "Title",
+        "bodyTemplate": "Fields",
+        "footer": { "kind": "Claim", "labelKey": "panels.inspector.footerClaim", "binding": null },
+        "traits": ["Scoped"]
+      }
+    ]
+  }
+}
