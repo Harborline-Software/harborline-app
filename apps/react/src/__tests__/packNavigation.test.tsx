@@ -14,6 +14,22 @@ const workshopItems = [
 const workshopKeys = ['workshop.workspace', 'workshop.definitions', ...workshopItems.map(([id]) => `workshop.${id}`)]
 const accessFirst = { ...workshop, pack: { ...workshop.pack, seedWorkspaces: [...fixture.pack.seedWorkspaces, ...workshop.pack.seedWorkspaces] } }
 
+it.each(['admin-forms', 'admin-reports', 'admin-views', 'admin-data-exchange', 'admin-scheduling'])
+  ('cannot restore retired route %s even when no navigation seed is configured', async item => {
+    vi.stubEnv('VITE_AUTHORIZATION_FIXTURE', '1')
+    vi.stubEnv('VITE_AUTHORIZATION_API_ORIGIN', '')
+    window.history.replaceState({}, '', `/?item=${item}`)
+    const request = vi.fn()
+    vi.stubGlobal('fetch', request)
+    const { App } = await import('../App')
+    const cut = render(<App />)
+    await waitFor(() => expect(new URLSearchParams(window.location.search).get('item')).toBe('assets'))
+    expect(cut.container.querySelector('main h1')).toHaveTextContent('Assets')
+    expect(cut.container.querySelector('[role=grid]')).toBeNull()
+    expect(cut.container.querySelectorAll('[href*="admin-forms"],[href*="admin-reports"],[href*="admin-views"],[href*="admin-data-exchange"],[href*="admin-scheduling"]')).toHaveLength(0)
+    expect(request).not.toHaveBeenCalled()
+  })
+
 afterEach(() => {
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()

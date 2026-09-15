@@ -91,13 +91,11 @@ ASPNETCORE_ENVIRONMENT=Production dotnet run --project apps/blazor   # macOS, Li
 $env:ASPNETCORE_ENVIRONMENT="Production"; dotnet run --project apps/blazor   # Windows PowerShell
 ```
 
-Outside `Development` the Forms admin client must also be configured, or startup fails loudly
-with a configuration error (ticket 153 — the fixture is an explicit opt-in, never a silent
-fallback). Either set `FormsAdmin:BaseUrl` (env: `FormsAdmin__BaseUrl`) to the local node
-origin, or opt in to the serverless fixture with the boolean `FormsAdmin:UseFixture=true`
-(env: `FormsAdmin__UseFixture=true`); `appsettings.Development.json` sets the opt-in for
-Development. The React lane's equivalents are `VITE_FORMS_API_ORIGIN` and
-`VITE_FORMS_FIXTURE`, which accepts exactly `1` or `true`.
+Configure `Workshop:BaseUrl` (env: `Workshop__BaseUrl`) to the local node origin in every
+environment. Workshop renders released seed definitions through the shared runtime; the five
+compiled catalogue inspectors and their fixture configuration have retired. The React node
+transport retains `VITE_FORMS_API_ORIGIN` for compatibility. Configure the existing Authorization
+client separately with `AuthorizationAdmin__BaseUrl` / `VITE_AUTHORIZATION_API_ORIGIN`.
 
 The reference host does not configure an HTTPS endpoint, so `dotnet dev-certs https --trust` is not needed. If you add one, note that `--trust` is supported on Windows and macOS but not on most Linux distributions, where the certificate must be trusted manually.
 

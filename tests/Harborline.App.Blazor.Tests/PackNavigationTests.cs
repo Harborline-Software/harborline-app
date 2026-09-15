@@ -20,6 +20,29 @@ namespace Harborline.App.Blazor.Tests;
 
 public sealed class PackNavigationTests : BunitContext
 {
+    [Theory]
+    [InlineData("admin-forms")]
+    [InlineData("admin-reports")]
+    [InlineData("admin-views")]
+    [InlineData("admin-data-exchange")]
+    [InlineData("admin-scheduling")]
+    public void Retired_routes_cannot_restore_when_navigation_seed_is_unconfigured(string item)
+    {
+        Services.AddHarborlineUiAdapters();
+        Services.AddSingleton<IMediaQueryObserver>(new Media());
+        Services.AddSingleton<IAuthorizationAdminClient>(new FixtureAuthorizationAdminClient());
+        Services.AddSingleton<IPackNavigationClient>(new FixturePackNavigationClient());
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo($"http://localhost/?item={item}");
+        var shell = Render<Shell>();
+        shell.WaitForAssertion(() => Assert.Equal("assets", QueryHelpers.ParseQuery(new Uri(navigation.Uri).Query)["item"].ToString()));
+        Assert.Equal("Assets", shell.Find("main h1").TextContent.Trim());
+        Assert.Empty(shell.FindAll("[role=grid]"));
+        Assert.DoesNotContain(shell.FindComponent<HarborlineAppShell>().Instance.NavigationState!.Items!.Keys,
+            id => id is "admin-forms" or "admin-reports" or "admin-views" or "admin-data-exchange" or "admin-scheduling");
+    }
+
     private static string WorkshopFixture => ReadFixture("workshop-navigation.json");
     private static string AccessFirstFixture
     {

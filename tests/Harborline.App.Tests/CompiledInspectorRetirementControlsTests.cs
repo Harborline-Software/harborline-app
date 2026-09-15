@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Harborline.App.Tests;
 
@@ -19,6 +20,89 @@ public sealed class CompiledInspectorRetirementControlsTests
     private static readonly string[] ReactRoots = ["forms", "reports", "views", "data-exchange", "scheduling"];
     private static readonly string[] BlazorRoots = ["Forms", "Reports", "Views", "DataExchange", "Scheduling"];
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+    private static readonly Regex DeclaredSymbols = new(
+        @"\b(?:export|public)\s+(?:sealed\s+|abstract\s+|static\s+)*(?:class|record|interface|type|function|const)\s+(?<name>[A-Z][A-Za-z0-9_]*)",
+        RegexOptions.CultureInvariant);
+
+    [Fact]
+    public void All_ten_retired_roots_are_absolutely_empty()
+    {
+        var roots = ReactRoots.Select(root => $"apps/react/src/admin/{root}")
+            .Concat(BlazorRoots.Select(root => $"apps/blazor/Admin/{root}"));
+        foreach (var root in roots)
+        {
+            var directory = Path.Combine(RepositoryRoot(), root);
+            Assert.True(!Directory.Exists(directory) || !Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories).Any(),
+                $"Retired inspector root contains files: {root}");
+        }
+    }
+
+    [Fact]
+    public void Production_has_no_retired_symbols_routes_or_test_control_dependencies()
+    {
+        var retiredSymbols = ReadBaselinePaths().Where(path => !path.Contains("/__tests__/", StringComparison.Ordinal))
+            .SelectMany(path => DeclaredSymbols.Matches(ReadGitText(path)).Select(match => match.Groups["name"].Value))
+            .Distinct(StringComparer.Ordinal).ToArray();
+        Assert.Contains("FormsAdminClient", retiredSymbols);
+        Assert.Contains("FormDefinitionSummary", retiredSymbols);
+        Assert.Contains("HttpSchedulingAdminClient", retiredSymbols);
+        var retired = new Regex(@"\b(?:" + string.Join('|', retiredSymbols.Select(Regex.Escape))
+            + @")\b|admin-(?:forms|reports|views|data-exchange|scheduling)\b", RegexOptions.CultureInvariant);
+        var dependency = new Regex(
+            @"(?:admin[/\\](?:forms|reports|views|data-exchange|scheduling)[/\\]|Admin[./\\](?:Forms|Reports|Views|DataExchange|Scheduling)\b|compiled-inspector-controls|Harborline\.App\.(?:Tests|Blazor\.Tests))",
+            RegexOptions.CultureInvariant);
+        foreach (var path in ProductionFiles())
+        {
+            var source = File.ReadAllText(Path.Combine(RepositoryRoot(), path));
+            Assert.False(retired.IsMatch(source), $"Retired inspector symbol or route in {path}: {retired.Match(source).Value}");
+            Assert.False(dependency.IsMatch(source), $"Retired inspector or test-only dependency in {path}: {dependency.Match(source).Value}");
+        }
+    }
+
+    [Fact]
+    public void Baseline_diff_adds_no_compiled_administration_file_or_entry_point()
+    {
+        var baseline = RunGitText("ls-tree", "-r", "--name-only", SourcePin, "--", "apps/react/src/admin", "apps/blazor/Admin")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.Ordinal);
+        var current = ProductionFiles().Where(path => path.StartsWith("apps/react/src/admin/", StringComparison.Ordinal)
+            || path.StartsWith("apps/blazor/Admin/", StringComparison.Ordinal)).ToArray();
+        Assert.DoesNotContain(current, path => !baseline.Contains(path));
+        foreach (var path in current)
+        {
+            var original = ReadGitText(path);
+            var tested = File.ReadAllText(Path.Combine(RepositoryRoot(), path));
+            var originalSymbols = DeclaredSymbols.Matches(original).Select(match => match.Groups["name"].Value).ToHashSet(StringComparer.Ordinal);
+            Assert.DoesNotContain(DeclaredSymbols.Matches(tested), match => !originalSymbols.Contains(match.Groups["name"].Value));
+            Assert.Equal(Regex.Matches(original, @"(?m)^\s*@page\s+.*").Select(match => match.Value.Trim()),
+                Regex.Matches(tested, @"(?m)^\s*@page\s+.*").Select(match => match.Value.Trim()));
+        }
+
+        var entries = new Regex(@"\b[A-Za-z][A-Za-z0-9]*AdminPage\b", RegexOptions.CultureInvariant);
+        var baselineEntries = new[] { "apps/react/src/App.tsx", "apps/blazor/Shell.razor" }
+            .SelectMany(path => entries.Matches(ReadGitText(path)).Select(match => match.Value)).ToHashSet(StringComparer.Ordinal);
+        foreach (var path in ProductionFiles())
+        {
+            var addedEntries = entries.Matches(File.ReadAllText(Path.Combine(RepositoryRoot(), path)))
+                .Select(match => match.Value).Where(entry => !baselineEntries.Contains(entry));
+            Assert.Empty(addedEntries);
+        }
+    }
+
+    private static IEnumerable<string> ProductionFiles()
+    {
+        foreach (var root in new[] { "apps/react/src", "apps/blazor", "src", "hosts" })
+        {
+            foreach (var file in Directory.EnumerateFiles(Path.Combine(RepositoryRoot(), root), "*", SearchOption.AllDirectories))
+            {
+                var path = Path.GetRelativePath(RepositoryRoot(), file).Replace('\\', '/');
+                if (path.Split('/').Any(part => part is "bin" or "obj" or "node_modules" or ".feed" or "__tests__")
+                    || path.Contains(".test.", StringComparison.Ordinal)) continue;
+                if (Path.GetExtension(path) is ".cs" or ".razor" or ".ts" or ".tsx" or ".js" or ".mjs" or ".json" or ".csproj")
+                    yield return path;
+            }
+        }
+    }
 
     [Fact]
     public void Retirement_manifest_is_the_exact_hashed_ninety_path_baseline()
@@ -118,7 +202,7 @@ public sealed class CompiledInspectorRetirementControlsTests
         _ => throw new ArgumentOutOfRangeException(nameof(pillar)),
     };
 
-    private static string ReadGitText(string path) => Encoding.UTF8.GetString(ReadGitBlob(path));
+    internal static string ReadGitText(string path) => Encoding.UTF8.GetString(ReadGitBlob(path));
 
     private static string[] ReadBaselinePaths() => RunGitText(
             "ls-tree", "-r", "--name-only", SourcePin, "--", "apps/react/src/admin", "apps/blazor/Admin")

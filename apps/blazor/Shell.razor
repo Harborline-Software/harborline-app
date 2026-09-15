@@ -1,9 +1,4 @@
 @using Harborline.UIAdapters.Blazor.Components.Layout
-@using Harborline.App.Blazor.ReferenceHost.Admin.Forms
-@using Harborline.App.Blazor.ReferenceHost.Admin.Reports
-@using Harborline.App.Blazor.ReferenceHost.Admin.Views
-@using Harborline.App.Blazor.ReferenceHost.Admin.DataExchange
-@using Harborline.App.Blazor.ReferenceHost.Admin.Scheduling
 @using Harborline.App.Blazor.ReferenceHost.Admin.Authorization
 @using Harborline.Contracts.Authorization
 @inject IAuthorizationAdminClient AuthorizationClient
@@ -49,36 +44,6 @@
     {
         <main class="happ-page"><AccessHoldersPage /></main>
     }
-    else if (activeItemId == "admin-forms")
-    {
-        <main class="happ-page">
-            <FormsAdminPage />
-        </main>
-    }
-    else if (activeItemId == "admin-reports")
-    {
-        <main class="happ-page">
-            <ReportsAdminPage />
-        </main>
-    }
-    else if (activeItemId == "admin-views")
-    {
-        <main class="happ-page">
-            <ViewsAdminPage />
-        </main>
-    }
-    else if (activeItemId == "admin-data-exchange")
-    {
-        <main class="happ-page">
-            <DataExchangeAdminPage />
-        </main>
-    }
-    else if (activeItemId == "admin-scheduling")
-    {
-        <main class="happ-page">
-            <SchedulingAdminPage />
-        </main>
-    }
     else if (activeItemId == "admin-authorization")
     {
         <main class="happ-page">
@@ -121,11 +86,6 @@
     [
         new ShellNavItem("assets", "Assets"),
         new ShellNavItem("run-report", "Run report"),
-        new ShellNavItem("admin-forms", "Forms"),
-        new ShellNavItem("admin-reports", "Reports"),
-        new ShellNavItem("admin-views", "Views"),
-        new ShellNavItem("admin-data-exchange", "Data Exchange"),
-        new ShellNavItem("admin-scheduling", "Scheduling"),
         // Ticket 205 will gate this item from live scoped held roles. No existing admin item has
         // that server/session role snapshot yet, so the API route fence remains authoritative.
         new ShellNavItem("admin-authorization", "Settings"),
@@ -152,11 +112,6 @@
     {
         "access.holders" => "Holders",
         "run-report" => "Run report",
-        "admin-forms" => "Forms",
-        "admin-reports" => "Reports",
-        "admin-views" => "Views",
-        "admin-data-exchange" => "Data Exchange",
-        "admin-scheduling" => "Scheduling",
         "admin-authorization" => "Settings › System",
         "assets" => "Assets",
         _ when WorkshopLabels.TryGetValue(activeItemId, out var label) => label,
