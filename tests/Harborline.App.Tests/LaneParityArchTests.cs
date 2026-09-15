@@ -65,9 +65,9 @@ public sealed class LaneParityArchTests
         Assert.Matches(@"activeItemId\s*===\s*'admin-authorization'[\s\S]*?<AuthorizationAdminPage\s*/>", react);
         Assert.Matches("activeItemId\\s*==\\s*\"admin-authorization\"[\\s\\S]*?<AuthorizationAdminPage\\s*/>", blazor);
         Assert.Contains("title: 'Settings › System'", react, StringComparison.Ordinal);
-        Assert.Contains("Harborline / Portfolio / {body.title}", react, StringComparison.Ordinal);
+        Assert.Contains("Harborline / {contentWorkspaceLabel && `${contentWorkspaceLabel} / `}{body.title}", react, StringComparison.Ordinal);
         Assert.Contains("\"admin-authorization\" => \"Settings › System\"", blazor, StringComparison.Ordinal);
-        Assert.Contains("Harborline / Portfolio / @ActiveLabel", blazor, StringComparison.Ordinal);
+        Assert.Contains("Harborline / @(ContentWorkspaceLabel is { } label ? $\"{label} / \" : \"\")@ActiveLabel", blazor, StringComparison.Ordinal);
         Assert.Contains("<h1>Settings › System</h1>", reactPage, StringComparison.Ordinal);
         Assert.Contains("<h1>Settings › System</h1>", blazorPage, StringComparison.Ordinal);
         Assert.Contains("Authorization capability bindings", reactPage, StringComparison.Ordinal);

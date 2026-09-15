@@ -21,6 +21,16 @@ namespace Harborline.App.Blazor.Tests;
 public sealed class PackNavigationTests : BunitContext
 {
     private static string WorkshopFixture => ReadFixture("workshop-navigation.json");
+    private static string AccessFirstFixture
+    {
+        get
+        {
+            var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+            var workshop = JsonSerializer.Deserialize<PackNavigationResponse>(WorkshopFixture, options)!;
+            var access = JsonSerializer.Deserialize<PackNavigationResponse>(ReadFixture("access-navigation.json"), options)!;
+            return JsonSerializer.Serialize(workshop with { Pack = workshop.Pack! with { SeedWorkspaces = [.. access.Pack!.SeedWorkspaces, .. workshop.Pack!.SeedWorkspaces] } }, options);
+        }
+    }
     private static readonly (string Id, string Label)[] WorkshopItems =
     [
         ("asset-types", "Asset types"), ("forms", "Forms"), ("workflows", "Workflows"),
@@ -165,43 +175,81 @@ public sealed class PackNavigationTests : BunitContext
     [InlineData("http://localhost/?item=forms")]
     [InlineData("http://localhost/?item=forms&selected=inspection%401.0.0&panels=inspector")]
     [InlineData("http://localhost/?source=shared%20link&item=forms&selected=inspection%401.0.0&panels=inspector#details")]
-    public void Canonical_workshop_address_loads_without_replacing_navigation(string address)
+    public void Canonical_workshop_address_with_Access_first_restores_owner_after_delayed_configuration_and_reload_without_replacing_navigation(string address)
     {
         Services.AddHarborlineUiAdapters();
         Services.AddSingleton<IMediaQueryObserver>(new Media());
         Services.AddSingleton<IAuthorizationAdminClient>(new FixtureAuthorizationAdminClient());
         Services.AddSingleton<IWorkshopCatalogueClient>(new FormsCatalogueClient());
+        var navigationReady = new TaskCompletionSource();
         Services.AddSingleton<IPackNavigationClient>(new HttpPackNavigationClient(
-            new HttpClient(new Handler(WorkshopFixture)) { BaseAddress = new Uri("http://localhost:7308/") }));
+            new HttpClient(new Handler(AccessFirstFixture) { Ready = navigationReady.Task }) { BaseAddress = new Uri("http://localhost:7308/") }));
         JSInterop.Mode = JSRuntimeMode.Loose;
         var navigation = Assert.IsType<BunitNavigationManager>(Services.GetRequiredService<NavigationManager>());
         navigation.NavigateTo(address);
         var initialHistory = navigation.History.ToArray();
 
         var shell = Render<Shell>();
+        Assert.Empty(shell.FindAll("a[href='/workspaces/workshop']"));
+        navigationReady.SetResult();
 
         shell.WaitForAssertion(() =>
         {
             Assert.Equal("Forms", shell.Find("main h1").TextContent.Trim());
+            Assert.Equal("page", shell.Find("a[href='/workspaces/workshop']").GetAttribute("aria-current"));
+            Assert.Equal("page", shell.Find("a[href='/workspaces/forms']").GetAttribute("aria-current"));
+            Assert.Equal("Harborline / Workshop / Forms", shell.Find(".happ-breadcrumb").TextContent.Trim());
             Assert.NotEmpty(shell.FindAll("[role=grid]"));
             if (address.Contains("panels=inspector", StringComparison.Ordinal))
                 Assert.Contains("Inspection", shell.Find("[data-shell-panel-id='inspector']").TextContent, StringComparison.Ordinal);
             Assert.Equal(address, navigation.Uri);
             Assert.Equal(initialHistory, navigation.History);
         });
+        shell.Find("button.hl-app-shell__show-more").Click();
+        shell.WaitForAssertion(() => Assert.Equal(new[] { "/workspaces/access", "/workspaces/workshop" }.Concat(WorkshopItems.Select(item => $"/workspaces/{item.Id}")),
+            shell.FindAll("[data-shell-region='rail'] a").Select(link => link.GetAttribute("href"))));
+        shell.Dispose();
+        var restored = Render<Shell>();
+        restored.WaitForAssertion(() =>
+        {
+            Assert.Equal("page", restored.Find("a[href='/workspaces/workshop']").GetAttribute("aria-current"));
+            Assert.Equal("page", restored.Find("a[href='/workspaces/forms']").GetAttribute("aria-current"));
+            Assert.Equal("Harborline / Workshop / Forms", restored.Find(".happ-breadcrumb").TextContent.Trim());
+            if (address.Contains("panels=inspector", StringComparison.Ordinal))
+                Assert.Contains("Inspection", restored.Find("[data-shell-panel-id='inspector']").TextContent, StringComparison.Ordinal);
+            Assert.Equal(address, navigation.Uri);
+            Assert.Equal(initialHistory, navigation.History);
+        });
+        restored.Find("a[href='/workspaces/access']").Click();
+        Assert.Equal("page", restored.Find("a[href='/workspaces/access']").GetAttribute("aria-current"));
+        restored.Find("a[href='/workspaces/access.holders']").Click();
+        Assert.Equal("Harborline / Access / Holders", restored.Find(".happ-breadcrumb").TextContent.Trim());
+        Assert.False(QueryHelpers.ParseQuery(new Uri(navigation.Uri).Query).ContainsKey("selected"));
+        restored.Find("a[href='/workspaces/workshop']").Click();
+        restored.Find("a[href='/workspaces/forms']").Click();
+        Assert.Equal("page", restored.Find("a[href='/workspaces/workshop']").GetAttribute("aria-current"));
+        Assert.Equal("Harborline / Workshop / Forms", restored.Find(".happ-breadcrumb").TextContent.Trim());
+        Assert.Equal(new Uri(address).Fragment, new Uri(navigation.Uri).Fragment);
+        Assert.Equal(QueryHelpers.ParseQuery(new Uri(address).Query).GetValueOrDefault("source"), QueryHelpers.ParseQuery(new Uri(navigation.Uri).Query).GetValueOrDefault("source"));
     }
 
     [Theory]
     [InlineData("missing")]
     [InlineData("assets")]
     [InlineData("unavailable")]
+    [InlineData("forms")]
+    [InlineData("empty")]
     public void Address_without_a_workshop_item_clears_stale_selection_and_undeclared_panels(string item)
     {
         Services.AddHarborlineUiAdapters();
         Services.AddSingleton<IMediaQueryObserver>(new Media());
         Services.AddSingleton<IAuthorizationAdminClient>(new FixtureAuthorizationAdminClient());
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var declaration = JsonSerializer.Deserialize<PackNavigationResponse>(AccessFirstFixture, options)!;
+        if (item == "forms") declaration = declaration with { Pack = declaration.Pack! with { SeedWorkspaces = declaration.Pack!.SeedWorkspaces.Where(workspace => workspace.Id != "workshop").ToArray() } };
+        if (item == "empty") declaration = declaration with { Pack = declaration.Pack! with { SeedWorkspaces = [], PanelSet = [] } };
         Services.AddSingleton<IPackNavigationClient>(new HttpPackNavigationClient(
-            new HttpClient(new Handler(WorkshopFixture)) { BaseAddress = new Uri("http://localhost:7308/") }));
+            new HttpClient(new Handler(JsonSerializer.Serialize(declaration, options))) { BaseAddress = new Uri("http://localhost:7308/") }));
         JSInterop.Mode = JSRuntimeMode.Loose;
         var navigation = Assert.IsType<BunitNavigationManager>(Services.GetRequiredService<NavigationManager>());
         navigation.NavigateTo($"http://localhost/?item={item}&selected=inspection%401.0.0&panels=pilot");
@@ -209,6 +257,8 @@ public sealed class PackNavigationTests : BunitContext
         shell.WaitForAssertion(() =>
         {
             Assert.Equal("Assets", shell.Find("main h1").TextContent.Trim());
+            Assert.Equal("Harborline / Portfolio / Assets", shell.Find(".happ-breadcrumb").TextContent.Trim());
+            if (item == "empty") Assert.Empty(shell.FindAll("[data-shell-region='rail'] a"));
             var address = QueryHelpers.ParseQuery(new Uri(navigation.Uri).Query);
             Assert.Equal("assets", address["item"].ToString());
             Assert.False(address.ContainsKey("selected"));
@@ -298,10 +348,12 @@ public sealed class PackNavigationTests : BunitContext
         public string Json = json;
         public HttpStatusCode Status = HttpStatusCode.OK;
         public string? LastPath;
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        public Task Ready = Task.CompletedTask;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             LastPath = request.RequestUri!.AbsolutePath;
-            return Task.FromResult(new HttpResponseMessage(Status) { Content = new StringContent(Json, Encoding.UTF8, "application/json") });
+            await Ready.WaitAsync(cancellationToken);
+            return new HttpResponseMessage(Status) { Content = new StringContent(Json, Encoding.UTF8, "application/json") };
         }
     }
     private sealed class Media(int width = 1600) : IMediaQueryObserver

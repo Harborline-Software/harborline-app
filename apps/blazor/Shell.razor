@@ -36,6 +36,7 @@
                   ResolveLabel="@ResolveLabel"
                   RoleVocabulary="@roleVocabulary"
                   HeldRoles="@HeldRoles"
+                  DefaultActiveWorkspaceId="@ActiveWorkspace?.Id"
                   ActiveItemId="@activeItemId"
                   Navigated="@NavigateAsync"
                   InspectorCommand="@OpenInspectorAsync"
@@ -165,7 +166,10 @@
         : activeItemId == "assets" ? "Browse and manage the physical assets your organization tracks."
         : "This application surface is not available in this version.";
 
-    private RenderFragment PageHeaderFragment => @<nav aria-label="Breadcrumb" class="happ-breadcrumb">@if (activeItemId == "access.holders") { <text>Harborline / Access / Holders</text> } else { <text>Harborline / Portfolio / @ActiveLabel</text> }</nav>;
+    private PackNavigationWorkspace? ActiveWorkspace => (packNavigation ?? Navigation).SeedWorkspaces
+        .FirstOrDefault(workspace => workspace.Groups?.Any(group => group.ItemIds.Contains(activeItemId, StringComparer.Ordinal)) == true);
+    private string? ContentWorkspaceLabel => ActiveWorkspace is { } workspace ? ResolveLabel(workspace.LabelKey) : activeItemId == "assets" ? "Portfolio" : null;
+    private RenderFragment PageHeaderFragment => @<nav aria-label="Breadcrumb" class="happ-breadcrumb">Harborline / @(ContentWorkspaceLabel is { } label ? $"{label} / " : "")@ActiveLabel</nav>;
     private IReadOnlyList<string> OpenPanelIds => openPanelIds;
     private RenderFragment<PackPanelDeclaration> PanelToolbar => panel => @<span>
         @if (panel.Id == "inspector")

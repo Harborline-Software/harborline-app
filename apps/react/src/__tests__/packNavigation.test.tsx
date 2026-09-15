@@ -12,6 +12,7 @@ const workshopItems = [
   ['schedules', 'Schedules'], ['views', 'Views'],
 ] as const
 const workshopKeys = ['workshop.workspace', 'workshop.definitions', ...workshopItems.map(([id]) => `workshop.${id}`)]
+const accessFirst = { ...workshop, pack: { ...workshop.pack, seedWorkspaces: [...fixture.pack.seedWorkspaces, ...workshop.pack.seedWorkspaces] } }
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -59,13 +60,18 @@ it('renders the declared Access workspace and panels, removes them with the decl
   expect(screen.queryByRole('alert')).toBeNull()
 })
 
-it.each([[480, 'compact', 'bottom-sheet'], [720, 'medium', 'side-sheet'], [1024, 'expanded', 'side-sheet']] as const)('restores the shared Workshop address and command census at %ipx', async (width, breakpoint, containerKind) => {
+it.each([[480, 'compact', 'bottom-sheet', false], [720, 'medium', 'side-sheet', false], [1024, 'expanded', 'side-sheet', false], [1024, 'expanded', 'side-sheet', true]] as const)('restores the shared Workshop address and command census at %ipx (%s, %s, Access first: %s)', async (width, breakpoint, containerKind, multipleWorkspaces) => {
   vi.stubEnv('VITE_FORMS_FIXTURE', '1')
   vi.stubEnv('VITE_AUTHORIZATION_FIXTURE', '1')
   vi.stubEnv('VITE_AUTHORIZATION_API_ORIGIN', 'http://localhost:7308')
   window.matchMedia = query => ({ ...media(query), matches: [...query.matchAll(/(min|max)-width:\s*(\d+)px/g)].every(([, bound, value]) => bound === 'min' ? width >= Number(value) : width <= Number(value)) })
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
-  window.history.replaceState({}, '', '/?item=forms&selected=inspection%401.0.0&panels=inspector,pilot')
+  window.history.replaceState({}, '', multipleWorkspaces
+    ? '/?source=shared%20link&item=forms&selected=inspection%401.0.0&panels=inspector#details'
+    : '/?item=forms&selected=inspection%401.0.0&panels=inspector,pilot')
+  const declaration = multipleWorkspaces ? accessFirst : workshop
+  let releaseNavigation!: () => void
+  const navigationReady = new Promise<void>(resolve => { releaseNavigation = resolve })
 
   const plan = {
     definitionHash: 'forms-hash', definitionId: 'platform.list.forms', definitionVersion: '1.0.0',
@@ -78,7 +84,10 @@ it.each([[480, 'compact', 'bottom-sheet'], [720, 'medium', 'side-sheet'], [1024,
   ]
   vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => {
     const path = String(url)
-    if (path.endsWith('/api/local-node/navigation/workspaces')) return Response.json(workshop)
+    if (path.endsWith('/api/local-node/navigation/workspaces')) {
+      await navigationReady
+      return Response.json(declaration)
+    }
     if (path.includes('/ViewDefinition/')) return Response.json({ renderPlan: plan })
     if (path.includes('/catalogue/definitions?kind=FormDefinition')) return Response.json({ entries, kindsUnavailable: [] })
     return Response.json([])
@@ -86,9 +95,13 @@ it.each([[480, 'compact', 'bottom-sheet'], [720, 'medium', 'side-sheet'], [1024,
 
   const { App } = await import('../App')
   const view = render(<App />)
+  expect(screen.queryByRole('link', { name: 'Workshop' })).toBeNull()
+  await act(async () => releaseNavigation())
 
   await waitFor(() => expect(view.container.querySelector('[data-shell-panel-id="inspector"]')).toHaveTextContent('Inspection'))
   if (width < 840) fireEvent.click(view.container.querySelector('button[aria-label="Navigation"][aria-controls]')!)
+  expect(screen.getByRole('link', { name: 'Workshop' })).toHaveAttribute('aria-current', 'page')
+  expect(view.container.querySelector('.happ-breadcrumb')).toHaveTextContent('Harborline / Workshop / Forms')
   const workspace = workshop.pack.seedWorkspaces[0]
   const group = workspace.groups[0]
   const panel = workshop.pack.panelSet[0]
@@ -99,6 +112,7 @@ it.each([[480, 'compact', 'bottom-sheet'], [720, 'medium', 'side-sheet'], [1024,
   const rail = screen.getByRole('link', { name: 'Workshop' }).closest('[data-shell-region="rail"]')!
   fireEvent.click(screen.getByRole('button', { name: 'Show 6 more' }))
   expect([...rail.querySelectorAll('a')].map(link => [link.getAttribute('href'), link.textContent?.trim()])).toEqual([
+    ...(multipleWorkspaces ? [['/workspaces/access', 'Access']] : []),
     ['/workspaces/workshop', 'Workshop'],
     ...workshopItems.map(([id, label]) => [`/workspaces/${id}`, label]),
   ])
@@ -150,18 +164,43 @@ it.each([[480, 'compact', 'bottom-sheet'], [720, 'medium', 'side-sheet'], [1024,
   fireEvent.keyDown(document, { key: panel.shortcut.split('+').at(-1), metaKey: panel.shortcut.includes('mod'), shiftKey: panel.shortcut.includes('shift') })
   expect(view.container.querySelector('[data-shell-panel-id="inspector"]')).toHaveTextContent('Work order')
   expect(new URLSearchParams(window.location.search).get('panels')).toBe(panel.id)
+  if (multipleWorkspaces) {
+    expect(new URLSearchParams(window.location.search).get('source')).toBe('shared link')
+    expect(window.location.hash).toBe('#details')
+    const copiedAddress = window.location.href
+    view.unmount()
+    const restored = render(<App />)
+    await waitFor(() => expect(restored.container.querySelector('[data-shell-panel-id="inspector"]')).toHaveTextContent('Work order'))
+    expect(screen.getByRole('link', { name: 'Workshop' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Forms' })).toHaveAttribute('aria-current', 'page')
+    expect(window.location.href).toBe(copiedAddress)
+    fireEvent.click(screen.getByRole('link', { name: 'Access' }))
+    expect(screen.getByRole('link', { name: 'Access' })).toHaveAttribute('aria-current', 'page')
+    fireEvent.click(screen.getByRole('link', { name: 'Holders' }))
+    expect(restored.container.querySelector('.happ-breadcrumb')).toHaveTextContent('Harborline / Access / Holders')
+    expect(new URLSearchParams(window.location.search).has('selected')).toBe(false)
+    fireEvent.click(screen.getByRole('link', { name: 'Workshop' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Forms' }))
+    expect(screen.getByRole('link', { name: 'Workshop' })).toHaveAttribute('aria-current', 'page')
+    expect(restored.container.querySelector('.happ-breadcrumb')).toHaveTextContent('Harborline / Workshop / Forms')
+  }
 }, 120_000)
 
-it.each(['missing', 'assets', 'unavailable'])('clears a stale selected row when the addressed item %s cannot restore Workshop', async item => {
+it.each(['missing', 'assets', 'unavailable', 'forms', 'empty'])('clears a stale selected row when the addressed item %s cannot restore Workshop', async item => {
   vi.stubEnv('VITE_FORMS_FIXTURE', '1')
   vi.stubEnv('VITE_AUTHORIZATION_FIXTURE', '1')
   vi.stubEnv('VITE_AUTHORIZATION_API_ORIGIN', 'http://localhost:7308')
   window.history.replaceState({}, '', `/?item=${item}&selected=inspection%401.0.0&panels=pilot`)
-  vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => String(url).endsWith('/api/local-node/navigation/workspaces') ? Response.json(workshop) : Response.json([])))
+  const declaration = structuredClone(accessFirst)
+  if (item === 'forms') declaration.pack.seedWorkspaces = declaration.pack.seedWorkspaces.filter(workspace => workspace.id !== 'workshop')
+  if (item === 'empty') { declaration.pack.seedWorkspaces = []; declaration.pack.panelSet = [] }
+  vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => String(url).endsWith('/api/local-node/navigation/workspaces') ? Response.json(declaration) : Response.json([])))
   const { App } = await import('../App')
   const view = render(<App />)
   await waitFor(() => expect(view.container.querySelector('main h1')).toHaveTextContent('Assets'))
   await waitFor(() => expect(new URLSearchParams(window.location.search).has('selected')).toBe(false))
   expect(new URLSearchParams(window.location.search).get('item')).toBe('assets')
   expect(new URLSearchParams(window.location.search).has('panels')).toBe(false)
+  expect(view.container.querySelector('.happ-breadcrumb')).toHaveTextContent('Harborline / Portfolio / Assets')
+  if (item === 'empty') expect(view.container.querySelectorAll('[data-shell-region="rail"] a')).toHaveLength(0)
 })
