@@ -49,6 +49,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with: {node-version: "22"}
+      - uses: pnpm/action-setup@v4  # version from apps/react/package.json packageManager
+        with: {package_json_file: apps/react/package.json}
       - uses: actions/setup-dotnet@v6
         with: {global-json-file: global.json}
       # The lane consumes @harborline-software/ui-react as a PACKAGE built from the platform, and
@@ -80,13 +82,13 @@ jobs:
           HARBORLINE_PLATFORM_REPO: ${{ github.workspace }}/.platform
         run: npm run feed
         working-directory: apps/react
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
         working-directory: apps/react
-      - run: npm run typecheck
+      - run: pnpm run typecheck
         working-directory: apps/react
-      - run: npm test
+      - run: pnpm test
         working-directory: apps/react
-      - run: npm run build
+      - run: pnpm run build
         working-directory: apps/react
 
   pack-consume-publish:

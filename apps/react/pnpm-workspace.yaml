@@ -1,0 +1,9 @@
+packages:
+  - .
+# Hoisted layout, as npm laid it out: the feed tarball for ui-react peers on the one react copy here;
+# the isolated layout gave it a second React and broke the hook-based components under test.
+nodeLinker: hoisted
+# pnpm 11 checks every lockfile entry against the registry for minimum release age; the two
+# @harborline-software packages come from the local .feed and are not on the registry.
+minimumReleaseAgeExclude:
+  - "@harborline-software/*"

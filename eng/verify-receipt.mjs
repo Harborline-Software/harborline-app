@@ -25,6 +25,7 @@ const SCHEMA_VERSION = 1
 // these, so removing a step there fails loudly instead of quietly narrowing the gate.
 export const requiredStepIds = [
   'boundaries',
+  'dependency-ledger',
   'react-typecheck',
   'react-test',
   'react-build',

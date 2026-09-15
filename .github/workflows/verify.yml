@@ -73,6 +73,16 @@ jobs:
           fi
           echo "platform pinned at $actual"
 
+      # The dependency-ledger step reads every pin's justification note from the control repository
+      # (ADR-0086). Private, so the checkout carries the pins token the api's hosted job uses.
+      - name: Check out harborline-control for the dependency ledger
+        uses: actions/checkout@v7
+        with:
+          repository: Harborline-Software/harborline-control
+          ref: main
+          path: .control
+          token: ${{ secrets.HARBORLINE_PINS_TOKEN }}
+
       - name: Build the React local package feed
         working-directory: apps/react
         env:
@@ -92,9 +102,12 @@ jobs:
         # verify.sh refuses to record a receipt from a dirty tree; .platform is a checkout, not a change.
         run: |
           grep -qx '.platform/' .git/info/exclude 2>/dev/null || echo '.platform/' >> .git/info/exclude
+          grep -qx '.control/' .git/info/exclude 2>/dev/null || echo '.control/' >> .git/info/exclude
           git status --porcelain
 
       - name: eng/verify.sh
+        env:
+          HARBORLINE_CONTROL_REPO: ${{ github.workspace }}/.control
         run: bash eng/verify.sh
 
       - name: Evidence
