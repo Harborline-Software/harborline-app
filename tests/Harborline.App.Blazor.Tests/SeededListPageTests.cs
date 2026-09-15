@@ -5,12 +5,50 @@ using Harborline.UIAdapters.Blazor;
 using Harborline.UIAdapters.Blazor.Browser;
 using Harborline.UIAdapters.Blazor.Components.DataDisplay;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Harborline.App.Blazor.Tests;
 
 public sealed class SeededListPageTests : BunitContext
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Delayed_action_disables_declared_buttons_without_double_dispatch_and_restores_them(bool refuse)
+    {
+        var handler = new WorkshopWorkflowTests.WorkflowHandler
+        {
+            FormRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously),
+            RefuseForm = refuse,
+        };
+        Services.AddSingleton<IWorkshopCatalogueClient>(WorkshopWorkflowTests.Client(handler));
+        Services.AddHarborlineUiAdapters();
+        Services.AddSingleton<IMediaQueryObserver>(new StubMediaQueryObserver());
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var cut = Render<SeededListPage>(parameters => parameters.Add(page => page.ItemId, "forms"));
+        const string formPath = "/api/local-node/catalogue/definitions/FormDefinition/declared.author";
+        cut.WaitForAssertion(() => Assert.Equal(7, cut.FindAll(".hl-view-runtime__actions button").Count));
+        var pending = cut.Find(".hl-view-runtime__actions button").ClickAsync(new MouseEventArgs());
+        cut.WaitForAssertion(() => Assert.All(cut.FindAll(".hl-view-runtime__actions button"), button =>
+        {
+            Assert.True(button.HasAttribute("disabled"));
+            Assert.Equal("true", button.GetAttribute("aria-disabled"));
+        }));
+        cut.Find(".hl-view-runtime__actions button").Click();
+        Assert.Single(handler.Requests, request => request.Path == formPath);
+        handler.FormRelease.SetResult();
+        await pending;
+        cut.WaitForAssertion(() => Assert.All(cut.FindAll(".hl-view-runtime__actions button"), button => Assert.False(button.HasAttribute("disabled"))));
+        if (refuse) Assert.Contains("Form temporarily unavailable", cut.Find("[role=alert]").TextContent, StringComparison.Ordinal);
+        else Assert.Single(cut.FindAll("textarea"));
+        handler.RefuseForm = false;
+        cut.Find(".hl-view-runtime__actions button").Click();
+        cut.WaitForAssertion(() => Assert.Equal(2, handler.Requests.Count(request => request.Path == formPath)));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("textarea")));
+        Assert.All(cut.FindAll(".hl-view-runtime__actions button"), button => Assert.False(button.HasAttribute("disabled")));
+    }
+
     [Fact]
     public void Unsupported_plan_is_inert_including_host_workflow_controls()
     {

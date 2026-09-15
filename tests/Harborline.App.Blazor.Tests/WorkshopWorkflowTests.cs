@@ -184,10 +184,17 @@ public sealed class WorkshopWorkflowTests
         public bool RefuseValidation;
         public bool OmitAuditId;
         public TaskCompletionSource? ExportRelease;
+        public TaskCompletionSource? FormRelease;
+        public bool RefuseForm;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var path = request.RequestUri!.PathAndQuery;
             Requests.Add(new Request(path, request.Content is null ? [] : await request.Content.ReadAsByteArrayAsync(cancellationToken), request.Headers.Authorization?.ToString()));
+            if (path == "/api/local-node/catalogue/definitions/FormDefinition/declared.author")
+            {
+                if (FormRelease is not null) await FormRelease.Task.WaitAsync(cancellationToken);
+                if (RefuseForm) return Json("Form temporarily unavailable", HttpStatusCode.ServiceUnavailable);
+            }
             if (path == "/api/local-node/packs/export")
             {
                 if (ExportRelease is not null) await ExportRelease.Task.WaitAsync(cancellationToken);

@@ -16,7 +16,7 @@ else if (plan is null)
 else if (supported)
 {
     <fieldset disabled="@workflow!.Busy" style="border:0;padding:0;margin:0;min-inline-size:0">
-        <HarborlineViewRuntime Plan="@plan" Rows="@rows" Empty="No definitions." OnRowActivate="@SelectRowAsync" OnAction="@(EventCallback.Factory.Create<string>(this, ActivateActionAsync))" />
+        <HarborlineViewRuntime Plan="@plan" Rows="@rows" Empty="No definitions." ActionsDisabled="@workflow!.Busy" OnRowActivate="@SelectRowAsync" OnAction="@(EventCallback.Factory.Create<string>(this, ActivateActionAsync))" />
     </fieldset>
     @if (workflow.Form is not null)
     {

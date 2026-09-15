@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "repository": "Harborline-Software/harborline-platform",
-  "commit": "9fcddd1848747556adf41989fc5213cf846576ea",
-  "recordedAt": "2026-09-14 (M5 Blazor shell lifecycle and declared navigation label fixes)",
+  "commit": "dfd5480d5ce08c2700a7871da7772c7d751bb508",
+  "recordedAt": "2026-09-15 (canonical view actions, compact shell polish and single drawer transition callback)",
   "why": [
     "Both app lanes consume the platform's UI packages from a local feed built out of a sibling",
     "platform checkout. The feed directories are gitignored, so a clean CI runner had no package",

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SeededListPage } from '../SeededListPage'
@@ -82,6 +82,43 @@ afterEach(() => {
 })
 
 describe('seeded Workshop list', () => {
+  it.each([false, true])('disables declared actions during a delayed request and restores them after refusal=%s', async refuse => {
+    let release!: () => void
+    const pending = new Promise<void>(resolve => { release = resolve })
+    let formReads = 0
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (input.includes('/ViewDefinition/')) return Response.json({ renderPlan: actionPlan })
+      if (input.endsWith('/FormDefinition/platform.pack.author')) {
+        formReads += 1
+        await pending
+        if (refuse && formReads === 1) return new Response('Form temporarily unavailable', { status: 503 })
+        return Response.json(authorForm)
+      }
+      return Response.json({ entries: [], kindsUnavailable: [] })
+    }))
+    const view = render(<SeededListPage itemId="forms" />)
+    await screen.findByRole('grid')
+    const actionButtons = () => [...view.container.querySelectorAll<HTMLButtonElement>('.hl-view-runtime__actions button')]
+    expect(actionButtons()).toHaveLength(7)
+    fireEvent.click(screen.getByRole('button', { name: 'Draft check' }))
+    await waitFor(() => {
+      for (const button of actionButtons()) {
+        expect(button).toBeDisabled()
+        expect(button).toHaveAttribute('aria-disabled', 'true')
+      }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Draft check' }))
+    expect(formReads).toBe(1)
+    await act(async () => release())
+    await waitFor(() => { for (const button of actionButtons()) expect(button).toBeEnabled() })
+    if (refuse) expect(await screen.findByRole('alert')).toHaveTextContent('Form temporarily unavailable')
+    else expect(await screen.findByRole('textbox', { name: 'Pack document' })).toBeInTheDocument()
+    fireEvent.click(within(screen.getByRole('group', { name: 'View results' })).getByRole('button', { name: 'Draft check' }))
+    await waitFor(() => expect(formReads).toBe(2))
+    expect(await screen.findByRole('textbox', { name: 'Pack document' })).toBeInTheDocument()
+    await waitFor(() => { for (const button of actionButtons()) expect(button).toBeEnabled() })
+  })
+
   it('loads the declared author form after StrictMode replays mount effects', async () => {
     const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
       if (init?.signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError')
