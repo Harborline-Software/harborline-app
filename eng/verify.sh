@@ -52,13 +52,14 @@ started=$SECONDS
 # First, and cheap: this repository is meant to carry no trace of the consumer codename, in its
 # code, paths, fixtures, or checks.
 step boundaries        bash eng/verify-boundaries.sh
+step dependency-ledger node eng/dependency-ledger.mjs
 
 # The React lane is the parity AUTHORITY for every pillar admin surface. Install from the lockfile
 # first: checking only that node_modules existed let stale first-party packages typecheck instead of
 # the contracts and UI tarballs the app actually declares in package-lock.json.
-step react-typecheck   bash -c 'cd apps/react && npm ci && npm run typecheck'
-step react-test        bash -c 'cd apps/react && npm test'
-step react-build       bash -c 'cd apps/react && npm run build'
+step react-typecheck   bash -c 'cd apps/react && pnpm install --frozen-lockfile && pnpm run typecheck'
+step react-test        bash -c 'cd apps/react && pnpm test'
+step react-build       bash -c 'cd apps/react && pnpm run build'
 
 if [ "${HARBORLINE_GATE_COVERAGE:-}" = "1" ]; then
   rm -rf artifacts/quality/coverage/dotnet

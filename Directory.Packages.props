@@ -12,13 +12,13 @@
     <HarborlinePackedVersion Condition="'$(HarborlinePackedVersion)' == ''">0.0.0-alpha.0</HarborlinePackedVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="11.0.0-rc.1.26425.128" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.0" />
-    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
-    <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
-    <PackageVersion Include="bunit" Version="2.9.0" />
-    <PackageVersion Include="AngleSharp" Version="1.7.2" />
-    <PackageVersion Include="Harborline.UIAdapters.Blazor" Version="$(HarborlinePackedVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="11.0.0-rc.1.26425.128" Justification="R-0054" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.0" Justification="R-0034" />
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" Justification="R-0036" />
+    <PackageVersion Include="xunit" Version="2.9.3" Justification="R-0032" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" Justification="R-0033" />
+    <PackageVersion Include="bunit" Version="2.9.0" Justification="R-0038" />
+    <PackageVersion Include="AngleSharp" Version="1.7.2" Justification="R-0039" />
+    <PackageVersion Include="Harborline.UIAdapters.Blazor" Version="$(HarborlinePackedVersion)" Justification="platform" />
   </ItemGroup>
 </Project>
