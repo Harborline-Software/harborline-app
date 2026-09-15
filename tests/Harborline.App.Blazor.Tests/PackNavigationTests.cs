@@ -88,6 +88,46 @@ public sealed class PackNavigationTests : BunitContext
     }
 
     [Theory]
+    [InlineData("", "inspection@1.0.0")]
+    [InlineData(" \t\r\n ", "inspection@1.0.0")]
+    [InlineData("Inspection", "Inspection")]
+    [InlineData("  Inspection  ", "Inspection")]
+    public void Inspector_shows_a_stable_identity_on_activation_and_restore(string title, string expectedIdentity)
+    {
+        Services.AddHarborlineUiAdapters();
+        Services.AddSingleton<IMediaQueryObserver>(new Media());
+        Services.AddSingleton<IAuthorizationAdminClient>(new FixtureAuthorizationAdminClient());
+        Services.AddSingleton<IWorkshopCatalogueClient>(new FormsCatalogueClient(title));
+        Services.AddSingleton<IPackNavigationClient>(new HttpPackNavigationClient(
+            new HttpClient(new Handler(WorkshopFixture)) { BaseAddress = new Uri("http://localhost:7308/") }));
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("http://localhost/?source=shared%20link&item=forms#details");
+        var shell = Render<Shell>();
+        shell.WaitForAssertion(() => Assert.NotEmpty(shell.FindAll("[data-row-id='inspection@1.0.0']")));
+        shell.Find("[data-row-id='inspection@1.0.0']").DoubleClick();
+
+        void AssertIdentity(IRenderedComponent<Shell> rendered)
+        {
+            var inspector = rendered.Find("[data-shell-panel-id='inspector']");
+            Assert.Equal(expectedIdentity, inspector.QuerySelector("h2")!.TextContent);
+            Assert.Contains($"{expectedIdentity} · follows selection", inspector.QuerySelectorAll("p").Select(paragraph => paragraph.TextContent));
+            var address = QueryHelpers.ParseQuery(new Uri(navigation.Uri).Query);
+            Assert.Equal("inspection@1.0.0", address["selected"].ToString());
+            Assert.Equal("inspector", address["panels"].ToString());
+            Assert.Equal("shared link", address["source"].ToString());
+            Assert.Equal("#details", new Uri(navigation.Uri).Fragment);
+        }
+
+        shell.WaitForAssertion(() => AssertIdentity(shell));
+        var copiedAddress = navigation.Uri;
+        shell.Dispose();
+        var restored = Render<Shell>();
+        restored.WaitForAssertion(() => AssertIdentity(restored));
+        Assert.Equal(copiedAddress, navigation.Uri);
+    }
+
+    [Theory]
     [InlineData(480, "compact", "bottom-sheet")]
     [InlineData(720, "medium", "side-sheet")]
     [InlineData(1024, "expanded", "side-sheet")]
@@ -369,14 +409,14 @@ public sealed class PackNavigationTests : BunitContext
         }
     }
 
-    private sealed class FormsCatalogueClient : IWorkshopCatalogueClient
+    private sealed class FormsCatalogueClient(string title = "Inspection") : IWorkshopCatalogueClient
     {
         private static readonly ViewRenderPlan Plan = new(
             "sha256:test", "platform.list.forms", "1.0.0", "harborline.platform", "1.0.0", "ViewDefinition",
             new ViewRenderPlanBindings("views.entity-list/grid", new ViewRenderPlanParameters([
                 new("formId", "Key"), new("title", "Title"), new("version", "Version"), new("cascadeLayer", "Cascade layer")] )));
-        private static readonly JsonElement Body = JsonElement.Parse("""{"cascadeLayer":"Pack"}""");
-        private static readonly WorkshopCatalogueEntry Entry = new("inspection", "1.0.0", "Active", new WorkshopLocalizedText("en", new Dictionary<string, string> { ["en"] = "Inspection" }), Body, null);
+        private static readonly JsonElement Body = JsonElement.Parse("""{"cascadeLayer":"Pack","privateNote":"Private body is not an identity"}""");
+        private readonly WorkshopCatalogueEntry Entry = new("inspection", "1.0.0", "Active", new WorkshopLocalizedText("en", new Dictionary<string, string> { ["en"] = title }), Body, null);
 
         public Task<WorkshopCatalogueEntry> ReadViewAsync(string itemId, CancellationToken cancellationToken = default) =>
             Task.FromResult(Entry with { Id = $"platform.list.{itemId}", RenderPlan = Plan });

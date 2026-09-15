@@ -158,6 +158,10 @@ function declaredItemIds(navigation: PackNavigationDeclaration): readonly string
   return navigation.seedWorkspaces.flatMap(workspace => (workspace.groups ?? []).flatMap(group => group.itemIds))
 }
 
+function displayTitle(row: ViewRuntimeRow): string {
+  return String(row.title ?? '').trim() || row.id
+}
+
 export function App() {
   const [initialAddress] = useState(readChromeAddress)
   const [activeItemId, setActiveItemId] = useState(initialAddress.activeItemId)
@@ -285,10 +289,10 @@ export function App() {
       }
       openPanelIds={openPanelIds}
       onOpenPanelIdsChange={setOpenPanelIds}
-      panelToolbar={panel => panel.id === 'inspector' ? <p>{selectedDefinition ? `${String(selectedDefinition.title ?? selectedDefinition.id)} · follows selection` : 'No selection · follows selection'}</p> : null}
+      panelToolbar={panel => panel.id === 'inspector' ? <p>{selectedDefinition ? `${displayTitle(selectedDefinition)} · follows selection` : 'No selection · follows selection'}</p> : null}
       panelContent={panel => panel.id === 'inspector'
         ? <section aria-label="Definition inspector">{selectedDefinition
-          ? <><h2>{String(selectedDefinition.title ?? selectedDefinition.id)}</h2><pre>{JSON.stringify(selectedDefinition, null, 2)}</pre></>
+          ? <><h2>{displayTitle(selectedDefinition)}</h2><pre>{JSON.stringify(selectedDefinition, null, 2)}</pre></>
           : <p>Select a Workshop definition to inspect it.</p>}</section>
         : <section className="happ-pilot"><p>{panel.id === 'pilot' ? `Pilot sees what you see — Portfolio · ${body.title}.` : `${resolveLabel(panel.labelKey ?? panel.id)}: This application surface is not available in this version.`}</p></section>}
       body={activeItemId === 'access.holders' ? <main className="happ-page"><AccessHoldersPage /></main>

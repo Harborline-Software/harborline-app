@@ -186,6 +186,52 @@ it.each([[480, 'compact', 'bottom-sheet', false], [720, 'medium', 'side-sheet', 
   }
 }, 120_000)
 
+it.each([
+  ['', 'inspection@1.0.0'],
+  [' \t\r\n ', 'inspection@1.0.0'],
+  ['Inspection', 'Inspection'],
+  ['  Inspection  ', 'Inspection'],
+])('shows a stable Inspector identity for title %j on activation and restore', async (title, expectedIdentity) => {
+  vi.stubEnv('VITE_FORMS_FIXTURE', '1')
+  vi.stubEnv('VITE_AUTHORIZATION_FIXTURE', '1')
+  vi.stubEnv('VITE_AUTHORIZATION_API_ORIGIN', 'http://localhost:7308')
+  window.matchMedia = query => ({ ...media(query), matches: !query.includes('max-width') })
+  window.history.replaceState({}, '', '/?source=shared%20link&item=forms#details')
+  const plan = {
+    definitionHash: 'forms-hash', definitionId: 'platform.list.forms', definitionVersion: '1.0.0',
+    packKey: 'harborline.platform', packVersion: '1.0.0', definitionKind: 'ViewDefinition',
+    bindings: { viewKind: 'views.entity-list/grid', parameters: { fields: [{ id: 'formId', label: 'Key' }, { id: 'title', label: 'Title' }] } },
+  }
+  const entry = { id: 'inspection', version: '1.0.0', status: 'Active', title: { defaultLocale: 'en', values: { en: title } }, body: { cascadeLayer: 'Pack', privateNote: 'Private body is not an identity' } }
+  vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => {
+    const path = String(url)
+    if (path.endsWith('/api/local-node/navigation/workspaces')) return Response.json(workshop)
+    if (path.includes('/ViewDefinition/')) return Response.json({ renderPlan: plan })
+    if (path.includes('/catalogue/definitions?kind=FormDefinition')) return Response.json({ entries: [entry], kindsUnavailable: [] })
+    return Response.json([])
+  }))
+  const { App } = await import('../App')
+  const view = render(<App />)
+  await waitFor(() => expect(view.container.querySelector('[data-row-id="inspection@1.0.0"]')).not.toBeNull())
+  fireEvent.doubleClick(view.container.querySelector('[data-row-id="inspection@1.0.0"]')!)
+  const assertIdentity = (container: HTMLElement) => {
+    const inspector = container.querySelector('[data-shell-panel-id="inspector"]')!
+    expect(inspector.querySelector('h2')?.textContent).toBe(expectedIdentity)
+    expect([...inspector.querySelectorAll('p')].map(paragraph => paragraph.textContent)).toContain(`${expectedIdentity} · follows selection`)
+    const address = new URLSearchParams(window.location.search)
+    expect(address.get('selected')).toBe('inspection@1.0.0')
+    expect(address.get('panels')).toBe('inspector')
+    expect(address.get('source')).toBe('shared link')
+    expect(window.location.hash).toBe('#details')
+  }
+  await waitFor(() => assertIdentity(view.container))
+  const copiedAddress = window.location.href
+  view.unmount()
+  const restored = render(<App />)
+  await waitFor(() => assertIdentity(restored.container))
+  expect(window.location.href).toBe(copiedAddress)
+})
+
 it.each(['missing', 'assets', 'unavailable', 'forms', 'empty'])('clears a stale selected row when the addressed item %s cannot restore Workshop', async item => {
   vi.stubEnv('VITE_FORMS_FIXTURE', '1')
   vi.stubEnv('VITE_AUTHORIZATION_FIXTURE', '1')

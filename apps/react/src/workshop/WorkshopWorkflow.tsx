@@ -524,6 +524,7 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
       plan={workshopPlan}
       rows={rows}
       empty="No definitions."
+      actionsDisabled={busy}
       onRowActivate={onRowActivate}
       onAction={actionId => { void dispatch(actionId) }}
     />
