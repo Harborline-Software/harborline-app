@@ -169,6 +169,9 @@ export function App() {
   const [navigationAttempt, setNavigationAttempt] = useState(0)
   const [roleVocabulary, setRoleVocabulary] = useState(EMPTY_ROLE_VOCABULARY)
   const body = BODY[activeItemId] ?? { title: resolveLabel(`workshop.${activeItemId}`), description: 'Definitions supplied by the active platform pack.' }
+  const activeWorkspace = (packNavigation ?? NAVIGATION).seedWorkspaces.find(workspace =>
+    workspace.groups?.some(group => group.itemIds.includes(activeItemId)))
+  const contentWorkspaceLabel = activeWorkspace ? resolveLabel(activeWorkspace.labelKey) : activeItemId === 'assets' ? 'Portfolio' : null
 
   useEffect(() => {
     if (authorizationAdminClient === null || formsAdminClient === null) return
@@ -271,12 +274,13 @@ export function App() {
       resolveLabel={resolveLabel}
       roleVocabulary={roleVocabulary}
       heldRoles={EMPTY_HELD_ROLES}
+      defaultActiveWorkspaceId={activeWorkspace?.id}
       activeItemId={activeItemId}
       onNavigate={navigate}
       onInspectorCommand={openInspector}
       pageHeader={
         <nav aria-label="Breadcrumb" className="happ-breadcrumb">
-          {activeItemId === 'access.holders' ? <>Harborline / Access / Holders</> : <>Harborline / Portfolio / {body.title}</>}
+          Harborline / {contentWorkspaceLabel && `${contentWorkspaceLabel} / `}{body.title}
         </nav>
       }
       openPanelIds={openPanelIds}
