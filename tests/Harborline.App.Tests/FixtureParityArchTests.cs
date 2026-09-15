@@ -12,6 +12,17 @@ namespace Harborline.App.Tests;
 /// </summary>
 public sealed class FixtureParityArchTests
 {
+    internal static (string[] Definitions, string[] Versions) ReadCanonicalRows(
+        string pillar,
+        string source,
+        bool react)
+    {
+        var pair = Pairs.Single(candidate => candidate.Pillar == pillar);
+        return react
+            ? (pair.ReactDefinitions(source).Order(StringComparer.Ordinal).ToArray(), pair.ReactVersions(source).Order(StringComparer.Ordinal).ToArray())
+            : (pair.BlazorDefinitions(source).Order(StringComparer.Ordinal).ToArray(), pair.BlazorVersions(source).Order(StringComparer.Ordinal).ToArray());
+    }
+
     private static readonly AuthorizationFixturePair AuthorizationPair = new(
         "apps/react/src/admin/authorization/client/fixtureClient.ts",
         "apps/blazor/Admin/Authorization/FixtureAuthorizationAdminClient.cs");
