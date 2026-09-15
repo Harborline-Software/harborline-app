@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 2,
+  "sourcePin": "11e38b663bb7e953bae9596af12bf9788b1edc7e",
+  "pillar": "Forms",
+  "definitionRows": [
+    "incident-intake 1.0.3 title='en|en=Incident intake' updatedAt=2026-08-05T12:00:00.0000000Z cascadeLayer='Tenant'",
+    "vessel-registration 2.1.4 title='en|en=Vessel registration' updatedAt=2026-08-10T15:45:00.0000000Z cascadeLayer='Tenant'",
+    "crew-manifest 1.0.0 title=(null) updatedAt=2026-08-03T08:00:00.0000000Z cascadeLayer='Pack'"
+  ],
+  "versionRows": [
+    "incident-intake 1.0.3 status=Published owner='user:fixture-admin' derivedFrom='1.0.2' updatedAt=2026-08-05T12:00:00.0000000Z",
+    "incident-intake 1.0.2 status=Draft owner='user:fixture-admin' derivedFrom='1.0.0' updatedAt=2026-08-04T09:30:00.0000000Z",
+    "incident-intake 1.0.1 status=Published owner='user:fixture-operator' derivedFrom=(null) updatedAt=2026-08-02T10:00:00.0000000Z",
+    "incident-intake 1.0.0 status=Published owner='user:fixture-operator' derivedFrom=(null) updatedAt=2026-08-01T08:00:00.0000000Z",
+    "vessel-registration 2.1.4 status=Published owner=(null) derivedFrom=(null) updatedAt=2026-08-10T15:45:00.0000000Z",
+    "vessel-registration 2.1.3 status=Deprecated owner=(null) derivedFrom=(null) updatedAt=2026-08-09T15:45:00.0000000Z",
+    "crew-manifest 1.0.0 status=Published owner=(null) derivedFrom=(null) updatedAt=2026-08-03T08:00:00.0000000Z"
+  ],
+  "entries": [
+    {
+      "id": "incident-intake",
+      "list": {
+        "version": "1.0.3",
+        "title": "Incident intake",
+        "updatedAt": "2026-08-05T12:00:00.0000000Z",
+        "cascadeLayer": "Tenant"
+      },
+      "detail": {
+        "versions": [
+          {
+            "version": "1.0.3",
+            "status": "Published",
+            "owner": "user:fixture-admin",
+            "derivedFrom": "1.0.2",
+            "createdAt": "2026-08-05T12:00:00.0000000Z",
+            "updatedAt": "2026-08-05T12:00:00.0000000Z",
+            "syncsToPeers": true,
+            "safeForStaging": false
+          },
+          {
+            "version": "1.0.2",
+            "status": "Draft",
+            "owner": "user:fixture-admin",
+            "derivedFrom": "1.0.0",
+            "createdAt": "2026-08-04T09:30:00.0000000Z",
+            "updatedAt": "2026-08-04T09:30:00.0000000Z",
+            "syncsToPeers": true,
+            "safeForStaging": false
+          },
+          {
+            "version": "1.0.1",
+            "status": "Published",
+            "owner": "user:fixture-operator",
+            "derivedFrom": null,
+            "createdAt": "2026-08-02T10:00:00.0000000Z",
+            "updatedAt": "2026-08-02T10:00:00.0000000Z",
+            "syncsToPeers": true,
+            "safeForStaging": false
+          },
+          {
+            "version": "1.0.0",
+            "status": "Published",
+            "owner": "user:fixture-operator",
+            "derivedFrom": null,
+            "createdAt": "2026-08-01T08:00:00.0000000Z",
+            "updatedAt": "2026-08-01T08:00:00.0000000Z",
+            "syncsToPeers": true,
+            "safeForStaging": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "vessel-registration",
+      "list": {
+        "version": "2.1.4",
+        "title": "Vessel registration",
+        "updatedAt": "2026-08-10T15:45:00.0000000Z",
+        "cascadeLayer": "Tenant"
+      },
+      "detail": {
+        "versions": [
+          {
+            "version": "2.1.4",
+            "status": "Published",
+            "owner": null,
+            "derivedFrom": null,
+            "createdAt": "2026-08-10T15:45:00.0000000Z",
+            "updatedAt": "2026-08-10T15:45:00.0000000Z",
+            "syncsToPeers": true,
+            "safeForStaging": false
+          },
+          {
+            "version": "2.1.3",
+            "status": "Deprecated",
+            "owner": null,
+            "derivedFrom": null,
+            "createdAt": "2026-08-09T15:45:00.0000000Z",
+            "updatedAt": "2026-08-09T15:45:00.0000000Z",
+            "syncsToPeers": true,
+            "safeForStaging": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "crew-manifest",
+      "list": {
+        "version": "1.0.0",
+        "title": null,
+        "updatedAt": "2026-08-03T08:00:00.0000000Z",
+        "cascadeLayer": "Pack"
+      },
+      "detail": {
+        "versions": [
+          {
+            "version": "1.0.0",
+            "status": "Published",
+            "owner": null,
+            "derivedFrom": null,
+            "createdAt": "2026-08-03T08:00:00.0000000Z",
+            "updatedAt": "2026-08-03T08:00:00.0000000Z",
+            "syncsToPeers": true,
+            "safeForStaging": false
+          }
+        ]
+      }
+    }
+  ],
+  "behavior": {
+    "actions": [
+      "restoreVersion"
+    ],
+    "restore": {
+      "mint": "next patch version",
+      "status": "Draft",
+      "owner": "user:fixture-operator",
+      "derivedFrom": "requested version",
+      "clockStart": "2026-08-15T00:00:00Z",
+      "clockStepMinutes": 1,
+      "listHeadChanges": false
+    },
+    "notFound": {
+      "status": 404
+    }
+  }
+}

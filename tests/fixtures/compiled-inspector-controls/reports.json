@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 2,
+  "sourcePin": "11e38b663bb7e953bae9596af12bf9788b1edc7e",
+  "pillar": "Reports",
+  "definitionRows": [
+    "trial-balance|2.1.0|Trial balance|standard|Tenant",
+    "ar-aging|1.4.2|AR aging summary|standard|Tenant",
+    "occupancy|0.3.0|Occupancy snapshot|snapshot|Tenant"
+  ],
+  "versionRows": [
+    "trial-balance|2.1.0|Trial balance|standard|Tenant|semver",
+    "trial-balance|2.0.0|Trial balance|standard|Tenant|semver",
+    "trial-balance|1.9.0|Trial balance|standard|Tenant|semver",
+    "ar-aging|1.4.2|AR aging summary|standard|Tenant|semver",
+    "ar-aging|1.4.1|AR aging summary|standard|Tenant|semver",
+    "occupancy|2024-legacy|Occupancy snapshot|snapshot|Tenant|ordinal",
+    "occupancy|0.3.0|Occupancy snapshot|snapshot|Tenant|ordinal"
+  ],
+  "entries": [
+    {
+      "id": "trial-balance",
+      "list": {
+        "version": "2.1.0",
+        "title": "Trial balance",
+        "kind": "standard",
+        "cascadeLayer": "Tenant"
+      },
+      "detail": {
+        "schemaVersion": 1,
+        "parameters": {
+          "chartId": "chart-7"
+        },
+        "provenance": {
+          "originPackKey": "harborline.core-reports",
+          "tier": "Vendor"
+        }
+      },
+      "history": {
+        "ordering": "semver",
+        "versions": [
+          "2.1.0",
+          "2.0.0",
+          "1.9.0"
+        ]
+      }
+    },
+    {
+      "id": "ar-aging",
+      "list": {
+        "version": "1.4.2",
+        "title": "AR aging summary",
+        "kind": "standard",
+        "cascadeLayer": "Tenant"
+      },
+      "detail": {
+        "schemaVersion": 1,
+        "parameters": {
+          "chartId": "chart-7"
+        },
+        "provenance": {
+          "originPackKey": "harborline.core-reports",
+          "tier": "Vendor"
+        }
+      },
+      "history": {
+        "ordering": "semver",
+        "versions": [
+          "1.4.2",
+          "1.4.1"
+        ]
+      }
+    },
+    {
+      "id": "occupancy",
+      "list": {
+        "version": "0.3.0",
+        "title": "Occupancy snapshot",
+        "kind": "snapshot",
+        "cascadeLayer": "Tenant"
+      },
+      "detail": {
+        "schemaVersion": 1,
+        "parameters": {
+          "scope": "portfolio"
+        },
+        "provenance": {
+          "originPackKey": "demo.occupancy",
+          "tier": "Community"
+        }
+      },
+      "history": {
+        "ordering": "ordinal",
+        "versions": [
+          "2024-legacy",
+          "0.3.0"
+        ]
+      }
+    }
+  ],
+  "behavior": {
+    "actions": [],
+    "notFound": {
+      "status": 404
+    }
+  }
+}

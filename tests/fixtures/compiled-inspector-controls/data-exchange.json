@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 2,
+  "sourcePin": "11e38b663bb7e953bae9596af12bf9788b1edc7e",
+  "pillar": "DataExchange",
+  "definitionRows": [
+    "bank-feed-import|2.1.0|Bank feed import|import|Tenant",
+    "erpnext-sync|1.4.2|ERPNext sync|import|Tenant",
+    "legacy-ledger-export|0.3.0|Legacy ledger export|export|Tenant"
+  ],
+  "versionRows": [
+    "bank-feed-import|2.1.0|Bank feed import|import|Tenant|semver",
+    "bank-feed-import|2.0.0|Bank feed import|import|Tenant|semver",
+    "bank-feed-import|1.9.0|Bank feed import|import|Tenant|semver",
+    "erpnext-sync|1.4.2|ERPNext sync|import|Tenant|semver",
+    "erpnext-sync|1.4.1|ERPNext sync|import|Tenant|semver",
+    "legacy-ledger-export|2024-legacy|Legacy ledger export|export|Tenant|ordinal",
+    "legacy-ledger-export|0.3.0|Legacy ledger export|export|Tenant|ordinal"
+  ],
+  "entries": [
+    {
+      "id": "bank-feed-import",
+      "list": {
+        "version": "2.1.0",
+        "title": "Bank feed import",
+        "kind": "import",
+        "cascadeLayer": "Tenant"
+      },
+      "detail": {
+        "schemaVersion": 1,
+        "settings": {
+          "mapping": "csv-standard"
+        },
+        "provenance": {
+          "originPackKey": "harborline.core-exchange",
+          "tier": "Vendor"
+        }
+      },
+      "history": {
+        "ordering": "semver",
+        "versions": [
+          "2.1.0",
+          "2.0.0",
+          "1.9.0"
+        ]
+      }
+    },
+    {
+      "id": "erpnext-sync",
+      "list": {
+        "version": "1.4.2",
+        "title": "ERPNext sync",
+        "kind": "import",
+        "cascadeLayer": "Tenant"
+      },
+      "detail": {
+        "schemaVersion": 1,
+        "settings": {
+          "mapping": "csv-standard"
+        },
+        "provenance": {
+          "originPackKey": "harborline.core-exchange",
+          "tier": "Vendor"
+        }
+      },
+      "history": {
+        "ordering": "semver",
+        "versions": [
+          "1.4.2",
+          "1.4.1"
+        ]
+      }
+    },
+    {
+      "id": "legacy-ledger-export",
+      "list": {
+        "version": "0.3.0",
+        "title": "Legacy ledger export",
+        "kind": "export",
+        "cascadeLayer": "Tenant"
+      },
+      "detail": {
+        "schemaVersion": 1,
+        "settings": {
+          "format": "ofx"
+        },
+        "provenance": {
+          "originPackKey": "demo.exchange",
+          "tier": "Community"
+        }
+      },
+      "history": {
+        "ordering": "ordinal",
+        "versions": [
+          "2024-legacy",
+          "0.3.0"
+        ]
+      }
+    }
+  ],
+  "behavior": {
+    "actions": [],
+    "notFound": {
+      "status": 404
+    }
+  }
+}
