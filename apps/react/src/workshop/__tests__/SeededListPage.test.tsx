@@ -372,6 +372,57 @@ describe('seeded Workshop list', () => {
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/packs/export'))).toBe(false)
   })
 
+  it('requires a declared pack check to pass before install and preserves every refusal tuple', async () => {
+    const checkAction = { id: 'check', label: 'Check candidate', operation: 'pack.check' }
+    const plan = { ...actionPlan, bindings: {
+      ...actionPlan.bindings,
+      parameters: { ...actionPlan.bindings.parameters, actions: [
+        ...actionPlan.bindings.parameters.actions.slice(0, 3), checkAction,
+        ...actionPlan.bindings.parameters.actions.slice(3),
+      ] },
+      actions: [
+        ...actionPlan.bindings.actions.slice(0, 3), { id: 'check', label: 'Check candidate' },
+        ...actionPlan.bindings.actions.slice(3),
+      ],
+    } }
+    const requests: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      requests.push(input)
+      if (input.includes('/ViewDefinition/')) return Response.json({ renderPlan: plan })
+      if (input.endsWith('/FormDefinition/platform.pack.author')) return Response.json(authorForm)
+      if (input.endsWith('/packs/export?validateOnly=true')) return Response.json({ valid: true, codes: [] })
+      if (input.endsWith('/packs/export')) return new Response(new Uint8Array([1, 2, 3, 4]))
+      if (input.endsWith('/packs/verify')) return Response.json({ verdict: 'Verified' })
+      if (input.endsWith('/packs/preview')) return Response.json({
+        verdict: 'WouldInstall', conflicts: [], watermarkHits: [], admissionRefusals: [],
+        refusalCodes: ['pack.requirement.unmet'],
+        refusals: [{ code: 'pack.requirement.unmet', pointer: '/requirements/0' }],
+        crossPackCollisions: [], unmetContentReferences: [], unmetDependencies: [],
+      })
+      if (input.endsWith('/packs/install')) return Response.json({ installed: true })
+      return Response.json({ entries: [], kindsUnavailable: [] })
+    }))
+    vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:pack'), revokeObjectURL: vi.fn() })
+
+    render(<SeededListPage itemId="forms" />)
+    await screen.findByRole('grid')
+    fireEvent.click(screen.getByRole('button', { name: 'Draft check' }))
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Pack document' }), { target: { value: JSON.stringify(candidate) } })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Draft check' }).at(-1)!)
+    await screen.findByText(/"valid": true/)
+    fireEvent.click(screen.getByRole('button', { name: 'Make bundle' }))
+    await screen.findByRole('link', { name: 'acme.assets-1.0.0.pack' })
+    fireEvent.click(screen.getByRole('button', { name: 'Check signature' }))
+    await screen.findByText(/"verdict": "Verified"/)
+    fireEvent.click(screen.getByRole('button', { name: 'Stage bundle' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Check candidate')
+    fireEvent.click(screen.getByRole('button', { name: 'Check candidate' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Pack check refused')
+    expect(screen.getByText(/pack.requirement.unmet/)).toHaveTextContent('/requirements/0')
+    fireEvent.click(screen.getByRole('button', { name: 'Stage bundle' }))
+    expect(requests.some(path => path.endsWith('/packs/install'))).toBe(false)
+  })
+
   it('drops retained workflow state when the compiled view kind becomes unsupported', async () => {
     let unsupported = false
     const fetchMock = vi.fn(async (input: string) => {

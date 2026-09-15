@@ -10,6 +10,28 @@ public sealed class WorkshopWorkflowTests
 {
     internal const string PackJson = """{"key":"example.pack","version":"1.0.0","contents":[{"key":"example.record","kind":"AssetTypeDefinition"}]}""";
     internal const string Actions = """[{"id":"a","label":"Check this draft","operation":"pack.validate","inputForm":"declared.author"},{"id":"b","label":"Download this artifact","operation":"pack.export"},{"id":"c","label":"Check signature","operation":"pack.verify"},{"id":"d","label":"Add artifact","operation":"pack.install"},{"id":"e","label":"Use artifact","operation":"pack.activate"},{"id":"f","label":"Capture entry","operation":"record.create","input":"active-pack.property-form"},{"id":"g","label":"Inspect entry","operation":"record.read"}]""";
+    internal const string ActionsWithCheck = """[{"id":"a","label":"Check this draft","operation":"pack.validate","inputForm":"declared.author"},{"id":"b","label":"Download this artifact","operation":"pack.export"},{"id":"c","label":"Check signature","operation":"pack.verify"},{"id":"check","label":"Check candidate","operation":"pack.check"},{"id":"d","label":"Add artifact","operation":"pack.install"},{"id":"e","label":"Use artifact","operation":"pack.activate"},{"id":"f","label":"Capture entry","operation":"record.create","input":"active-pack.property-form"},{"id":"g","label":"Inspect entry","operation":"record.read"}]""";
+
+    [Fact]
+    public async Task Declared_pack_check_must_pass_without_refusals_before_install()
+    {
+        var handler = new WorkflowHandler { IncludeCheck = true, RefuseCheck = true };
+        var client = Client(handler);
+        var workflow = new WorkshopWorkflow(client);
+        workflow.Bind(await client.ReadViewAsync("platform.list.forms"));
+        await workflow.ActivateActionAsync("a");
+        await workflow.SubmitAsync(new Dictionary<string, object?> { ["packJson"] = PackJson });
+        foreach (var id in new[] { "b", "c" }) await workflow.ActivateActionAsync(id);
+
+        await workflow.ActivateActionAsync("d");
+        Assert.Contains("Check", workflow.Error, StringComparison.Ordinal);
+        await workflow.ActivateActionAsync("check");
+        Assert.Contains("Pack check refused", workflow.Error, StringComparison.Ordinal);
+        Assert.Contains("pack.requirement.unmet", workflow.ResultText, StringComparison.Ordinal);
+        Assert.Contains("/requirements/0", workflow.ResultText, StringComparison.Ordinal);
+        await workflow.ActivateActionAsync("d");
+        Assert.DoesNotContain(handler.Requests, request => request.Path.EndsWith("/install", StringComparison.Ordinal));
+    }
 
     [Fact]
     public async Task Declared_actions_execute_the_pack_and_bound_record_workflow_over_the_authenticated_client()
@@ -182,6 +204,8 @@ public sealed class WorkshopWorkflowTests
         public List<Request> Requests { get; } = [];
         public bool RefuseCreate;
         public bool RefuseValidation;
+        public bool IncludeCheck;
+        public bool RefuseCheck;
         public bool OmitAuditId;
         public TaskCompletionSource? ExportRelease;
         public TaskCompletionSource? FormRelease;
@@ -208,12 +232,15 @@ public sealed class WorkshopWorkflowTests
                 return Json("""{"valid":false,"codes":["pack.render-plan.unsupported-kind"]}""", HttpStatusCode.UnprocessableEntity);
             var response = path switch
             {
-                "/api/local-node/catalogue/definitions/ViewDefinition/platform.list.forms" => ViewEntry(),
+                "/api/local-node/catalogue/definitions/ViewDefinition/platform.list.forms" => ViewEntry(IncludeCheck),
                 "/api/local-node/catalogue/definitions?kind=FormDefinition" => """{"entries":[],"kindsUnavailable":[]}""",
                 "/api/local-node/catalogue/definitions/FormDefinition/declared.author" => FormEntry("declared.author", "1.0.0", "packJson", "textarea"),
                 "/api/local-node/catalogue/definitions/FormDefinition/example.capture?version=2.1.0" => FormEntry("example.capture", "2.1.0", "subject", "text"),
                 "/api/local-node/packs/export?validateOnly=true" => """{"valid":true,"codes":[]}""",
                 "/api/local-node/packs/verify" => """{"verdict":"Verified"}""",
+                "/api/local-node/packs/preview" => RefuseCheck
+                    ? """{"verdict":"WouldInstall","conflicts":[],"watermarkHits":[],"admissionRefusals":[],"refusalCodes":["pack.requirement.unmet"],"refusals":[{"code":"pack.requirement.unmet","pointer":"/requirements/0"}],"crossPackCollisions":[],"unmetContentReferences":[],"unmetDependencies":[]}"""
+                    : """{"verdict":"WouldInstall","conflicts":[],"watermarkHits":[],"admissionRefusals":[],"refusalCodes":[],"refusals":[],"crossPackCollisions":[],"unmetContentReferences":[],"unmetDependencies":[]}""",
                 "/api/local-node/packs/install" => """{"installed":true}""",
                 "/api/local-node/packs/activate" => """{"activated":true,"projectionRefusals":[],"platformRefusals":[]}""",
                 "/api/local-node/asset-registry/types/example.record" => """{"displayName":"Entry","propertyForm":{"definition":"example.capture","version":"2.1.0"}}""",
@@ -228,9 +255,9 @@ public sealed class WorkshopWorkflowTests
         private static HttpResponseMessage Json(string body, HttpStatusCode status = HttpStatusCode.OK) =>
             new(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 
-        private static string ViewEntry() => """
+        private static string ViewEntry(bool includeCheck) => """
             {"id":"platform.list.forms","version":"1.0.0","status":"Published","body":{},"renderPlan":{"definitionHash":"hash","definitionId":"platform.list.forms","definitionVersion":"1.0.0","packKey":"platform","packVersion":"1.0.0","definitionKind":"ViewDefinition","bindings":{"viewKind":"views.entity-list/grid","parameters":{"fields":[{"id":"formId","label":"Key"}],"actions":ACTIONS},"actions":ACTIONS}}}
-            """.Replace("ACTIONS", Actions, StringComparison.Ordinal);
+            """.Replace("ACTIONS", includeCheck ? ActionsWithCheck : Actions, StringComparison.Ordinal);
 
         private static string FormEntry(string id, string version, string field, string hint) => JsonSerializer.Serialize(new
         {
