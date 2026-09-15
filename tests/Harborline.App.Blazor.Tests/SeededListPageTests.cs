@@ -75,6 +75,10 @@ public sealed class SeededListPageTests : BunitContext
 
         cut.WaitForAssertion(() =>
         {
+            // The fieldset's default min-content floor prevents the browser grid from shrinking.
+            var fieldset = cut.Find("[role=grid]").Closest("fieldset")!;
+            Assert.Contains("min-inline-size:0", fieldset.GetAttribute("style"), StringComparison.Ordinal);
+            Assert.False(fieldset.HasAttribute("disabled"));
             Assert.Equal(["Key", "Title", "Version", "Cascade layer"], cut.FindAll("[role=columnheader]").Select(cell => cell.TextContent.Trim()));
             var row = cut.Find("[data-row-id='inspection@1.0.0']");
             Assert.Equal("inspection", row.QuerySelector("[data-column-id=formId]")!.TextContent.Trim());
