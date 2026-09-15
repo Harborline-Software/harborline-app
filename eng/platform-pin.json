@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "repository": "Harborline-Software/harborline-platform",
-  "commit": "e5c84e5d5a97ae78aad5f8fba07edd6ea70b6330",
-  "recordedAt": "2026-09-15 (released grid lifecycle fix for Workshop surface switching; publish run 34973166062)",
+  "commit": "5656aa518fea4a19ef692c6687a38d981fe727fb",
+  "recordedAt": "2026-09-15 (released shared DataGrid dark-shell token fix; publish run 34984704377, job 104433701489)",
   "why": [
     "Both app lanes consume the platform's UI packages from a local feed built out of a sibling",
     "platform checkout. The feed directories are gitignored, so a clean CI runner had no package",
