@@ -7,7 +7,7 @@
 // exactly the defect the Blazor lane shipped (assets present in obj/, absent from the served
 // app). Packing proves the files listed in "files" are the files the app actually gets.
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gunzipSync } from 'node:zlib'
@@ -77,19 +77,39 @@ function listEntries(archivePath) {
   return names
 }
 
-// Refresh THIS entry in the lockfile. npm records an integrity hash for a file: dependency, and a
-// rebuilt tarball hashes differently every time — so `npm ci` dies with EINTEGRITY the moment the
-// platform legitimately moves. The hash is no supply-chain guarantee here in any case: these bytes
-// are built locally from platform sources whose real pin is a git commit in eng/platform-pin.json,
-// not a checksum of whatever happened to be on disk when someone last ran npm install.
-//
-// --package-lock-only rewrites the entry without touching node_modules, so `npm ci` keeps full
-// strictness for every registry dependency and only the one unpinnable entry moves.
-//
-// Worth knowing, because it cost a CI run: a stale hash is MASKED BY NPM'S CACHE, which serves the
-// old content and lets `npm ci` pass on a machine that has built this before while failing on a
-// clean runner. Testing this without `npm cache clean --force` produces a false pass.
-run(app, 'install', ...tarballs.map(tarball => `./.feed/${tarball}`), '--package-lock-only', '--no-audit', '--no-fund')
+// Unpack each tarball into .feed/<name>/ and point the manifest's file: dependency at that
+// DIRECTORY. pnpm records a directory dependency as a link with no integrity hash, so a rebuilt
+// feed never invalidates the lockfile; a tarball dependency carries an integrity hash that changes
+// with every rebuild, and the refresh that fixed that under npm (--package-lock-only) dirtied the
+// attested tree under pnpm. The bytes are built locally from platform sources whose real pin is the
+// git commit in eng/platform-pin.json, not a checksum.
+for (const tarball of tarballs) {
+  const target = path.join(feed, tarball.replace(/^harborline-software-/, '').replace(/-\d.*$/, ''))
+  rmSync(target, { recursive: true, force: true })
+  extract(path.join(feed, tarball), target)
+}
+
+/**
+ * Extracts a gzipped tar archive, stripping the leading package/ segment.
+ * @param {string} archivePath Path to the .tgz file.
+ * @param {string} target Directory to write into.
+ */
+function extract(archivePath, target) {
+  const raw = gunzipSync(readFileSync(archivePath))
+  for (let offset = 0; offset + 512 <= raw.length; ) {
+    const name = raw.toString('utf8', offset, offset + 100).replace(/\0.*$/, '')
+    if (name === '') break
+    const size = Number.parseInt(raw.toString('ascii', offset + 124, offset + 136).replace(/\0.*$/, '').trim(), 8) || 0
+    const type = raw.toString('ascii', offset + 156, offset + 157)
+    const relative = name.replace(/^package\//, '')
+    if (type === '0' || type === '\0' || type === '') {
+      const file = path.join(target, relative)
+      mkdirSync(path.dirname(file), { recursive: true })
+      writeFileSync(file, raw.subarray(offset + 512, offset + 512 + size))
+    }
+    offset += 512 + Math.ceil(size / 512) * 512
+  }
+}
 
 process.stdout.write(`${JSON.stringify({ feed, tarballs, sources: packages }, null, 2)}\n`)
-process.stdout.write('\nInstall them with:\n  npm install ' + tarballs.map(tarball => `./.feed/${tarball}`).join(' ') + '\n')
+process.stdout.write('\nInstall them with:\n  pnpm install --frozen-lockfile\n')
