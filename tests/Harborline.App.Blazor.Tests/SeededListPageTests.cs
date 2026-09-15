@@ -139,11 +139,11 @@ public sealed class SeededListPageTests : BunitContext
                 new("formId", "Key"), new("title", "Title"), new("version", "Version"), new("cascadeLayer", "Cascade layer")])));
         private static readonly JsonElement Body = JsonElement.Parse("""{"cascadeLayer":"Pack"}""");
         private static readonly WorkshopCatalogueEntry Entry = new("inspection", "1.0.0", "Active", new WorkshopLocalizedText("en", new Dictionary<string, string> { ["en"] = "Inspection" }), Body, null);
-        public Task<WorkshopCatalogueEntry> ReadViewAsync(string itemId, CancellationToken cancellationToken = default) => Task.FromResult(Entry with
+        public Task<WorkshopCatalogueEntry> ReadViewAsync(string viewId, CancellationToken cancellationToken = default) => Task.FromResult(Entry with
         {
-            Id = $"platform.list.{itemId}", RenderPlan = Unsupported ? Plan with { DefinitionKind = "UnknownDefinition" } : Plan,
+            Id = viewId, RenderPlan = Unsupported ? Plan with { DefinitionKind = "UnknownDefinition" } : Plan with { DefinitionId = viewId },
         });
-        public Task<IReadOnlyList<WorkshopCatalogueEntry>> ListAsync(string kind, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<WorkshopCatalogueEntry>>([Entry]);
+        public Task<WorkshopCatalogueList> ListAsync(string kind, CancellationToken cancellationToken = default) => Task.FromResult(new WorkshopCatalogueList([Entry], []));
         public Task<WorkshopCatalogueEntry> ReadFormAsync(string id, string? version = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<JsonElement> ReadJsonAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<JsonElement> PostJsonAsync(string path, object body, CancellationToken cancellationToken = default) => throw new NotSupportedException();

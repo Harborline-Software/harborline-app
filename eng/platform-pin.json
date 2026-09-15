@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "repository": "Harborline-Software/harborline-platform",
-  "commit": "dfd5480d5ce08c2700a7871da7772c7d751bb508",
-  "recordedAt": "2026-09-15 (canonical view actions, compact shell polish and single drawer transition callback)",
+  "commit": "e5c84e5d5a97ae78aad5f8fba07edd6ea70b6330",
+  "recordedAt": "2026-09-15 (released grid lifecycle fix for Workshop surface switching; publish run 34973166062)",
   "why": [
     "Both app lanes consume the platform's UI packages from a local feed built out of a sibling",
     "platform checkout. The feed directories are gitignored, so a clean CI runner had no package",

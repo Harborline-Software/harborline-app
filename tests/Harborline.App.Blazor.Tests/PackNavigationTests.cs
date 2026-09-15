@@ -54,6 +54,26 @@ public sealed class PackNavigationTests : BunitContext
         return File.ReadAllText(Path.Combine(root!.FullName, "tests/fixtures", name));
     }
 
+    [Theory]
+    [InlineData("health")]
+    [InlineData("browse")]
+    public void Restores_an_explicit_surface_for_a_declared_workshop_item(string surface)
+    {
+        Services.AddHarborlineUiAdapters();
+        Services.AddSingleton<IMediaQueryObserver>(new Media());
+        Services.AddSingleton<IAuthorizationAdminClient>(new FixtureAuthorizationAdminClient());
+        Services.AddSingleton<IWorkshopCatalogueClient>(new FormsCatalogueClient());
+        Services.AddSingleton<IPackNavigationClient>(new HttpPackNavigationClient(
+            new HttpClient(new Handler(WorkshopFixture)) { BaseAddress = new Uri("http://localhost:7308/") }));
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo($"http://localhost/?item=forms&surface={surface}&selected=inspection%401.0.0&panels=inspector");
+        var shell = Render<Shell>();
+        shell.WaitForAssertion(() => Assert.Contains($"platform.{surface}.forms", shell.Find("[data-definition-source]").GetAttribute("data-definition-source"), StringComparison.Ordinal));
+        Assert.Contains("Inspection", shell.Find("[data-shell-panel-id=inspector]").TextContent, StringComparison.Ordinal);
+        Assert.Equal(surface, QueryHelpers.ParseQuery(new Uri(navigation.Uri).Query)["surface"].ToString());
+    }
+
     [Fact]
     public void Addressed_workshop_forms_renders_its_seeded_grid_and_lifts_a_row_into_the_declared_inspector_panel()
     {
@@ -418,10 +438,10 @@ public sealed class PackNavigationTests : BunitContext
         private static readonly JsonElement Body = JsonElement.Parse("""{"cascadeLayer":"Pack","privateNote":"Private body is not an identity"}""");
         private readonly WorkshopCatalogueEntry Entry = new("inspection", "1.0.0", "Active", new WorkshopLocalizedText("en", new Dictionary<string, string> { ["en"] = title }), Body, null);
 
-        public Task<WorkshopCatalogueEntry> ReadViewAsync(string itemId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Entry with { Id = $"platform.list.{itemId}", RenderPlan = Plan });
-        public Task<IReadOnlyList<WorkshopCatalogueEntry>> ListAsync(string kind, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<WorkshopCatalogueEntry>>([Entry]);
+        public Task<WorkshopCatalogueEntry> ReadViewAsync(string viewId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Entry with { Id = viewId, RenderPlan = Plan with { DefinitionId = viewId } });
+        public Task<WorkshopCatalogueList> ListAsync(string kind, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WorkshopCatalogueList([Entry], []));
         public Task<WorkshopCatalogueEntry> ReadFormAsync(string id, string? version = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<JsonElement> ReadJsonAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<JsonElement> PostJsonAsync(string path, object body, CancellationToken cancellationToken = default) => throw new NotSupportedException();

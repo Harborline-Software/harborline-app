@@ -87,7 +87,7 @@
     }
     else if (WorkshopItems.Contains(activeItemId))
     {
-        <main class="happ-page"><h1>@ActiveLabel</h1><SeededListPage ItemId="@activeItemId" SelectedRowId="@selectedRowId" RowActivated="@SelectDefinitionAsync" SelectionRestored="@(row => selectedDefinition = row)" /></main>
+        <main class="happ-page"><h1>@ActiveLabel</h1><SeededListPage ItemId="@activeItemId" ViewId="@(surface is null ? null : $"platform.{surface}.{activeItemId}")" SelectedRowId="@selectedRowId" RowActivated="@SelectDefinitionAsync" SelectionRestored="@(row => selectedDefinition = row)" /></main>
     }
     else
     {
@@ -139,6 +139,7 @@
     private string activeItemId = "assets";
     private IReadOnlyList<string> openPanelIds = [];
     private string? selectedRowId;
+    private string? surface;
     private ViewRuntimeRow? selectedDefinition;
     private PackNavigationDeclaration? packNavigation;
     private string? navigationError;
@@ -237,6 +238,7 @@
             packNavigation = await PackNavigationClient.ReadAsync(navigationCancellation.Token);
             var navigation = packNavigation ?? Navigation;
             var address = ReadAddress();
+            surface = address.Surface;
             openPanelIds = address.HasPanelState
                 ? address.OpenPanelIds.Where(DeclaredPanels(navigation).Contains).ToArray()
                 : navigation.PanelSet?.Where(panel => panel.DefaultOpen).Select(panel => panel.Id).ToArray() ?? [];
@@ -294,7 +296,7 @@
         return string.IsNullOrEmpty(title) ? row.Id : title;
     }
 
-    private sealed record ChromeAddress(string? ItemId, string? SelectedRowId, IReadOnlyList<string> OpenPanelIds, bool HasPanelState);
+    private sealed record ChromeAddress(string? ItemId, string? SelectedRowId, IReadOnlyList<string> OpenPanelIds, bool HasPanelState, string? Surface);
 
     private ChromeAddress ReadAddress()
     {
@@ -303,7 +305,8 @@
             query.TryGetValue("item", out var item) ? item.ToString() : null,
             query.TryGetValue("selected", out var selected) ? selected.ToString() : null,
             query.TryGetValue("panels", out var panels) ? panels.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries) : [],
-            query.ContainsKey("panels"));
+            query.ContainsKey("panels"),
+            query.TryGetValue("surface", out var value) && value.ToString() is "health" or "browse" ? value.ToString() : null);
     }
 
     private void ReplaceAddress()

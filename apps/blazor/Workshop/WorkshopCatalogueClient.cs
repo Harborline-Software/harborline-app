@@ -8,8 +8,8 @@ namespace Harborline.App.Blazor.ReferenceHost.Workshop;
 
 public interface IWorkshopCatalogueClient
 {
-    Task<WorkshopCatalogueEntry> ReadViewAsync(string itemId, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<WorkshopCatalogueEntry>> ListAsync(string kind, CancellationToken cancellationToken = default);
+    Task<WorkshopCatalogueEntry> ReadViewAsync(string viewId, CancellationToken cancellationToken = default);
+    Task<WorkshopCatalogueList> ListAsync(string kind, CancellationToken cancellationToken = default);
     Task<WorkshopCatalogueEntry> ReadFormAsync(string id, string? version = null, CancellationToken cancellationToken = default);
     Task<JsonElement> ReadJsonAsync(string path, CancellationToken cancellationToken = default);
     Task<JsonElement> PostJsonAsync(string path, object body, CancellationToken cancellationToken = default);
@@ -18,6 +18,8 @@ public interface IWorkshopCatalogueClient
 }
 
 public sealed record WorkshopLocalizedText(string DefaultLocale, IReadOnlyDictionary<string, string> Values);
+public sealed record WorkshopCatalogueList(IReadOnlyList<WorkshopCatalogueEntry> Entries, IReadOnlyList<JsonElement> KindsUnavailable);
+public sealed record WorkshopCatalogueProvenance(string? PackKey, string? PackVersion, string Kind);
 
 public sealed record WorkshopCatalogueEntry(
     string Id,
@@ -27,6 +29,11 @@ public sealed record WorkshopCatalogueEntry(
     JsonElement Body,
     ViewRenderPlan? RenderPlan)
 {
+    public JsonElement? Kind { get; init; }
+    public WorkshopCatalogueProvenance? Provenance { get; init; }
+    public bool Sealed { get; init; }
+    public DateTimeOffset UpdatedAt { get; init; }
+    public string? DefinitionHash { get; init; }
     [JsonIgnore] public JsonElement CompiledBindings { get; init; }
 }
 
@@ -38,8 +45,8 @@ public sealed class WorkshopRequestException(int statusCode, string responseBody
 
 public sealed class HttpWorkshopCatalogueClient(HttpClient httpClient) : IWorkshopCatalogueClient
 {
-    public async Task<WorkshopCatalogueEntry> ReadViewAsync(string itemId, CancellationToken cancellationToken = default) =>
-        await ReadEntryAsync($"api/local-node/catalogue/definitions/ViewDefinition/platform.list.{Uri.EscapeDataString(itemId)}", cancellationToken);
+    public async Task<WorkshopCatalogueEntry> ReadViewAsync(string viewId, CancellationToken cancellationToken = default) =>
+        await ReadEntryAsync($"api/local-node/catalogue/definitions/ViewDefinition/{Uri.EscapeDataString(viewId)}", cancellationToken);
 
     public Task<WorkshopCatalogueEntry> ReadFormAsync(string id, string? version = null, CancellationToken cancellationToken = default) =>
         ReadEntryAsync($"api/local-node/catalogue/definitions/FormDefinition/{Uri.EscapeDataString(id)}"
@@ -94,10 +101,8 @@ public sealed class HttpWorkshopCatalogueClient(HttpClient httpClient) : IWorksh
             throw new WorkshopRequestException((int)response.StatusCode, await response.Content.ReadAsStringAsync(cancellationToken));
     }
 
-    public async Task<IReadOnlyList<WorkshopCatalogueEntry>> ListAsync(string kind, CancellationToken cancellationToken = default) =>
+    public async Task<WorkshopCatalogueList> ListAsync(string kind, CancellationToken cancellationToken = default) =>
         (await httpClient.GetFromJsonAsync<WorkshopCatalogueList>(
-            $"api/local-node/catalogue/definitions?kind={Uri.EscapeDataString(kind)}", cancellationToken))?.Entries
+            $"api/local-node/catalogue/definitions?kind={Uri.EscapeDataString(kind)}", cancellationToken))
         ?? throw new InvalidOperationException("The Workshop catalogue returned no list.");
-
-    private sealed record WorkshopCatalogueList(IReadOnlyList<WorkshopCatalogueEntry> Entries);
 }

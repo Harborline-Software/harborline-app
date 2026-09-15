@@ -141,16 +141,19 @@ interface ChromeAddress {
   readonly selectedRowId: string | null
   readonly openPanelIds: readonly string[]
   readonly hasPanelState: boolean
+  readonly surface: 'health' | 'browse' | null
 }
 
 function readChromeAddress(): ChromeAddress {
   const parameters = new URLSearchParams(window.location.search)
+  const surface = parameters.get('surface')
   return {
     activeItemId: parameters.get('item') ?? 'assets',
     hasItemState: parameters.has('item'),
     selectedRowId: parameters.get('selected'),
     openPanelIds: parameters.get('panels')?.split(',').filter(Boolean) ?? [],
     hasPanelState: parameters.has('panels'),
+    surface: surface === 'health' || surface === 'browse' ? surface : null,
   }
 }
 
@@ -297,7 +300,9 @@ export function App() {
         : <section className="happ-pilot"><p>{panel.id === 'pilot' ? `Pilot sees what you see — Portfolio · ${body.title}.` : `${resolveLabel(panel.labelKey ?? panel.id)}: This application surface is not available in this version.`}</p></section>}
       body={activeItemId === 'access.holders' ? <main className="happ-page"><AccessHoldersPage /></main>
         : WORKSHOP_ITEM_IDS.has(activeItemId)
-        ? <main className="happ-page"><h1>{body.title}</h1><SeededListPage itemId={activeItemId} selectedRowId={selectedRowId} onRowActivate={inspectDefinition} onSelectionRestored={setSelectedDefinition} /></main>
+        ? <main className="happ-page"><h1>{body.title}</h1>{initialAddress.surface && !packNavigation
+          ? <p role="status">Loading Workshop view…</p>
+          : <SeededListPage itemId={activeItemId} viewId={initialAddress.surface ? `platform.${initialAddress.surface}.${activeItemId}` : undefined} selectedRowId={selectedRowId} onRowActivate={inspectDefinition} onSelectionRestored={setSelectedDefinition} />}</main>
         : activeItemId === 'admin-forms'
         ? <main className="happ-page"><FormsAdminPage /></main>
         : activeItemId === 'admin-reports'
