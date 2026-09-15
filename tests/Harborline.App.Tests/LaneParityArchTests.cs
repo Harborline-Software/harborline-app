@@ -60,8 +60,8 @@ public sealed class LaneParityArchTests
         var reactPage = File.ReadAllText(Path.Combine(root, "apps", "react", "src", "admin", "authorization", "AuthorizationAdminPage.tsx"));
         var blazorPage = File.ReadAllText(Path.Combine(root, "apps", "blazor", "Admin", "Authorization", "AuthorizationAdminPage.razor"));
 
-        AssertOrder(react, "{ id: 'admin-scheduling', label: 'Scheduling' }", "{ id: 'admin-authorization', label: 'Settings' }");
-        AssertOrder(blazor, "new ShellNavItem(\"admin-scheduling\", \"Scheduling\")", "new ShellNavItem(\"admin-authorization\", \"Settings\")");
+        AssertOrder(react, "{ id: 'run-report', label: 'Run report' }", "{ id: 'admin-authorization', label: 'Settings' }");
+        AssertOrder(blazor, "new ShellNavItem(\"run-report\", \"Run report\")", "new ShellNavItem(\"admin-authorization\", \"Settings\")");
         Assert.Matches(@"activeItemId\s*===\s*'admin-authorization'[\s\S]*?<AuthorizationAdminPage\s*/>", react);
         Assert.Matches("activeItemId\\s*==\\s*\"admin-authorization\"[\\s\\S]*?<AuthorizationAdminPage\\s*/>", blazor);
         Assert.Contains("title: 'Settings › System'", react, StringComparison.Ordinal);

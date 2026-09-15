@@ -126,16 +126,19 @@ describe('seeded Workshop list', () => {
     })))
   })
 
-  it.each([403, 404])('does not fall back or expose actions when the requested view returns %s', async status => {
+  it.each(['forms', 'reports', 'views', 'data-exchanges', 'schedules']
+    .flatMap(item => ['health', 'browse'].flatMap(surface => [403, 404].map(status => ({ item, surface, status })))))
+    ('keeps $item $surface absent when its seed returns $status', async ({ item, surface, status }) => {
+    const viewId = `platform.${surface}.${item}`
     const fetchMock = vi.fn(async (input: string) => input.includes('/ViewDefinition/')
       ? new Response('View refused or absent', { status }) : Response.json({ entries: [], kindsUnavailable: [] }))
     vi.stubGlobal('fetch', fetchMock)
-    render(<SeededListPage itemId="forms" viewId="platform.health.forms" />)
+    render(<SeededListPage itemId={item} viewId={viewId} />)
     expect(await screen.findByRole('alert')).toHaveTextContent(String(status))
     expect(screen.queryByRole('grid')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
     expect(fetchMock.mock.calls.filter(([input]) => input.includes('/ViewDefinition/')).map(([input]) => input))
-      .toEqual(['/api/local-node/catalogue/definitions/ViewDefinition/platform.health.forms'])
+      .toEqual([`/api/local-node/catalogue/definitions/ViewDefinition/${viewId}`])
   })
 
   it('keeps an available empty view actionable and suppresses restoration for an inert plan', async () => {
@@ -372,11 +375,13 @@ describe('seeded Workshop list', () => {
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/packs/export'))).toBe(false)
   })
 
-  it('drops retained workflow state when the compiled view kind becomes unsupported', async () => {
+  it.each([false, true])('drops retained workflow state for unknown view kind=%s', async unknownViewKind => {
     let unsupported = false
     const fetchMock = vi.fn(async (input: string) => {
       if (input.includes('/ViewDefinition/')) return Response.json({
-        renderPlan: unsupported ? { ...actionPlan, definitionKind: 'UnknownDefinition' } : actionPlan,
+        renderPlan: unsupported ? (unknownViewKind
+          ? { ...actionPlan, bindings: { ...actionPlan.bindings, viewKind: 'views.future-kind' } }
+          : { ...actionPlan, definitionKind: 'UnknownDefinition' }) : actionPlan,
       })
       if (input.includes('/FormDefinition/platform.pack.author')) return Response.json(authorForm)
       return Response.json({ entries: [], kindsUnavailable: [] })

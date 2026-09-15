@@ -12,6 +12,49 @@ namespace Harborline.App.Blazor.Tests;
 
 public sealed class SeededListPageTests : BunitContext
 {
+    public static TheoryData<string, string, int> MissingSeeds()
+    {
+        var data = new TheoryData<string, string, int>();
+        foreach (var item in new[] { "forms", "reports", "views", "data-exchanges", "schedules" })
+        foreach (var surface in new[] { "health", "browse" })
+        foreach (var status in new[] { 403, 404 })
+            data.Add(item, surface, status);
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(MissingSeeds))]
+    public void Missing_or_refused_seed_has_no_grid_actions_or_compiled_fallback(string item, string surface, int status)
+    {
+        var viewId = $"platform.{surface}.{item}";
+        var handler = new MissingSeedHandler(status);
+        Services.AddSingleton<IWorkshopCatalogueClient>(new HttpWorkshopCatalogueClient(
+            new HttpClient(handler) { BaseAddress = new Uri("http://localhost:7308/") }));
+        var cut = Render<SeededListPage>(parameters => parameters
+            .Add(page => page.ItemId, item).Add(page => page.ViewId, viewId));
+        cut.WaitForAssertion(() => Assert.Contains(status.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            cut.Find("[role=alert]").TextContent, StringComparison.Ordinal));
+        Assert.Empty(cut.FindAll("[role=grid],button,form,a"));
+        Assert.Equal(["/api/local-node/catalogue/definitions/ViewDefinition/" + viewId],
+            handler.Paths.Where(path => path.Contains("/ViewDefinition/", StringComparison.Ordinal)));
+    }
+
+    private sealed class MissingSeedHandler(int status) : HttpMessageHandler
+    {
+        public List<string> Paths { get; } = [];
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            Paths.Add(path);
+            var missing = path.Contains("/ViewDefinition/", StringComparison.Ordinal);
+            return Task.FromResult(new HttpResponseMessage(missing ? (System.Net.HttpStatusCode)status : System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(missing ? "View refused or absent" : """{"entries":[],"kindsUnavailable":[]}""",
+                    System.Text.Encoding.UTF8, "application/json"),
+            });
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -49,10 +92,12 @@ public sealed class SeededListPageTests : BunitContext
         Assert.All(cut.FindAll(".hl-view-runtime__actions button"), button => Assert.False(button.HasAttribute("disabled")));
     }
 
-    [Fact]
-    public void Unsupported_plan_is_inert_including_host_workflow_controls()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Unsupported_plan_is_inert_including_host_workflow_controls(bool unknownViewKind)
     {
-        Services.AddSingleton<IWorkshopCatalogueClient>(new FixtureWorkshopCatalogueClient { Unsupported = true });
+        Services.AddSingleton<IWorkshopCatalogueClient>(new FixtureWorkshopCatalogueClient { Unsupported = true, UnknownViewKind = unknownViewKind });
         var cut = Render<SeededListPage>(parameters => parameters.Add(page => page.ItemId, "forms"));
         cut.WaitForAssertion(() => Assert.Equal(string.Empty, cut.Markup.Trim()));
         Assert.Empty(cut.FindAll("button,form,a,aside"));
@@ -134,6 +179,7 @@ public sealed class SeededListPageTests : BunitContext
     private sealed class FixtureWorkshopCatalogueClient : IWorkshopCatalogueClient
     {
         public bool Unsupported { get; init; }
+        public bool UnknownViewKind { get; init; }
         private static readonly ViewRenderPlan Plan = new("sha256:test", "platform.list.forms", "1.0.0", "harborline.platform", "1.0.0", "ViewDefinition",
             new ViewRenderPlanBindings("views.entity-list/grid", new ViewRenderPlanParameters([
                 new("formId", "Key"), new("title", "Title"), new("version", "Version"), new("cascadeLayer", "Cascade layer")])));
@@ -141,7 +187,9 @@ public sealed class SeededListPageTests : BunitContext
         private static readonly WorkshopCatalogueEntry Entry = new("inspection", "1.0.0", "Active", new WorkshopLocalizedText("en", new Dictionary<string, string> { ["en"] = "Inspection" }), Body, null);
         public Task<WorkshopCatalogueEntry> ReadViewAsync(string viewId, CancellationToken cancellationToken = default) => Task.FromResult(Entry with
         {
-            Id = viewId, RenderPlan = Unsupported ? Plan with { DefinitionKind = "UnknownDefinition" } : Plan with { DefinitionId = viewId },
+            Id = viewId, RenderPlan = Unsupported
+                ? UnknownViewKind ? Plan with { Bindings = Plan.Bindings with { ViewKind = "views.future-kind" } } : Plan with { DefinitionKind = "UnknownDefinition" }
+                : Plan with { DefinitionId = viewId },
         });
         public Task<WorkshopCatalogueList> ListAsync(string kind, CancellationToken cancellationToken = default) => Task.FromResult(new WorkshopCatalogueList([Entry], []));
         public Task<WorkshopCatalogueEntry> ReadFormAsync(string id, string? version = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();

@@ -245,6 +245,11 @@ public sealed class FixtureParityArchTests
     /// <returns>The fixture source text.</returns>
     private static string ReadLane(string relativePath)
     {
+        if (Pairs.Any(pair => pair.ReactPath == relativePath || pair.BlazorPath == relativePath))
+        {
+            return CompiledInspectorRetirementControlsTests.ReadGitText(relativePath);
+        }
+
         var path = Path.Combine(
             LaneSourceScanner.LocateHostSourceRoot(),
             relativePath.Replace('/', Path.DirectorySeparatorChar));

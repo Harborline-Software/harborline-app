@@ -11,8 +11,8 @@ describe('App configuration-error surface', () => {
   })
 
   it('renders a visible configuration-error screen instead of crashing before mount', async () => {
-    vi.stubEnv('VITE_FORMS_API_ORIGIN', '')
-    vi.stubEnv('VITE_FORMS_FIXTURE', '')
+    vi.stubEnv('VITE_AUTHORIZATION_API_ORIGIN', '')
+    vi.stubEnv('VITE_AUTHORIZATION_FIXTURE', '')
     vi.resetModules()
 
     // Importing App evaluates the module-scope client creation with the stubbed (empty) env —
@@ -21,7 +21,7 @@ describe('App configuration-error surface', () => {
     render(<App />)
 
     const alert = screen.getByRole('alert')
-    expect(alert).toHaveTextContent('Forms admin is not configured')
-    expect(alert).toHaveTextContent(/VITE_FORMS_API_ORIGIN/)
+    expect(alert).toHaveTextContent('Authorization admin is not configured')
+    expect(alert).toHaveTextContent(/VITE_AUTHORIZATION_API_ORIGIN/)
   })
 })
