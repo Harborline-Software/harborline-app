@@ -103,6 +103,7 @@ interface WorkflowState {
   readonly artifact?: Blob
   readonly download?: { readonly href: string; readonly name: string }
   readonly verification?: Readonly<Record<string, unknown>>
+  readonly check?: Readonly<Record<string, unknown>>
   readonly installation?: Readonly<Record<string, unknown>>
   readonly activation?: Readonly<Record<string, unknown>>
   readonly assetType?: AssetTypeDetail
@@ -118,6 +119,17 @@ interface ActiveForm {
 }
 
 interface ResultView { readonly key: number; readonly label: string; readonly text: string }
+
+const checkCollections = [
+  'conflicts', 'watermarkHits', 'admissionRefusals', 'refusalCodes', 'refusals',
+  'crossPackCollisions', 'unmetContentReferences', 'unmetDependencies',
+] as const
+
+function checkPassed(value: unknown): boolean {
+  const result = object(value)
+  return (result?.verdict === 'WouldInstall' || result?.verdict === 'WouldUpgrade')
+    && checkCollections.every(key => Array.isArray(result[key]) && result[key].length === 0)
+}
 
 interface ResponseBody {
   readonly value: unknown
@@ -380,15 +392,26 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
         }
         case 'pack.verify': {
           if (!requires(Boolean(workflow.artifact), label('pack.export'))) break
-          setWorkflow(current => ({ ...current, verification: undefined, installation: undefined, activation: undefined, assetType: undefined, assetContent: undefined, propertyForm: undefined, receipt: undefined }))
+          setWorkflow(current => ({ ...current, verification: undefined, check: undefined, installation: undefined, activation: undefined, assetType: undefined, assetContent: undefined, propertyForm: undefined, receipt: undefined }))
           const body = await requestJson('/api/local-node/packs/verify', { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: workflow.artifact, signal: lifetime.current.signal })
           const verification = object(body.value) ?? {}
-          setWorkflow(current => ({ ...current, verification, installation: undefined, activation: undefined, assetType: undefined, propertyForm: undefined, receipt: undefined }))
+          setWorkflow(current => ({ ...current, verification, check: undefined, installation: undefined, activation: undefined, assetType: undefined, propertyForm: undefined, receipt: undefined }))
           append(action, body.value)
           break
         }
-        case 'pack.install': {
+        case 'pack.check': {
           if (!requires(object(workflow.verification)?.verdict === 'Verified' && Boolean(workflow.artifact), label('pack.verify'))) break
+          setWorkflow(current => ({ ...current, check: undefined, installation: undefined, activation: undefined, assetType: undefined, assetContent: undefined, propertyForm: undefined, receipt: undefined }))
+          const body = await requestJson('/api/local-node/packs/check', { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: workflow.artifact, signal: lifetime.current.signal })
+          const check = object(body.value) ?? {}
+          setWorkflow(current => ({ ...current, check, installation: undefined, activation: undefined, assetType: undefined, assetContent: undefined, propertyForm: undefined, receipt: undefined }))
+          append(action, body.value)
+          if (!checkPassed(check)) setMessage('Pack check refused this candidate. Review every reported code and pointer before installing it.')
+          break
+        }
+        case 'pack.install': {
+          const checkLabel = label('pack.check')
+          if (!requires(Boolean(workflow.artifact) && (checkLabel ? checkPassed(workflow.check) : object(workflow.verification)?.verdict === 'Verified'), checkLabel ?? label('pack.verify'))) break
           setWorkflow(current => ({ ...current, installation: undefined, activation: undefined, assetType: undefined, assetContent: undefined, propertyForm: undefined, receipt: undefined }))
           const body = await requestJson('/api/local-node/packs/install', { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: workflow.artifact, signal: lifetime.current.signal })
           const installation = object(body.value) ?? {}

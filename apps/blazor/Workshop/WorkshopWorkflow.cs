@@ -12,7 +12,7 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
     private WorkshopAction? formAction;
     private JsonElement? candidate;
     private byte[]? artifact;
-    private bool validated, verified, installed, active;
+    private bool validated, verified, checkedForInstall, installed, active;
     private string? typeId;
     private JsonElement? type;
     private JsonElement? created;
@@ -60,7 +60,7 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
 
     private void ResetAfterCandidate()
     {
-        validated = verified = installed = active = false;
+        validated = verified = checkedForInstall = installed = active = false;
         artifact = null; typeId = null; type = null; created = null;
     }
 
@@ -89,14 +89,25 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
                     return false;
                 case "pack.verify":
                     Require(artifact is not null, "Export the current pack before verifying it.");
-                    verified = installed = active = false;
+                    verified = checkedForInstall = installed = active = false;
                     var verification = await client.PostArtifactAsync("api/local-node/packs/verify", artifact!, cancellationToken);
                     Show(verification);
                     verified = verification.TryGetProperty("verdict", out var verdict) && verdict.GetString() == "Verified";
                     Require(verified, "The node did not verify this pack.");
                     return false;
+                case "pack.check":
+                    Require(verified && artifact is not null, "Verify the current pack before checking it.");
+                    checkedForInstall = installed = active = false;
+                    var check = await client.PostArtifactAsync("api/local-node/packs/check", artifact!, cancellationToken);
+                    Show(check);
+                    checkedForInstall = CheckPassed(check);
+                    Require(checkedForInstall, "Pack check refused this candidate. Review every reported code and pointer before installing it.");
+                    return false;
                 case "pack.install":
-                    Require(verified && artifact is not null, "Verify the current pack before installing it.");
+                    Require(artifact is not null && (actions.Any(item => item.Operation == "pack.check") ? checkedForInstall : verified),
+                        actions.Any(item => item.Operation == "pack.check")
+                            ? "Check the current pack before installing it."
+                            : "Verify the current pack before installing it.");
                     installed = active = false;
                     var installation = await client.PostArtifactAsync("api/local-node/packs/install", artifact!, cancellationToken);
                     Show(installation);
@@ -220,5 +231,14 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
         && value.TryGetProperty(key, out var property) && property.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(property.GetString());
     private static bool Empty(JsonElement value, string key) => !value.TryGetProperty(key, out var property)
         || property.ValueKind == JsonValueKind.Array && property.GetArrayLength() == 0;
+    private static bool CheckPassed(JsonElement value)
+    {
+        var verdict = value.TryGetProperty("verdict", out var property) ? property.GetString() : null;
+        return verdict is "WouldInstall" or "WouldUpgrade"
+            && new[] { "conflicts", "watermarkHits", "admissionRefusals", "refusalCodes", "refusals",
+                "crossPackCollisions", "unmetContentReferences", "unmetDependencies" }
+                .All(key => value.TryGetProperty(key, out var items)
+                    && items.ValueKind == JsonValueKind.Array && items.GetArrayLength() == 0);
+    }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
 }
