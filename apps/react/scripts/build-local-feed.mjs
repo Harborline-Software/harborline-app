@@ -102,8 +102,13 @@ function extract(archivePath, target) {
     const size = Number.parseInt(raw.toString('ascii', offset + 124, offset + 136).replace(/\0.*$/, '').trim(), 8) || 0
     const type = raw.toString('ascii', offset + 156, offset + 157)
     const relative = name.replace(/^package\//, '')
+    // The archives are packed here from the pinned platform checkout, but an extractor still refuses
+    // an entry that would land outside its target (tar slip) and writes only regular files.
+    const file = path.resolve(target, relative)
+    if (path.isAbsolute(relative) || relative.split('/').includes('..') || !file.startsWith(path.resolve(target) + path.sep)) {
+      throw new Error(`${path.basename(archivePath)}: entry escapes the feed directory: ${name}`)
+    }
     if (type === '0' || type === '\0' || type === '') {
-      const file = path.join(target, relative)
       mkdirSync(path.dirname(file), { recursive: true })
       writeFileSync(file, raw.subarray(offset + 512, offset + 512 + size))
     }
