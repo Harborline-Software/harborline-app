@@ -98,7 +98,7 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
                 case "pack.check":
                     Require(verified && artifact is not null, "Verify the current pack before checking it.");
                     checkedForInstall = installed = active = false;
-                    var check = await client.PostArtifactAsync("api/local-node/packs/preview", artifact!, cancellationToken);
+                    var check = await client.PostArtifactAsync("api/local-node/packs/check", artifact!, cancellationToken);
                     Show(check);
                     checkedForInstall = CheckPassed(check);
                     Require(checkedForInstall, "Pack check refused this candidate. Review every reported code and pointer before installing it.");

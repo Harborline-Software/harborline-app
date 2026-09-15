@@ -393,7 +393,7 @@ describe('seeded Workshop list', () => {
       if (input.endsWith('/packs/export?validateOnly=true')) return Response.json({ valid: true, codes: [] })
       if (input.endsWith('/packs/export')) return new Response(new Uint8Array([1, 2, 3, 4]))
       if (input.endsWith('/packs/verify')) return Response.json({ verdict: 'Verified' })
-      if (input.endsWith('/packs/preview')) return Response.json({
+      if (input.endsWith('/packs/check')) return Response.json({
         verdict: 'WouldInstall', conflicts: [], watermarkHits: [], admissionRefusals: [],
         refusalCodes: ['pack.requirement.unmet'],
         refusals: [{ code: 'pack.requirement.unmet', pointer: '/requirements/0' }],

@@ -402,7 +402,7 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
         case 'pack.check': {
           if (!requires(object(workflow.verification)?.verdict === 'Verified' && Boolean(workflow.artifact), label('pack.verify'))) break
           setWorkflow(current => ({ ...current, check: undefined, installation: undefined, activation: undefined, assetType: undefined, assetContent: undefined, propertyForm: undefined, receipt: undefined }))
-          const body = await requestJson('/api/local-node/packs/preview', { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: workflow.artifact, signal: lifetime.current.signal })
+          const body = await requestJson('/api/local-node/packs/check', { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: workflow.artifact, signal: lifetime.current.signal })
           const check = object(body.value) ?? {}
           setWorkflow(current => ({ ...current, check, installation: undefined, activation: undefined, assetType: undefined, assetContent: undefined, propertyForm: undefined, receipt: undefined }))
           append(action, body.value)

@@ -238,7 +238,7 @@ public sealed class WorkshopWorkflowTests
                 "/api/local-node/catalogue/definitions/FormDefinition/example.capture?version=2.1.0" => FormEntry("example.capture", "2.1.0", "subject", "text"),
                 "/api/local-node/packs/export?validateOnly=true" => """{"valid":true,"codes":[]}""",
                 "/api/local-node/packs/verify" => """{"verdict":"Verified"}""",
-                "/api/local-node/packs/preview" => RefuseCheck
+                "/api/local-node/packs/check" => RefuseCheck
                     ? """{"verdict":"WouldInstall","conflicts":[],"watermarkHits":[],"admissionRefusals":[],"refusalCodes":["pack.requirement.unmet"],"refusals":[{"code":"pack.requirement.unmet","pointer":"/requirements/0"}],"crossPackCollisions":[],"unmetContentReferences":[],"unmetDependencies":[]}"""
                     : """{"verdict":"WouldInstall","conflicts":[],"watermarkHits":[],"admissionRefusals":[],"refusalCodes":[],"refusals":[],"crossPackCollisions":[],"unmetContentReferences":[],"unmetDependencies":[]}""",
                 "/api/local-node/packs/install" => """{"installed":true}""",
