@@ -23,6 +23,31 @@ afterEach(() => {
   window.history.replaceState({}, '', '/')
 })
 
+it.each(['health', 'browse'])('restores an explicit %s surface for a declared Workshop item', async surface => {
+  vi.stubEnv('VITE_FORMS_FIXTURE', '1')
+  vi.stubEnv('VITE_AUTHORIZATION_FIXTURE', '1')
+  vi.stubEnv('VITE_AUTHORIZATION_API_ORIGIN', 'http://localhost:7308')
+  window.history.replaceState({}, '', `/?item=forms&surface=${surface}&selected=inspection%401.0.0&panels=inspector`)
+  const viewId = `platform.${surface}.forms`
+  const plan = { definitionHash: 'hash', definitionId: viewId, definitionVersion: '1.0.0',
+    packKey: 'harborline.platform', packVersion: '1.0.0', definitionKind: 'ViewDefinition',
+    bindings: { viewKind: 'views.entity-list/grid', parameters: { fields: [{ id: 'formId', label: 'Key' }] } } }
+  const fetchMock = vi.fn(async (url: string | URL | Request) => {
+    const path = String(url)
+    if (path.endsWith('/navigation/workspaces')) return Response.json(workshop)
+    if (path.includes('/ViewDefinition/')) return Response.json({ renderPlan: plan })
+    if (path.includes('/catalogue/definitions?')) return Response.json({ entries: [{ id: 'inspection', version: '1.0.0', status: 'Published' }], kindsUnavailable: [] })
+    return Response.json([])
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  const { App } = await import('../App')
+  const cut = render(<App />)
+  await waitFor(() => expect(cut.container.querySelector('[aria-label="Definition inspector"]')).toHaveTextContent('inspection'))
+  expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/ViewDefinition/')).map(([url]) => url))
+    .toEqual([`/api/local-node/catalogue/definitions/ViewDefinition/${viewId}`])
+  expect(new URLSearchParams(window.location.search).get('surface')).toBe(surface)
+})
+
 it('renders the declared Access workspace and panels, removes them with the declaration, and retries a refused read', async () => {
   vi.stubEnv('VITE_FORMS_FIXTURE', '1')
   vi.stubEnv('VITE_AUTHORIZATION_FIXTURE', '1')

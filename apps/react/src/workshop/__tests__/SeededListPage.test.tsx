@@ -82,6 +82,92 @@ afterEach(() => {
 })
 
 describe('seeded Workshop list', () => {
+  it.each(['health', 'browse'])('loads the exact declared %s view and preserves ordered fields', async surface => {
+    const viewId = `platform.${surface}.forms`
+    const plan = { ...actionPlan, definitionId: viewId, bindings: { ...actionPlan.bindings,
+      parameters: { fields: [{ id: 'status', label: 'Lifecycle' }, { id: 'formId', label: 'Key' }] }, actions: [],
+    } }
+    const fetchMock = vi.fn(async (input: string) => Response.json(input.includes('/ViewDefinition/')
+      ? { renderPlan: plan }
+      : { entries: [{ id: 'inspection', version: '1.0.0', status: 'Published' }], kindsUnavailable: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+    const restored = vi.fn()
+    render(<SeededListPage itemId="forms" {...{ viewId }} selectedRowId="inspection@1.0.0" onSelectionRestored={restored} />)
+    await screen.findByRole('grid')
+    expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
+      `/api/local-node/catalogue/definitions/ViewDefinition/${viewId}`,
+      '/api/local-node/catalogue/definitions?kind=FormDefinition',
+    ])
+    expect(screen.getAllByRole('columnheader').map(node => node.textContent)).toEqual(['Lifecycle', 'Key'])
+    await waitFor(() => expect(restored).toHaveBeenCalledWith(expect.objectContaining({ id: 'inspection@1.0.0' })))
+  })
+
+  it.each([[0], ['FormDefinition']])('keeps an explicitly unavailable catalogue distinct from an available empty list: %j', async unavailable => {
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => Response.json(input.includes('/ViewDefinition/')
+      ? { renderPlan: actionPlan }
+      : { entries: [], kindsUnavailable: [unavailable] })))
+    const view = render(<SeededListPage itemId="forms" />)
+    expect(await screen.findByText('FormDefinition is unavailable in this host.')).toBeInTheDocument()
+    expect(view.container.querySelector('button,form,[role=grid]')).toBeNull()
+    expect(screen.queryByText('No definitions.')).not.toBeInTheDocument()
+  })
+
+  it('keeps catalogue coordinates and provenance outside the mutable body', async () => {
+    const entry = { id: 'inspection', version: '2.0.0', kind: 0, status: 'Published', sealed: true,
+      provenance: { packKey: 'acme.assets', packVersion: '1.0.0', kind: 'pack' },
+      definitionHash: 'sha256:definition', updatedAt: '2026-09-15T00:00:00Z',
+      body: { id: 'body-id', version: 'body-version', provenance: { kind: 'body' } } }
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => Response.json(input.includes('/ViewDefinition/')
+      ? { renderPlan: actionPlan } : { entries: [entry], kindsUnavailable: [] })))
+    const restored = vi.fn()
+    render(<SeededListPage itemId="forms" selectedRowId="inspection@2.0.0" onSelectionRestored={restored} />)
+    await waitFor(() => expect(restored).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'inspection@2.0.0', version: '2.0.0', provenance: entry.provenance, catalogue: entry, body: entry.body,
+    })))
+  })
+
+  it.each([403, 404])('does not fall back or expose actions when the requested view returns %s', async status => {
+    const fetchMock = vi.fn(async (input: string) => input.includes('/ViewDefinition/')
+      ? new Response('View refused or absent', { status }) : Response.json({ entries: [], kindsUnavailable: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<SeededListPage itemId="forms" viewId="platform.health.forms" />)
+    expect(await screen.findByRole('alert')).toHaveTextContent(String(status))
+    expect(screen.queryByRole('grid')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(fetchMock.mock.calls.filter(([input]) => input.includes('/ViewDefinition/')).map(([input]) => input))
+      .toEqual(['/api/local-node/catalogue/definitions/ViewDefinition/platform.health.forms'])
+  })
+
+  it('keeps an available empty view actionable and suppresses restoration for an inert plan', async () => {
+    let inert = false
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => Response.json(input.includes('/ViewDefinition/')
+      ? { renderPlan: inert ? { ...actionPlan, definitionKind: 'UnknownDefinition' } : actionPlan }
+      : { entries: inert ? [{ id: 'inspection', version: '1.0.0', status: 'Published' }] : [], kindsUnavailable: [] })))
+    const restored = vi.fn()
+    const cut = render(<SeededListPage itemId="forms" viewId="platform.health.forms" />)
+    expect(await screen.findByText('No definitions.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Draft check' })).toBeEnabled()
+    inert = true
+    cut.rerender(<SeededListPage itemId="forms" viewId="platform.browse.forms" selectedRowId="inspection@1.0.0" onSelectionRestored={restored} />)
+    await waitFor(() => expect(cut.container.innerHTML).toBe(''))
+    expect(restored).not.toHaveBeenCalled()
+  })
+
+  it('ignores a late response for the previously selected surface', async () => {
+    let finish!: (response: Response) => void
+    const pending = new Promise<Response>(resolve => { finish = resolve })
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (input.endsWith('/platform.health.forms')) return pending
+      if (input.includes('/ViewDefinition/')) return Response.json({ renderPlan: { ...actionPlan, definitionId: 'platform.browse.forms' } })
+      return Response.json({ entries: [], kindsUnavailable: [] })
+    }))
+    const cut = render(<SeededListPage itemId="forms" viewId="platform.health.forms" />)
+    cut.rerender(<SeededListPage itemId="forms" viewId="platform.browse.forms" />)
+    await screen.findByRole('grid')
+    await act(async () => finish(Response.json({ renderPlan: { ...actionPlan, definitionId: 'platform.health.forms' } })))
+    expect(cut.container.querySelector('[data-definition-source]')).toHaveAttribute('data-definition-source', expect.stringContaining('platform.browse.forms'))
+  })
+
   it.each([false, true])('disables declared actions during a delayed request and restores them after refusal=%s', async refuse => {
     let release!: () => void
     const pending = new Promise<void>(resolve => { release = resolve })

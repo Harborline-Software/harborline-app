@@ -17,7 +17,7 @@ public sealed class WorkshopWorkflowTests
         var handler = new WorkflowHandler();
         var client = Client(handler);
         var workflow = new WorkshopWorkflow(client);
-        workflow.Bind(await client.ReadViewAsync("forms"));
+        workflow.Bind(await client.ReadViewAsync("platform.list.forms"));
         await workflow.ActivateActionAsync("a");
         Assert.Equal("Authored title", workflow.Form!.Title!.Values["en"]);
         Assert.Equal("textarea", Assert.Single(Assert.Single(workflow.Form.Sections).Fields).ControlHint);
@@ -52,7 +52,7 @@ public sealed class WorkshopWorkflowTests
         var handler = new WorkflowHandler();
         var client = Client(handler);
         var workflow = new WorkshopWorkflow(client);
-        workflow.Bind(await client.ReadViewAsync("forms"));
+        workflow.Bind(await client.ReadViewAsync("platform.list.forms"));
         await workflow.ActivateActionAsync("b");
         Assert.Contains("Validate", workflow.Error, StringComparison.Ordinal);
         await workflow.ActivateActionAsync("a");
@@ -72,7 +72,7 @@ public sealed class WorkshopWorkflowTests
         var handler = new WorkflowHandler { OmitAuditId = true };
         var client = Client(handler);
         var workflow = new WorkshopWorkflow(client);
-        workflow.Bind(await client.ReadViewAsync("forms"));
+        workflow.Bind(await client.ReadViewAsync("platform.list.forms"));
         await workflow.ActivateActionAsync("a");
         await workflow.SubmitAsync(new Dictionary<string, object?> { ["packJson"] = PackJson });
         foreach (var id in new[] { "b", "c", "d", "e", "f" }) await workflow.ActivateActionAsync(id);
@@ -91,7 +91,7 @@ public sealed class WorkshopWorkflowTests
         var handler = new WorkflowHandler { RefuseValidation = true };
         var client = Client(handler);
         var workflow = new WorkshopWorkflow(client);
-        workflow.Bind(await client.ReadViewAsync("forms"));
+        workflow.Bind(await client.ReadViewAsync("platform.list.forms"));
         await workflow.ActivateActionAsync("a");
         var result = await workflow.SubmitAsync(new Dictionary<string, object?> { ["packJson"] = PackJson });
         Assert.False(result!.IsValid);
@@ -109,7 +109,7 @@ public sealed class WorkshopWorkflowTests
         var handler = new WorkflowHandler { ExportRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously) };
         var client = Client(handler);
         var workflow = new WorkshopWorkflow(client);
-        workflow.Bind(await client.ReadViewAsync("forms"));
+        workflow.Bind(await client.ReadViewAsync("platform.list.forms"));
         await workflow.ActivateActionAsync("a");
         await workflow.SubmitAsync(new Dictionary<string, object?> { ["packJson"] = PackJson });
         var exporting = workflow.ActivateActionAsync("b");
@@ -133,7 +133,7 @@ public sealed class WorkshopWorkflowTests
         var handler = new WorkflowHandler();
         var client = Client(handler);
         var workflow = new WorkshopWorkflow(client);
-        var entry = await client.ReadViewAsync("forms");
+        var entry = await client.ReadViewAsync("platform.list.forms");
         workflow.Bind(entry);
         await workflow.ActivateActionAsync("a");
         await workflow.SubmitAsync(new Dictionary<string, object?> { ["packJson"] = PackJson });
@@ -154,7 +154,7 @@ public sealed class WorkshopWorkflowTests
         var handler = new WorkflowHandler();
         var client = Client(handler);
         var workflow = new WorkshopWorkflow(client);
-        workflow.Bind(await client.ReadViewAsync("forms"));
+        workflow.Bind(await client.ReadViewAsync("platform.list.forms"));
         await workflow.ActivateActionAsync("a");
         await workflow.SubmitAsync(new Dictionary<string, object?> { ["packJson"] = PackJson });
         foreach (var id in new[] { "b", "c", "d", "e", "f" }) await workflow.ActivateActionAsync(id);

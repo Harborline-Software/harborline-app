@@ -13,6 +13,10 @@ else if (plan is null)
 {
     <p role="status">Loading Workshop list…</p>
 }
+else if (list?.KindsUnavailable.Count > 0)
+{
+    <p role="status">@Kinds[ItemId] is unavailable in this host.</p>
+}
 else if (supported)
 {
     <fieldset disabled="@workflow!.Busy" style="border:0;padding:0;margin:0;min-inline-size:0">
@@ -48,38 +52,45 @@ else if (supported)
         ["schedules"] = "ScheduleDefinition", ["views"] = "ViewDefinition",
     };
     [Parameter, EditorRequired] public string ItemId { get; set; } = string.Empty;
+    [Parameter] public string? ViewId { get; set; }
     [Parameter] public string? SelectedRowId { get; set; }
     [Parameter] public EventCallback<ViewRuntimeRow> RowActivated { get; set; }
     [Parameter] public EventCallback<ViewRuntimeRow> SelectionRestored { get; set; }
     private readonly CancellationTokenSource cancellation = new();
     private ViewRenderPlan? plan;
+    private WorkshopCatalogueList? list;
     private IReadOnlyList<ViewRuntimeRow> rows = [];
     private string? restoredSelection;
     private string? error;
     private WorkshopWorkflow? workflow;
     private bool supported;
+    private int requestVersion;
+    private string RequestedViewId => ViewId ?? $"platform.list.{ItemId}";
 
     protected override async Task OnParametersSetAsync()
     {
-        plan = null; rows = []; error = null; supported = false;
+        var request = ++requestVersion;
+        plan = null; list = null; rows = []; error = null; supported = false;
         workflow = new WorkshopWorkflow(CatalogueClient);
         if (!Kinds.TryGetValue(ItemId, out var kind)) { error = "This Workshop list is not declared by the platform pack."; return; }
         try
         {
-            var viewTask = CatalogueClient.ReadViewAsync(ItemId, cancellation.Token);
+            var viewTask = CatalogueClient.ReadViewAsync(RequestedViewId, cancellation.Token);
             var rowsTask = CatalogueClient.ListAsync(kind, cancellation.Token);
             await Task.WhenAll(viewTask, rowsTask);
+            if (request != requestVersion || cancellation.IsCancellationRequested) return;
             var view = await viewTask;
             plan = view.RenderPlan ?? throw new InvalidOperationException("The seeded view has no active compiled render plan.");
             workflow.Bind(view);
             supported = WorkshopWorkflow.Supports(view);
-            rows = (await rowsTask).Select(ToRow).ToArray();
+            list = await rowsTask;
+            rows = list.KindsUnavailable.Count == 0 && supported ? list.Entries.Select(ToRow).ToArray() : [];
             await RestoreSelectionAsync();
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or JsonException)
         {
-            error = exception.Message;
+            if (request == requestVersion) error = exception.Message;
         }
     }
 
@@ -89,6 +100,9 @@ else if (supported)
             ? entry.Body.EnumerateObject().ToDictionary(property => property.Name, property => (object?)JsonValue(property.Value))
             : new Dictionary<string, object?>();
         values["formId"] = entry.Id; values["title"] = EntryTitle(entry); values["version"] = entry.Version; values["status"] = entry.Status;
+        values["id"] = $"{entry.Id}@{entry.Version}"; values["catalogue"] = entry; values["body"] = entry.Body;
+        values["kind"] = entry.Kind; values["provenance"] = entry.Provenance; values["sealed"] = entry.Sealed;
+        values["updatedAt"] = entry.UpdatedAt; values["definitionHash"] = entry.DefinitionHash;
         return new ViewRuntimeRow($"{entry.Id}@{entry.Version}", values);
     }
 
@@ -102,7 +116,7 @@ else if (supported)
     private async Task RestoreSelectionAsync()
     {
         if (SelectedRowId is null) { restoredSelection = null; return; }
-        var selectionKey = $"{ItemId}:{SelectedRowId}";
+        var selectionKey = $"{RequestedViewId}:{SelectedRowId}";
         if (restoredSelection == selectionKey) return;
         var restored = rows.FirstOrDefault(row => row.Id == SelectedRowId);
         if (restored is null) return;
@@ -117,16 +131,24 @@ else if (supported)
     }
     private async Task ActivateActionAsync(string actionId)
     {
+        if (!supported || list?.KindsUnavailable.Count != 0) return;
+        var request = requestVersion;
         var operation = workflow!.ActivateActionAsync(actionId, cancellation.Token);
         try
         {
             if (await operation)
-                rows = (await CatalogueClient.ListAsync(Kinds[ItemId], cancellation.Token)).Select(ToRow).ToArray();
+            {
+                if (request != requestVersion) return;
+                var refreshed = await CatalogueClient.ListAsync(Kinds[ItemId], cancellation.Token);
+                if (request != requestVersion || cancellation.IsCancellationRequested) return;
+                list = refreshed;
+                rows = list.KindsUnavailable.Count == 0 ? list.Entries.Select(ToRow).ToArray() : [];
+            }
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or JsonException)
         {
-            error = exception.Message;
+            if (request == requestVersion) error = exception.Message;
         }
     }
     private async ValueTask<SchemaFormValidationResult?> SubmitAsync(IReadOnlyDictionary<string, object?> values)
