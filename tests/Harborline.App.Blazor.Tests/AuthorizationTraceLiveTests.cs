@@ -7,6 +7,7 @@ using Harborline.App.Blazor.ReferenceHost;
 using Harborline.App.Blazor.ReferenceHost.Admin.Authorization;
 using Harborline.App.Blazor.ReferenceHost.Authorization;
 using Harborline.App.Blazor.ReferenceHost.Navigation;
+using Harborline.App.Blazor.Tests.Fixtures;
 using Harborline.UIAdapters.Blazor;
 using Harborline.UIAdapters.Blazor.Browser;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,7 +49,7 @@ public sealed class AuthorizationTraceLiveTests(ITestOutputHelper output) : Buni
         Register(http);
         IRenderedComponent<Microsoft.AspNetCore.Components.IComponent> result;
         if (surface == "settings") result = Render<AuthorizationAdminPage>();
-        else if (surface == "holders") result = Render<AccessHoldersPage>();
+        else if (surface == "holders") result = Render<LegacyAccessHoldersPage>();
         else
         {
             var definition = (await new FixtureAuthorizationAdminClient().ListCapabilityDefinitionsAsync())[0];

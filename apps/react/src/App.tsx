@@ -1,4 +1,4 @@
-import { AccessHoldersPage } from './admin/authorization/AccessHoldersPage'
+import { PackActionHost } from './runtime/PackActionHost'
 import { useCallback, useEffect, useState } from 'react'
 import { readPackNavigation } from './navigation/packNavigation'
 import { RoleVocabulary, type HeldRoleSet } from '@harborline-software/contracts/authorization'
@@ -227,13 +227,14 @@ export function App() {
           ? <><h2>{displayTitle(selectedDefinition)}</h2><pre>{JSON.stringify(selectedDefinition, null, 2)}</pre></>
           : <p>Select a Workshop definition to inspect it.</p>}</section>
         : <section className="happ-pilot"><p>{panel.id === 'pilot' ? `Pilot sees what you see — Portfolio · ${body.title}.` : `${resolveLabel(panel.labelKey ?? panel.id)}: This application surface is not available in this version.`}</p></section>}
-      body={activeItemId === 'access.holders' ? <main className="happ-page"><AccessHoldersPage /></main>
-        : WORKSHOP_ITEM_IDS.has(activeItemId)
+      body={WORKSHOP_ITEM_IDS.has(activeItemId)
         ? <main className="happ-page"><h1>{body.title}</h1>{initialAddress.surface && !packNavigation
           ? <p role="status">Loading Workshop view…</p>
           : <SeededListPage itemId={activeItemId} viewId={initialAddress.surface ? `platform.${initialAddress.surface}.${activeItemId}` : undefined} selectedRowId={selectedRowId} onRowActivate={inspectDefinition} onSelectionRestored={setSelectedDefinition} />}</main>
         : activeItemId === 'admin-authorization'
         ? <main className="happ-page"><AuthorizationAdminPage /></main>
+        : packNavigation && declaredItemIds(packNavigation).includes(activeItemId)
+        ? <main className="happ-page"><h1>{body.title}</h1><PackActionHost key={activeItemId} viewId={activeItemId} onNavigationChanged={() => setNavigationAttempt(value => value + 1)} /></main>
         : <main className="happ-page"><h1>{body.title}</h1><p>{body.description}</p></main>}
     />
     </AuthorizationAdminClientProvider>

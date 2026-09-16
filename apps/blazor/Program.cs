@@ -46,8 +46,7 @@ else
 var authorizationAdminBaseUrl = builder.Configuration["AuthorizationAdmin:BaseUrl"];
 if (!string.IsNullOrWhiteSpace(authorizationAdminBaseUrl))
 {
-    builder.Services.AddHttpClient<IPackNavigationClient, HttpPackNavigationClient>(
-        client => ConfigureNodeClient(client, authorizationAdminBaseUrl));
+    builder.Services.AddScoped<IPackNavigationClient, BrowserPackNavigationClient>();
     builder.Services.AddHttpClient<IAuthorizationAdminClient, HttpAuthorizationAdminClient>(
         client => ConfigureNodeClient(client, authorizationAdminBaseUrl));
 }

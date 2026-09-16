@@ -78,7 +78,7 @@ test('unknown view kinds and action kinds never create an executable control', a
   }
 })
 
-test('explicit retry preserves invocation, but changed input starts a new intention without automatic retry', async () => {
+test('explicit retry preserves invocation and changed input requires an explicit new request', async () => {
   let sequence = 0
   const sent = []
   const runtime = createPackActionRuntime({ async send(path, method, _body, _type, headers) {
@@ -93,6 +93,88 @@ test('explicit retry preserves invocation, but changed input starts a new intent
   assert.equal(sent.length, 1)
   await runtime.invoke({ note: 'first' })
   assert.deepEqual(sent[0].headers, sent[1].headers)
+  assert.equal((await runtime.invoke({ note: 'changed' })).error, 'pack_request_changed_start_new')
+  assert.equal(sent.length, 2)
+  assert.equal(runtime.snapshot().requestLocked, true)
+  runtime.newRequest()
   await runtime.invoke({ note: 'changed' })
   assert.notEqual(sent[1].headers['X-Correlation-ID'], sent[2].headers['X-Correlation-ID'])
+})
+
+test('only bound request details are editable; malformed, duplicate, and authority values cannot dispatch', async () => {
+  let writes = 0
+  const runtime = createPackActionRuntime({ async send(path, method, _body, _type, headers) {
+    if (path.includes('/catalogue/')) return reply(entry)
+    if (path.endsWith('/list')) return reply({ items: [{ identity: 'row-1' }] })
+    writes++; return { ...reply({ status: 'applied' }), correlationId: headers['X-Correlation-ID'] }
+  } }, () => id)
+  await runtime.load('example'); runtime.select('row-1'); await runtime.begin('opaque')
+  assert.deepEqual(runtime.snapshot().requestDetails, { correlationId: id })
+  for (const entries of [[['actor', 'administrator']], [['correlationId', id], ['correlationId', id]], []]) {
+    assert.equal(runtime.setRequestDetails(entries).error, 'pack_request_details_invalid')
+    assert.deepEqual(runtime.snapshot().requestDetails, { correlationId: id })
+    assert.equal((await runtime.invoke()).error, 'pack_request_details_invalid')
+  }
+  for (const value of ['invalid', '00000000-0000-0000-0000-000000000000', `${id}\r\nAuthorization: bearer`]) {
+    runtime.setRequestDetails([['correlationId', value]])
+    assert.equal((await runtime.invoke()).error, 'pack_request_details_invalid')
+  }
+  assert.equal(writes, 0)
+  const fixtureCorrelation = '43300000-0000-4000-8000-000000000101'
+  runtime.setRequestDetails([['correlationId', fixtureCorrelation]])
+  const completed = await runtime.invoke()
+  assert.equal(completed.receipt.correlationId, fixtureCorrelation)
+  assert.equal(completed.requestDetails.correlationId, fixtureCorrelation)
+  assert.equal(completed.requestLocked, true)
+  assert.equal(runtime.setRequestDetails([['correlationId', id]]).requestDetails.correlationId, fixtureCorrelation)
+  await runtime.invoke()
+  assert.equal(writes, 2)
+})
+
+test('view refresh consumes the new active plan and signals navigation reload while preserving the native receipt', async () => {
+  let active = '1.0.0', reads = 0
+  const runtime = createPackActionRuntime({ async send(path) {
+    if (path.includes('/catalogue/')) {
+      reads++
+      const definition = structuredClone(entry)
+      definition.renderPlan.definitionVersion = active
+      definition.renderPlan.bindings.actions[0].result.refresh = 'view'
+      return reply(definition)
+    }
+    if (path.endsWith('/list')) return reply({ items: [{ identity: 'row-1' }] })
+    active = '1.0.1'; return reply({ status: 'replaced' })
+  } }, () => id)
+  await runtime.load('example'); runtime.select('row-1'); await runtime.begin('opaque')
+  const state = await runtime.invoke({})
+  assert.equal(reads, 2)
+  assert.equal(state.plan.definitionVersion, '1.0.1')
+  assert.equal(state.navigationRevision, 1)
+  assert.equal(state.receipt.body.status, 'replaced')
+  assert.equal(state.receipt.auditId, 'native-audit')
+  assert.equal(state.activeAction, null)
+})
+
+test('predeclared request ID and idempotency key bind through admitted inputs and replay unchanged', async () => {
+  const definition = structuredClone(entry), sent = []
+  const declared = definition.renderPlan.bindings.actions[0]
+  declared.dispatch.descriptor.inputs.push(
+    { name: 'successor', kind: 'Text', placement: 'BodyField', wireName: 'successorId' },
+    { name: 'key', kind: 'Text', placement: 'Header', wireName: 'Idempotency-Key' })
+  declared.dispatch.bindings.successor = { source: 'invocation', pointer: '/id' }
+  declared.dispatch.bindings.key = { source: 'invocation', pointer: '/idempotencyKey' }
+  const runtime = createPackActionRuntime({ async send(path, _method, body, _type, headers) {
+    if (path.includes('/catalogue/')) return reply(definition)
+    if (path.endsWith('/list')) return reply({ items: [{ identity: 'row-1' }] })
+    sent.push({ body, headers }); return reply({ status: 'applied', successorId: JSON.parse(body).successorId })
+  } }, () => id)
+  await runtime.load('example'); runtime.select('row-1'); await runtime.begin('opaque')
+  const details = { id: '43300000-0000-4000-8000-000000000002', idempotencyKey: 'm6-t433-grant-submit-v1', correlationId: id }
+  runtime.setRequestDetails(Object.entries({ ...details, idempotencyKey: 'bad key' }))
+  assert.equal((await runtime.invoke()).error, 'pack_request_details_invalid')
+  runtime.setRequestDetails(Object.entries(details))
+  const result = await runtime.invoke()
+  await runtime.invoke()
+  assert.deepEqual(sent[0], sent[1])
+  assert.equal(sent[0].headers['Idempotency-Key'], details.idempotencyKey)
+  assert.equal(result.receipt.body.successorId, details.id)
 })

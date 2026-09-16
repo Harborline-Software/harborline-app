@@ -12,7 +12,8 @@ public sealed record PackActionRow(string Id, IReadOnlyDictionary<string, JsonEl
 
 public sealed record PackActionSnapshot(ViewRenderPlan? Plan, IReadOnlyList<PackActionRow> Rows,
     string? SelectedId, PackActionDeclaration? ActiveAction, JsonElement InputPlan,
-    PackActionReceipt? Receipt, string? Error, bool Busy)
+    PackActionReceipt? Receipt, string? Error, bool Busy, int NavigationRevision = 0,
+    IReadOnlyDictionary<string, string>? RequestDetails = null, bool RequestLocked = false)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 

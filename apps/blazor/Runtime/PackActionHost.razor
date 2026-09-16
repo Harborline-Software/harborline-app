@@ -16,6 +16,21 @@
     @if (snapshot?.ActiveAction is { } action)
     {
         <section aria-label="@action.Label">
+            @if (snapshot.RequestDetails is { Count: > 0 } requestDetails)
+            {
+                <details><summary>Request details</summary>
+                    <fieldset disabled="@(busy || snapshot.RequestLocked)"><legend>Request identifiers</legend>
+                        @foreach (var detail in requestDetails)
+                        {
+                            <label>@(detail.Key == "id" ? "Request ID" : detail.Key == "idempotencyKey" ? "Idempotency key" : "Correlation ID")
+                                <input name="@($"request.{detail.Key}")" value="@detail.Value"
+                                    @onchange="@(args => SetRequestDetailAsync(detail.Key, args.Value?.ToString() ?? string.Empty))" />
+                            </label>
+                        }
+                    </fieldset>
+                    <button type="button" disabled="@busy" @onclick="NewRequestAsync">New request</button>
+                </details>
+            }
             @if (snapshot.Form is { } form)
             {
                 <HarborlineSchemaForm @key="actionKey" View="@form" Values="@values" Disabled="@busy"
@@ -34,7 +49,10 @@
             }
         </section>
     }
-    @if ((error ?? snapshot?.Error) is { } message) { <p role="alert">@message</p> }
+    @if ((error ?? snapshot?.Error) is { } message)
+    {
+        <section role="alert"><p>@message</p><button type="button" disabled="@busy" @onclick="ReloadAsync">Reload view</button></section>
+    }
     @if (snapshot?.Receipt is { } receipt)
     {
         <section aria-label="Action result" aria-live="polite">
@@ -48,6 +66,7 @@
 
 @code {
     [Parameter, EditorRequired] public string ViewId { get; set; } = string.Empty;
+    [Parameter] public EventCallback NavigationChanged { get; set; }
     private IJSObjectReference? module;
     private IJSObjectReference? runtime;
     private PackActionSnapshot? snapshot;
@@ -82,6 +101,15 @@
         catch (JSException exception) { error = exception.Message; }
     }
 
+    private async Task ReloadAsync()
+    {
+        if (runtime is null || busy) return;
+        busy = true; error = null;
+        try { snapshot = await runtime.InvokeAsync<PackActionSnapshot>("load", ViewId); }
+        catch (JSException exception) { error = exception.Message; }
+        finally { busy = false; }
+    }
+
     private async Task BeginAsync(string id)
     {
         if (runtime is null || busy) return;
@@ -95,11 +123,28 @@
     {
         if (runtime is null || busy) return;
         busy = true; error = null;
+        var revision = snapshot?.NavigationRevision ?? 0;
         try { snapshot = snapshot?.ActiveAction?.FileInput is not null
             ? await runtime.InvokeAsync<PackActionSnapshot>("invokeWithFile", values, fileElement)
-            : await runtime.InvokeAsync<PackActionSnapshot>("invoke", values); }
+            : await runtime.InvokeAsync<PackActionSnapshot>("invoke", values);
+            if (snapshot.NavigationRevision != revision) await NavigationChanged.InvokeAsync(); }
         catch (JSException exception) { error = exception.Message; }
         finally { busy = false; }
+    }
+
+    private async Task SetRequestDetailAsync(string name, string value)
+    {
+        if (runtime is null || busy || snapshot?.RequestDetails is not { } details || snapshot.RequestLocked) return;
+        var entries = details.Select(pair => new[] { pair.Key, pair.Key == name ? value : pair.Value }).ToArray();
+        try { snapshot = await runtime.InvokeAsync<PackActionSnapshot>("setRequestDetails", (object)entries); }
+        catch (JSException exception) { error = exception.Message; }
+    }
+
+    private async Task NewRequestAsync()
+    {
+        if (runtime is null || busy) return;
+        try { snapshot = await runtime.InvokeAsync<PackActionSnapshot>("newRequest"); }
+        catch (JSException exception) { error = exception.Message; }
     }
 
     private async ValueTask<SchemaFormValidationResult?> SubmitAsync(IReadOnlyDictionary<string, object?> submitted)

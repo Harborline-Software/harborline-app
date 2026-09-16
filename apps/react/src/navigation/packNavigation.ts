@@ -1,4 +1,5 @@
 import type { PackNavigationDeclaration } from '@harborline-software/ui-react'
+import { send } from '../../../shared/selected-session-transport.mjs'
 
 /** Wire envelope from the active tenant's ordinary pack composition. */
 export interface PackNavigationResponse {
@@ -13,9 +14,11 @@ export async function readPackNavigation(signal?: AbortSignal): Promise<PackNavi
     if (fixture === '1' || fixture === 'true') return null
     throw new Error('Pack navigation requires the configured authorization service.')
   }
-  const response = await fetch(`${import.meta.env.DEV ? '' : origin}/api/local-node/navigation/workspaces`, { signal })
-  if (!response.ok) throw new Error('Unable to load application navigation. Retry the request.')
-  const result = await response.json() as PackNavigationResponse
+  signal?.throwIfAborted()
+  const response = await send('/api/local-node/navigation/workspaces')
+  signal?.throwIfAborted()
+  if (response.status < 200 || response.status >= 300) throw new Error('Unable to load application navigation. Retry the request.')
+  const result = JSON.parse(response.body) as PackNavigationResponse
   if (result.configured && result.pack === null) throw new Error('The navigation service returned no declaration.')
   return result.configured ? result.pack : null
 }

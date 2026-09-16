@@ -77,7 +77,7 @@ it('renders the declared Access workspace and panels, removes them with the decl
   const { App } = await import('../App')
   const first = render(<App />)
   await waitFor(() => expect(first.container.textContent).toContain('Access'))
-  expect(request.mock.calls.some(([url]) => String(url).endsWith('/api/local-node/navigation/workspaces'))).toBe(true)
+  expect(request.mock.calls.some(([url]) => String(url).endsWith('/api/selected-node/local-node/navigation/workspaces'))).toBe(true)
   if (screen.queryByRole('button', { name: 'Panels' })) await act(async () => screen.getByRole('button', { name: 'Panels' }).click())
   expect(first.container.querySelector('[data-action-id="access-details"]')).not.toBeNull()
   await act(async () => first.container.querySelector<HTMLButtonElement>('[data-action-id="access-details"] button')!.click())
@@ -125,7 +125,7 @@ it.each([[480, 'compact', 'bottom-sheet', false], [720, 'medium', 'side-sheet', 
   ]
   vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => {
     const path = String(url)
-    if (path.endsWith('/api/local-node/navigation/workspaces')) {
+    if (path.endsWith('/api/selected-node/local-node/navigation/workspaces')) {
       await navigationReady
       return Response.json(declaration)
     }
@@ -246,7 +246,7 @@ it.each([
   const entry = { id: 'inspection', version: '1.0.0', status: 'Active', title: { defaultLocale: 'en', values: { en: title } }, body: { cascadeLayer: 'Pack', privateNote: 'Private body is not an identity' } }
   vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => {
     const path = String(url)
-    if (path.endsWith('/api/local-node/navigation/workspaces')) return Response.json(workshop)
+    if (path.endsWith('/api/selected-node/local-node/navigation/workspaces')) return Response.json(workshop)
     if (path.includes('/ViewDefinition/')) return Response.json({ renderPlan: plan })
     if (path.includes('/catalogue/definitions?kind=FormDefinition')) return Response.json({ entries: [entry], kindsUnavailable: [] })
     return Response.json([])
@@ -281,7 +281,7 @@ it.each(['missing', 'assets', 'unavailable', 'forms', 'empty'])('clears a stale 
   const declaration = structuredClone(accessFirst)
   if (item === 'forms') declaration.pack.seedWorkspaces = declaration.pack.seedWorkspaces.filter(workspace => workspace.id !== 'workshop')
   if (item === 'empty') { declaration.pack.seedWorkspaces = []; declaration.pack.panelSet = [] }
-  vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => String(url).endsWith('/api/local-node/navigation/workspaces') ? Response.json(declaration) : Response.json([])))
+  vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => String(url).endsWith('/api/selected-node/local-node/navigation/workspaces') ? Response.json(declaration) : Response.json([])))
   const { App } = await import('../App')
   const view = render(<App />)
   await waitFor(() => expect(view.container.querySelector('main h1')).toHaveTextContent('Assets'))

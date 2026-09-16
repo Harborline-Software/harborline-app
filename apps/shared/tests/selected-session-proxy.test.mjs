@@ -15,7 +15,9 @@ before(async () => {
       'X-Harborline-Audit-Id': 'server-audit-42',
       'Authorization': 'must-not-reach-browser',
     })
-    response.end(JSON.stringify({ principal, auditId: 'server-audit-42' }))
+    response.end(JSON.stringify(request.url.endsWith('/navigation/workspaces')
+      ? { configured: true, pack: { packId: principal, seedWorkspaces: [{ id: principal }] } }
+      : { principal, auditId: 'server-audit-42' }))
   })
   await new Promise(resolve => node.listen(0, '127.0.0.1', resolve))
   nodeOrigin = `http://127.0.0.1:${node.address().port}`
@@ -120,4 +122,15 @@ test('malformed and duplicate correlation headers refuse before upstream', async
     assert.equal(response.status, 400)
   }
   assert.equal(received.length, count)
+})
+
+test('navigation is tenant-isolated across concurrent selected sessions despite injected bootstrap bearer', async () => {
+  const results = await Promise.all(['tenant-a', 'tenant-b'].map(async tenant => {
+    const response = await fetch(`${appOrigin}/api/selected-node/local-node/navigation/workspaces`, { headers: {
+      Origin: appOrigin, Cookie: `__Host-hl-selected=${tenant}`, Authorization: 'Bearer first-administrator',
+    } })
+    return response.json()
+  }))
+  assert.deepEqual(results.map(result => result.pack.packId), ['__Host-hl-selected=tenant-a', '__Host-hl-selected=tenant-b'])
+  assert.ok(received.slice(-2).every(row => row.headers.authorization === undefined))
 })

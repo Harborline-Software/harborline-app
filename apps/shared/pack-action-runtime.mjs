@@ -1,5 +1,5 @@
-import { dispatchPackRequest } from './pack-request.mjs'
-import { send } from './selected-session-transport.mjs'
+import { dispatchPackRequest, preparePackRequest } from './pack-request.mjs'
+import { send, validCorrelationId, validRequestHeader } from './selected-session-transport.mjs'
 
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const supported = action => action?.dispatch?.schemaVersion === 1 && action.dispatch.kind === 'request'
@@ -28,9 +28,16 @@ export function normalizePackReceipt(response) {
 /** One controller per mounted view, shared by React and the browser-owned Blazor bridge. */
 export function createPackActionRuntime(transport = { send }, uuid = () => crypto.randomUUID()) {
   let state = { plan: null, rows: [], actions: [], selectedId: null, activeAction: null, inputPlan: null,
-    receipt: null, error: null, busy: false }
-  let invocation, fingerprint, generation = 0
+    receipt: null, error: null, busy: false, navigationRevision: 0, requestDetails: {}, requestLocked: false }
+  let fingerprint, generation = 0, requestEditRefused = false
   const snapshot = () => structuredClone(state)
+  function resetRequest() {
+    const pointers = Object.values(state.activeAction?.dispatch?.bindings ?? {})
+      .filter(binding => binding.source === 'invocation').map(binding => binding.pointer)
+    state.requestDetails = Object.fromEntries(['id', 'idempotencyKey', 'correlationId']
+      .filter(name => pointers.includes(`/${name}`)).map(name => [name, uuid()]))
+    state.requestLocked = false; fingerprint = undefined; requestEditRefused = false
+  }
   async function readEntry(kind, id, version) {
     if (!identifier(id) || (version !== undefined && !identifier(version))) throw Error('pack_definition_invalid')
     const response = await transport.send(`/api/local-node/catalogue/definitions/${kind}/${encodeURIComponent(id)}${version ? `?version=${encodeURIComponent(version)}` : ''}`)
@@ -61,7 +68,8 @@ export function createPackActionRuntime(transport = { send }, uuid = () => crypt
     async load(viewId) {
       const request = ++generation
       state = { plan: null, rows: [], actions: [], selectedId: null, activeAction: null, inputPlan: null,
-        receipt: null, error: null, busy: true }
+        receipt: null, error: null, busy: true, navigationRevision: state.navigationRevision, requestDetails: {}, requestLocked: false }
+      fingerprint = undefined
       try {
         const entry = await readEntry('ViewDefinition', viewId)
         if (request !== generation) return snapshot()
@@ -82,7 +90,7 @@ export function createPackActionRuntime(transport = { send }, uuid = () => crypt
     async begin(id) {
       if (state.busy) return snapshot()
       state.activeAction = state.actions.find(action => action.id === id) ?? null
-      state.inputPlan = null; state.error = null; state.receipt = null; invocation = undefined; fingerprint = undefined
+      state.inputPlan = null; state.error = null; state.receipt = null; resetRequest()
       if (!state.activeAction) { state.error = 'pack_action_unsupported'; return snapshot() }
       state.busy = true
       try {
@@ -97,21 +105,43 @@ export function createPackActionRuntime(transport = { send }, uuid = () => crypt
       finally { state.busy = false }
       return snapshot()
     },
+    setRequestDetails(entries) {
+      if (state.busy || state.requestLocked) return snapshot()
+      const expected = Object.keys(state.requestDetails), names = new Set()
+      if (!Array.isArray(entries) || entries.length !== expected.length || entries.some(entry => {
+        if (!Array.isArray(entry) || entry.length !== 2 || !expected.includes(entry[0])
+          || names.has(entry[0]) || typeof entry[1] !== 'string') return true
+        names.add(entry[0]); return false
+      })) { requestEditRefused = true; state.error = 'pack_request_details_invalid'; return snapshot() }
+      state.requestDetails = Object.fromEntries(entries); state.error = null; requestEditRefused = false
+      return snapshot()
+    },
+    newRequest() {
+      if (!state.busy && state.activeAction) { resetRequest(); state.error = null; state.receipt = null }
+      return snapshot()
+    },
     async invoke(values = {}, file) {
       if (state.busy || !state.activeAction) return snapshot()
       state.busy = true; state.error = null
       try {
+        if (requestEditRefused || Object.entries(state.requestDetails).some(([name, value]) => name === 'idempotencyKey'
+          ? !validRequestHeader('Idempotency-Key', value) : !validCorrelationId(value))) throw Error('pack_request_details_invalid')
         const selection = state.rows.find(row => row.id === state.selectedId)?.values
         const bytes = file instanceof Blob ? new Uint8Array(await file.arrayBuffer()) : file
         const digest = bytes ? Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))).join(',') : null
         const next = JSON.stringify({ values, selection, digest })
-        if (!invocation || fingerprint !== next) {
-          invocation = { id: uuid(), idempotencyKey: uuid(), correlationId: uuid() }; fingerprint = next
-        }
-        state.receipt = normalizePackReceipt(await dispatchPackRequest(state.activeAction, { input: values, selection, file: bytes, invocation }, transport))
+        if (fingerprint !== undefined && fingerprint !== next) throw Error('pack_request_changed_start_new')
+        const sources = { input: values, selection, file: bytes, invocation: state.requestDetails }
+        if (!preparePackRequest(state.activeAction, sources)) throw Error('pack_action_unsupported')
+        fingerprint = next; state.requestLocked = true
+        state.receipt = normalizePackReceipt(await dispatchPackRequest(state.activeAction, sources, transport))
         if (state.receipt.status >= 200 && state.receipt.status < 300 && state.activeAction.result?.refresh === 'data-source') {
           const receipt = state.receipt
           try { await refresh() } finally { state.receipt = receipt }
+        } else if (state.receipt.status >= 200 && state.receipt.status < 300 && state.activeAction.result?.refresh === 'view') {
+          const receipt = state.receipt, revision = state.navigationRevision
+          await this.load(state.plan.definitionId)
+          state.receipt = receipt; state.navigationRevision = revision + 1
         }
       } catch (error) { state.error = error.message }
       finally { state.busy = false }
