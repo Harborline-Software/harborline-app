@@ -17,16 +17,18 @@ export default defineConfig(({ mode }) => {
   // but is never one of the VITE_-prefixed values Vite inlines into client code. A token in a
   // bundle is a token in every browser cache that ever loaded the app.
   //
-  // Consequence, stated rather than hidden: the HTTP path is a DEV-SERVER capability. `vite
-  // build` output has no proxy, so a built bundle pointed at a real node is unauthenticated
-  // again. Giving these surfaces a browser-usable credential means adopting the node's
-  // web-client session, which is its own piece of work.
+  // This legacy bearer proxy remains development-only. The separate selected-session
+  // transport below runs in both development and the built-bundle preview host; it never
+  // receives this bearer or falls back to it when a selected session is missing.
   const sessionToken = env.LOCAL_NODE_SESSION_TOKEN
 
   return {
     plugins: [react(), {
       name: 'selected-session-node-transport',
       configureServer(server) {
+        if (origin) server.middlewares.use(createSelectedSessionProxy(origin))
+      },
+      configurePreviewServer(server) {
         if (origin) server.middlewares.use(createSelectedSessionProxy(origin))
       },
     }],
@@ -42,6 +44,7 @@ export default defineConfig(({ mode }) => {
           }
         : undefined,
     },
-    preview: { port: 5322 },
+    build: { manifest: true },
+    preview: { host: '127.0.0.1', port: 5322, strictPort: true, proxy: {} },
   }
 })
