@@ -3,7 +3,7 @@ import { createServer as createNodeServer } from 'node:http'
 import { test } from 'node:test'
 import { createServer, preview } from 'vite'
 
-for (const mode of ['dev', 'preview']) test(`${mode} host reaches selected sessions without inheriting bootstrap credentials`, async () => {
+for (const service of ['FORMS', 'AUTHORIZATION']) for (const mode of ['dev', 'preview']) test(`${mode} host reaches selected sessions with ${service} origin without inheriting bootstrap credentials`, async () => {
   const received = []
   const node = createNodeServer((request, response) => {
     received.push({ path: request.url, headers: request.headers })
@@ -13,9 +13,12 @@ for (const mode of ['dev', 'preview']) test(`${mode} host reaches selected sessi
     response.end(JSON.stringify({ cookie: request.headers.cookie }))
   })
   await new Promise(resolve => node.listen(0, '127.0.0.1', resolve))
-  const previousOrigin = process.env.VITE_FORMS_API_ORIGIN
+  const originKeys = ['FORMS', 'REPORTS', 'VIEWS', 'DATA_EXCHANGE', 'SCHEDULING', 'AUTHORIZATION']
+    .map(name => `VITE_${name}_API_ORIGIN`)
+  const previousOrigins = Object.fromEntries(originKeys.map(key => [key, process.env[key]]))
   const previousToken = process.env.LOCAL_NODE_SESSION_TOKEN
-  process.env.VITE_FORMS_API_ORIGIN = `http://127.0.0.1:${node.address().port}`
+  for (const key of originKeys) process.env[key] = ''
+  process.env[`VITE_${service}_API_ORIGIN`] = `http://127.0.0.1:${node.address().port}`
   process.env.LOCAL_NODE_SESSION_TOKEN = 'bootstrap-must-not-flow'
   let app
   try {
@@ -43,15 +46,27 @@ for (const mode of ['dev', 'preview']) test(`${mode} host reaches selected sessi
       assert.equal((await response.json()).cookie, `__Host-hl-selected=${principal}`)
     }))
     assert.deepEqual(received.map(item => item.path), ['/api/session/example', '/api/session/example'])
+    const vocabulary = await fetch(origin + '/api/selected-node/local-node/authorization/role-vocabulary', { headers: {
+      Origin: origin, Cookie: '__Host-hl-selected=administrator', Authorization: 'Bearer injected-bootstrap',
+    } })
+    assert.equal(vocabulary.status, 200)
+    assert.deepEqual(await vocabulary.json(), { cookie: '__Host-hl-selected=administrator' })
+    assert.equal(received.at(-1).path, '/api/local-node/authorization/role-vocabulary')
     assert.ok(received.every(item => item.headers.authorization === undefined))
+    const countBeforeMissingSession = received.length
+    const missingSession = await fetch(origin + '/api/selected-node/local-node/authorization/role-vocabulary', { headers: { Origin: origin } })
+    assert.equal(missingSession.status, 401)
+    assert.equal(received.length, countBeforeMissingSession, 'Authorization reads require a selected session even when a bootstrap token is configured.')
     if (mode === 'preview') {
       const count = received.length
       await fetch(origin + '/api/local-node/example')
       assert.equal(received.length, count, 'Preview must not inherit the legacy bearer proxy from server.proxy.')
     }
   } finally {
-    if (previousOrigin === undefined) delete process.env.VITE_FORMS_API_ORIGIN
-    else process.env.VITE_FORMS_API_ORIGIN = previousOrigin
+    for (const [key, value] of Object.entries(previousOrigins)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
     if (previousToken === undefined) delete process.env.LOCAL_NODE_SESSION_TOKEN
     else process.env.LOCAL_NODE_SESSION_TOKEN = previousToken
     await app?.close()

@@ -196,6 +196,7 @@
     {
         values = submitted;
         await InvokeAsync();
+        if (!disposed) await InvokeAsync(StateHasChanged);
         return null;
     }
 

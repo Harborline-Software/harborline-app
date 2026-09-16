@@ -17,6 +17,34 @@ const entry = { renderPlan: { definitionId: 'example', definitionKind: 'ViewDefi
   bindings: { viewKind: 'views.entity-list/grid', dataSource: source, actions: [action], parameters: {} } } }
 const reply = (body, status = 200) => ({ status, body: JSON.stringify(body), auditId: 'native-audit', correlationId: id })
 
+for (const listStatus of [200, 403])
+  test(`input-bound grant action submits without a selected row after list status ${listStatus}`, async () => {
+    const definition = structuredClone(entry), writes = []
+    const declared = definition.renderPlan.bindings.actions[0]
+    declared.input = { fields: { targetGrant: { type: 'text', required: true } }, overlay: {} }
+    declared.dispatch.bindings.id = { source: 'input', pointer: '/targetGrant' }
+    const runtime = createPackActionRuntime({ async send(path, method, body, _type, headers) {
+      if (path.includes('/catalogue/')) return reply(definition)
+      if (path.endsWith('/list')) return reply(listStatus === 200 ? { items: [] } : { code: 'authorization.permission_required' }, listStatus)
+      writes.push({ path, method, body, headers })
+      return reply({ code: 'authorization.permission_required', pointer: '/targetGrant' }, 403)
+    } }, () => id)
+    const loaded = await runtime.load('example')
+    assert.deepEqual(loaded.rows, [])
+    assert.equal(loaded.selectedId, null)
+    assert.equal(loaded.actions.length, 1)
+    const begun = await runtime.begin('opaque')
+    assert.equal(begun.inputPlan.bindings.fields.targetGrant.required, true)
+    const result = await runtime.invoke({ targetGrant: 'known-grant' })
+    assert.equal(writes.length, 1)
+    assert.equal(writes[0].body, '{"id":"known-grant"}')
+    assert.equal(writes[0].headers['X-Correlation-ID'], id)
+    assert.equal(result.receipt.status, 403)
+    assert.deepEqual(result.receipt.body, { code: 'authorization.permission_required', pointer: '/targetGrant' })
+    assert.equal(result.receipt.auditId, 'native-audit')
+    assert.equal(result.receipt.correlationId, id)
+  })
+
 for (const invalid of ['POST', 'PUT', 'PATCH', 'DELETE', 'missing-rows', 'missing-identity', 'invalid-rows', 'invalid-identity'])
   test(`automatic data source refuses ${invalid} before any dispatch and leaves controls inert`, async () => {
     const definition = structuredClone(entry)

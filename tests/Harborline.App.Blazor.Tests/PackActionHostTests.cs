@@ -10,6 +10,30 @@ public sealed class PackActionHostTests : BunitContext
 {
     private const string SafeFailure = "The selected-session request could not complete. No mutation was retried.";
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Input_bound_grant_action_submits_visible_field_without_rows_and_preserves_refusal(bool rowsRefused)
+    {
+        var browser = new BrowserRuntime { GrantInput = true, RowsRefused = rowsRefused };
+        Services.AddSingleton<IJSRuntime>(browser);
+        var component = Render<PackActionHost>(parameters => parameters.Add(view => view.ViewId, "access.holders"));
+        component.WaitForAssertion(() => Assert.Single(component.FindAll("input[name=targetGrant]")));
+        Assert.Empty(component.FindAll("tbody tr"));
+        if (rowsRefused) Assert.Contains("authorization.permission_required", component.Find("[role=alert]").TextContent, StringComparison.Ordinal);
+        var field = component.Find("input[name=targetGrant]");
+        Assert.True(field.HasAttribute("required"));
+        field.Input("known-grant");
+        component.Find("form").Submit();
+        Assert.True(browser.Calls.Contains("invoke"), component.Markup);
+        component.WaitForAssertion(() => Assert.True(component.Markup.Contains("Audit: native-audit", StringComparison.Ordinal), component.Markup));
+        Assert.Contains("Correlation: native-correlation", component.Markup, StringComparison.Ordinal);
+        Assert.Contains("authorization.permission_required", component.Markup, StringComparison.Ordinal);
+        Assert.Equal("known-grant", browser.Submitted!["targetGrant"]);
+        Assert.Single(browser.Calls, call => call == "invoke");
+        Assert.DoesNotContain("select", browser.Calls);
+    }
+
     [Fact]
     public void Configured_interop_deadline_is_not_disabled_by_owned_cancellation_tokens()
     {
@@ -168,6 +192,9 @@ public sealed class PackActionHostTests : BunitContext
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
         public List<string> Calls { get; } = [];
         public bool Details { get; init; }
+        public bool GrantInput { get; init; }
+        public bool RowsRefused { get; init; }
+        public IReadOnlyDictionary<string, object?>? Submitted { get; private set; }
         public string? FailingCall { get; init; }
         public bool TimeoutFailure { get; init; }
         public string? CancellationBlockedCall { get; init; }
@@ -215,11 +242,27 @@ public sealed class PackActionHostTests : BunitContext
             if (identifier == "setRequestDetails") Correlation = ((string[][])args![0]!)[0][1];
             if (identifier == "newRequest") locked = false;
             if (identifier == "invoke") locked = true;
+            if (identifier == "invoke" && GrantInput) Submitted = (IReadOnlyDictionary<string, object?>)args![0]!;
             var state = JsonSerializer.Deserialize<PackActionSnapshot>("""
                 {"plan":null,"rows":[],"selectedId":null,"activeAction":{"id":"opaque","label":"Apply change"},
                  "inputPlan":null,"receipt":null,"error":null,"busy":false}
                 """, JsonOptions)!;
             if (Details) state = state with { RequestDetails = new Dictionary<string, string> { ["correlationId"] = Correlation }, RequestLocked = locked };
+            if (GrantInput) state = state with
+            {
+                ActiveAction = new PackActionDeclaration("revoke", "Revoke grant", null),
+                Error = RowsRefused && identifier == "load" ? "authorization.permission_required" : null,
+                InputPlan = JsonSerializer.SerializeToElement(new
+                {
+                    definitionId = "revoke", definitionVersion = "1", definitionKind = "FormDefinition",
+                    bindings = new
+                    {
+                        fields = new { targetGrant = new { type = "text", required = true } },
+                        overlay = new { fields = new { targetGrant = new { label = "Grant ID" } },
+                            sections = new[] { new { id = "details", title = "Details", fields = new[] { "targetGrant" } } } },
+                    },
+                }),
+            };
             if (identifier == "invoke") state = state with { Receipt = new PackActionReceipt(403,
                 "authorization.permission_required", JsonSerializer.SerializeToElement(new { code = "authorization.permission_required" }),
                 "authorization.permission_required", "native-audit", Details ? Correlation : "native-correlation") };

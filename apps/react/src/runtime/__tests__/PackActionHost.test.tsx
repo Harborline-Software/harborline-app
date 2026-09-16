@@ -8,6 +8,38 @@ vi.mock('../../../../shared/selected-session-transport.mjs', async original => (
 }))
 afterEach(() => vi.clearAllMocks())
 
+it.each([200, 403])('submits a visible targetGrant input with no selectable rows after list status %s', async listStatus => {
+  const dispatch = { schemaVersion: 1, kind: 'request', descriptor: { id: 'authorization.grant.revoke.v1',
+    method: 'POST', routeTemplate: '/api/session/example/revoke', contentType: 'application/json',
+    audience: 'selected-session', requiresAntiforgery: true,
+    inputs: [{ name: 'target', kind: 'Text', placement: 'BodyField', wireName: 'targetGrant' }] },
+    bindings: { target: { source: 'input', pointer: '/targetGrant' } } }
+  const plan = { definitionHash: 'hash', definitionId: 'access.holders', definitionVersion: '1.0.2',
+    packKey: 'harborline.access-administration', packVersion: '1.1.3', definitionKind: 'ViewDefinition',
+    bindings: { viewKind: 'views.entity-list/grid', parameters: { entityType: 'AccessGrant', fields: [] },
+      dataSource: { descriptor: { id: 'example.list.v1', method: 'GET', routeTemplate: '/api/session/example/list',
+        contentType: 'application/json', audience: 'selected-session', requiresAntiforgery: false,
+        inputs: [], rowsPointer: '/items', rowIdentityPointer: '/targetGrant' }, bindings: {} },
+      actions: [{ id: 'revoke', label: 'Revoke grant', operation: 'access.grant.revoke', dispatch,
+        input: { fields: { targetGrant: { type: 'text', required: true } }, overlay: { fields: { targetGrant: { label: 'Grant ID' } } } } }] } }
+  send.mockImplementation(async (path: string) => path.includes('/catalogue/')
+    ? { status: 200, body: JSON.stringify({ renderPlan: plan }) }
+    : path.endsWith('/list') ? { status: listStatus, body: JSON.stringify(listStatus === 200 ? { items: [] } : { code: 'authorization.permission_required' }) }
+      : { status: 403, body: '{"code":"authorization.permission_required","pointer":"/targetGrant"}', auditId: 'grant-audit', correlationId: 'grant-correlation' })
+  render(<PackActionHost viewId="access.holders" />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Revoke grant' }))
+  const field = await screen.findByRole('textbox', { name: /Grant ID/ })
+  expect(field).toBeRequired()
+  fireEvent.change(field, { target: { value: 'known-grant' } })
+  fireEvent.submit(field.closest('form')!)
+  expect(await screen.findByText('Audit: grant-audit')).toBeInTheDocument()
+  expect(screen.getByText('Correlation: grant-correlation')).toBeInTheDocument()
+  expect(screen.getByText('{"code":"authorization.permission_required","pointer":"/targetGrant"}')).toBeInTheDocument()
+  const writes = send.mock.calls.filter(call => call[1] === 'POST')
+  expect(writes).toHaveLength(1)
+  expect(JSON.parse(writes[0][2])).toEqual({ targetGrant: 'known-grant' })
+})
+
 it('renders a generic declared action and preserves the actual refusal evidence', async () => {
   const dispatch = { schemaVersion: 1, kind: 'request', descriptor: { id: 'example.apply.v1',
     method: 'POST', routeTemplate: '/api/session/example/apply', contentType: 'application/json',
