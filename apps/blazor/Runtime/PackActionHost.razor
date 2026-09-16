@@ -3,6 +3,7 @@
 @using Harborline.UIAdapters.Blazor.Components.Forms
 @using Microsoft.JSInterop
 @inject IJSRuntime Javascript
+@inject Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Components.Server.CircuitOptions> CircuitOptions
 @implements IAsyncDisposable
 
 <section aria-label="Pack actions">
@@ -67,89 +68,128 @@
 @code {
     [Parameter, EditorRequired] public string ViewId { get; set; } = string.Empty;
     [Parameter] public EventCallback NavigationChanged { get; set; }
+    [Parameter] public CancellationToken CancellationToken { get; set; }
+    private const string InteropFailure = "The selected-session request could not complete. No mutation was retried.";
+    private readonly CancellationTokenSource lifetime = new();
     private IJSObjectReference? module;
     private IJSObjectReference? runtime;
     private PackActionSnapshot? snapshot;
     private IReadOnlyDictionary<string, object?> values = new Dictionary<string, object?>();
     private ElementReference fileElement;
-    private string? loadedView;
+    private string? attemptedView;
     private string? error;
     private bool busy;
     private bool disposed;
     private int actionKey;
 
+    private CancellationTokenSource StartRequest(CancellationToken caller)
+    {
+        var request = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, caller);
+        // Passing a token to JS interop replaces its default timeout. Keep the configured
+        // deadline, but distinguish it from cancellation actually owned by this host/caller.
+        request.CancelAfter(CircuitOptions.Value.JSInteropDefaultCallTimeout);
+        return request;
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (loadedView == ViewId || disposed) return;
-        loadedView = ViewId;
-        busy = true;
+        if (attemptedView == ViewId || disposed) return;
+        attemptedView = ViewId;
+        await LoadViewAsync(recreate: true);
+        if (!disposed) StateHasChanged();
+    }
+
+    private async Task LoadViewAsync(bool recreate)
+    {
+        var caller = CancellationToken;
+        using var request = StartRequest(caller);
+        busy = true; error = null;
         try
         {
-            var imported = module ?? await Javascript.InvokeAsync<IJSObjectReference>("import", "./pack-action-runtime.mjs");
-            if (disposed) { await imported.DisposeAsync(); return; }
-            module = imported;
-            if (runtime is not null) { await runtime.InvokeVoidAsync("dispose"); await runtime.DisposeAsync(); }
-            var created = await module.InvokeAsync<IJSObjectReference>("createPackActionRuntime");
-            if (disposed) { await created.InvokeVoidAsync("dispose"); await created.DisposeAsync(); return; }
-            runtime = created;
-            var next = await runtime.InvokeAsync<PackActionSnapshot>("load", ViewId);
+            request.Token.ThrowIfCancellationRequested();
+            if (recreate || runtime is null)
+            {
+                if (runtime is not null) { await runtime.InvokeVoidAsync("dispose"); await runtime.DisposeAsync(); runtime = null; }
+                if (module is not null) { await module.DisposeAsync(); module = null; }
+                snapshot = null;
+                var imported = await Javascript.InvokeAsync<IJSObjectReference>("import", request.Token, "./pack-action-runtime.mjs");
+                if (disposed) { await imported.DisposeAsync(); return; }
+                module = imported;
+                var created = await module.InvokeAsync<IJSObjectReference>("createPackActionRuntime", request.Token);
+                if (disposed) { await created.InvokeVoidAsync("dispose"); await created.DisposeAsync(); return; }
+                runtime = created;
+            }
+            var next = await runtime.InvokeAsync<PackActionSnapshot>("load", request.Token, ViewId);
             if (!disposed) snapshot = next;
         }
-        catch (JSException exception) { error = exception.Message; }
+        catch (JSException) { error = InteropFailure; }
+        catch (OperationCanceledException) when (!lifetime.IsCancellationRequested && !caller.IsCancellationRequested) { error = InteropFailure; }
         finally { busy = false; }
-        if (!disposed) StateHasChanged();
     }
 
     private async Task SelectAsync(string id)
     {
-        try { if (!disposed && runtime is not null && !busy) snapshot = await runtime.InvokeAsync<PackActionSnapshot>("select", id); }
-        catch (JSException exception) { error = exception.Message; }
+        if (disposed || runtime is null || busy) return;
+        var caller = CancellationToken;
+        using var request = StartRequest(caller);
+        try { request.Token.ThrowIfCancellationRequested(); snapshot = await runtime.InvokeAsync<PackActionSnapshot>("select", request.Token, id); }
+        catch (JSException) { error = InteropFailure; }
+        catch (OperationCanceledException) when (!lifetime.IsCancellationRequested && !caller.IsCancellationRequested) { error = InteropFailure; }
     }
 
     private async Task ReloadAsync()
     {
-        if (disposed || runtime is null || busy) return;
-        busy = true; error = null;
-        try { snapshot = await runtime.InvokeAsync<PackActionSnapshot>("load", ViewId); }
-        catch (JSException exception) { error = exception.Message; }
-        finally { busy = false; }
+        if (disposed || busy) return;
+        await LoadViewAsync(recreate: runtime is null);
     }
 
     private async Task BeginAsync(string id)
     {
         if (disposed || runtime is null || busy) return;
+        var caller = CancellationToken;
+        using var request = StartRequest(caller);
         busy = true; error = null; values = new Dictionary<string, object?>(); actionKey++;
-        try { snapshot = await runtime.InvokeAsync<PackActionSnapshot>("begin", id); }
-        catch (JSException exception) { error = exception.Message; }
+        try { request.Token.ThrowIfCancellationRequested(); snapshot = await runtime.InvokeAsync<PackActionSnapshot>("begin", request.Token, id); }
+        catch (JSException) { error = InteropFailure; }
+        catch (OperationCanceledException) when (!lifetime.IsCancellationRequested && !caller.IsCancellationRequested) { error = InteropFailure; }
         finally { busy = false; }
     }
 
     private async Task InvokeAsync()
     {
         if (disposed || runtime is null || busy) return;
+        var caller = CancellationToken;
+        using var request = StartRequest(caller);
         busy = true; error = null;
         var revision = snapshot?.NavigationRevision ?? 0;
-        try { snapshot = snapshot?.ActiveAction?.FileInput is not null
-            ? await runtime.InvokeAsync<PackActionSnapshot>("invokeWithFile", values, fileElement)
-            : await runtime.InvokeAsync<PackActionSnapshot>("invoke", values);
+        try { request.Token.ThrowIfCancellationRequested(); snapshot = snapshot?.ActiveAction?.FileInput is not null
+            ? await runtime.InvokeAsync<PackActionSnapshot>("invokeWithFile", request.Token, values, fileElement)
+            : await runtime.InvokeAsync<PackActionSnapshot>("invoke", request.Token, values);
             if (!disposed && snapshot.NavigationRevision != revision) await NavigationChanged.InvokeAsync(); }
-        catch (JSException exception) { error = exception.Message; }
+        catch (JSException) { error = InteropFailure; }
+        catch (OperationCanceledException) when (!lifetime.IsCancellationRequested && !caller.IsCancellationRequested) { error = InteropFailure; }
         finally { busy = false; }
     }
 
     private async Task SetRequestDetailAsync(string name, string value)
     {
         if (disposed || runtime is null || busy || snapshot?.RequestDetails is not { } details || snapshot.RequestLocked) return;
+        var caller = CancellationToken;
+        using var request = StartRequest(caller);
         var entries = details.Select(pair => new[] { pair.Key, pair.Key == name ? value : pair.Value }).ToArray();
-        try { snapshot = await runtime.InvokeAsync<PackActionSnapshot>("setRequestDetails", (object)entries); }
-        catch (JSException exception) { error = exception.Message; }
+        try { request.Token.ThrowIfCancellationRequested(); snapshot = await runtime.InvokeAsync<PackActionSnapshot>("setRequestDetails", request.Token, (object)entries); }
+        catch (JSException) { error = InteropFailure; }
+        catch (OperationCanceledException) when (!lifetime.IsCancellationRequested && !caller.IsCancellationRequested) { error = InteropFailure; }
     }
 
     private async Task NewRequestAsync()
     {
         if (disposed || runtime is null || busy) return;
-        try { snapshot = await runtime.InvokeAsync<PackActionSnapshot>("newRequest"); }
-        catch (JSException exception) { error = exception.Message; }
+        var caller = CancellationToken;
+        using var request = StartRequest(caller);
+        try { request.Token.ThrowIfCancellationRequested(); snapshot = await runtime.InvokeAsync<PackActionSnapshot>("newRequest", request.Token); }
+        catch (JSException) { error = InteropFailure; }
+        catch (OperationCanceledException) when (!lifetime.IsCancellationRequested && !caller.IsCancellationRequested) { error = InteropFailure; }
     }
 
     private async ValueTask<SchemaFormValidationResult?> SubmitAsync(IReadOnlyDictionary<string, object?> submitted)
@@ -163,11 +203,13 @@
     {
         if (disposed) return;
         disposed = true;
+        await lifetime.CancelAsync();
         try
         {
             if (runtime is not null) { await runtime.InvokeVoidAsync("dispose"); await runtime.DisposeAsync(); }
             if (module is not null) await module.DisposeAsync();
         }
         catch (JSDisconnectedException) { }
+        finally { lifetime.Dispose(); }
     }
 }

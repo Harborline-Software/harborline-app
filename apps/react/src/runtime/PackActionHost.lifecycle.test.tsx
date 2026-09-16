@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { send } from '../../../shared/selected-session-transport.mjs'
 import { PackActionHost } from './PackActionHost'
 
@@ -60,4 +61,24 @@ it('StrictMode remount creates a live runtime after the previous effect is dispo
   vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => response(String(url))))
   render(<StrictMode><PackActionHost viewId="example" /></StrictMode>)
   expect(await screen.findByRole('button', { name: 'Apply' })).toBeEnabled()
+})
+
+it('reopening the same file action clears the native picker and accepts the same file again', async () => {
+  const filePlan = { ...plan, bindings: { ...plan.bindings,
+    actions: plan.bindings.actions.map(action => ({ ...action, fileInput: { accept: '.json' } })) } }
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ renderPlan: filePlan })))
+  const user = userEvent.setup()
+  render(<PackActionHost viewId="example" />)
+  await user.click(await screen.findByRole('button', { name: 'Apply' }))
+  const file = new File(['{}'], 'replacement.json', { type: 'application/json' })
+  await user.upload(await screen.findByLabelText('Package file'), file)
+  expect(screen.getAllByRole('button', { name: 'Apply' }).at(-1)).toBeEnabled()
+  await user.click(screen.getAllByRole('button', { name: 'Apply' })[0])
+  const reopened = await screen.findByLabelText<HTMLInputElement>('Package file')
+  expect(reopened.files).toHaveLength(0)
+  expect(reopened.value).toBe('')
+  expect(screen.getAllByRole('button', { name: 'Apply' }).at(-1)).toBeDisabled()
+  await user.upload(reopened, file)
+  expect(reopened.files?.[0]).toBe(file)
+  expect(screen.getAllByRole('button', { name: 'Apply' }).at(-1)).toBeEnabled()
 })

@@ -8,6 +8,100 @@ namespace Harborline.App.Blazor.Tests;
 
 public sealed class PackActionHostTests : BunitContext
 {
+    private const string SafeFailure = "The selected-session request could not complete. No mutation was retried.";
+
+    [Fact]
+    public void Configured_interop_deadline_is_not_disabled_by_owned_cancellation_tokens()
+    {
+        Services.Configure<Microsoft.AspNetCore.Components.Server.CircuitOptions>(options => options.JSInteropDefaultCallTimeout = TimeSpan.Zero);
+        var browser = new BrowserRuntime { CancellationBlockedCall = "import" };
+        Services.AddSingleton<IJSRuntime>(browser);
+        var component = Render<PackActionHost>(parameters => parameters.Add(view => view.ViewId, "example"));
+        component.WaitForAssertion(() => Assert.Contains(SafeFailure, component.Find("[role=alert]").TextContent, StringComparison.Ordinal));
+        Assert.DoesNotContain("invoke", browser.Calls);
+    }
+
+    [Theory]
+    [InlineData("import", false)]
+    [InlineData("import", true)]
+    [InlineData("invoke", false)]
+    [InlineData("invoke", true)]
+    public async Task Owned_cancellation_stays_cancelled_without_a_visible_timeout_or_replay(string blockedCall, bool dispose)
+    {
+        using var caller = new CancellationTokenSource();
+        var browser = new BrowserRuntime { CancellationBlockedCall = blockedCall };
+        Services.AddSingleton<IJSRuntime>(browser);
+        var component = Render<PackActionHost>(parameters => parameters
+            .Add(view => view.ViewId, "example").Add(view => view.CancellationToken, caller.Token));
+        Task? click = null;
+        if (blockedCall == "invoke")
+        {
+            component.WaitForAssertion(() => Assert.Equal("Apply change", component.Find("button").TextContent));
+            click = component.Find("button").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        }
+        await browser.CancellationEntered.Task;
+        if (dispose) await component.Instance.DisposeAsync();
+        else await caller.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => browser.CancellationWork!);
+        if (click is not null) await click;
+        await component.InvokeAsync(() => Task.CompletedTask);
+        Assert.True(browser.ObservedToken.IsCancellationRequested);
+        Assert.Empty(component.FindAll("[role=alert]"));
+        Assert.Equal(1, browser.Calls.Count(call => call == blockedCall));
+    }
+
+    [Theory]
+    [InlineData("import")]
+    [InlineData("createPackActionRuntime")]
+    [InlineData("load")]
+    public void Unowned_initialization_timeout_is_visible_and_explicitly_retryable(string failingCall)
+    {
+        var browser = new BrowserRuntime { FailingCall = failingCall, TimeoutFailure = true };
+        Services.AddSingleton<IJSRuntime>(browser);
+        var component = Render<PackActionHost>(parameters => parameters.Add(view => view.ViewId, "example"));
+        component.WaitForAssertion(() => Assert.Contains(SafeFailure, component.Find("[role=alert]").TextContent, StringComparison.Ordinal));
+        Assert.Equal(1, browser.Calls.Count(call => call == failingCall));
+        component.Find("button").Click();
+        component.WaitForAssertion(() => Assert.Equal("Apply change", component.Find("button").TextContent));
+        Assert.Equal(2, browser.Calls.Count(call => call == failingCall));
+        Assert.DoesNotContain("invoke", browser.Calls);
+    }
+
+    [Fact]
+    public void Unowned_action_timeout_is_visible_and_reload_never_replays_the_mutation()
+    {
+        var browser = new BrowserRuntime { FailingCall = "invoke", TimeoutFailure = true };
+        Services.AddSingleton<IJSRuntime>(browser);
+        var component = Render<PackActionHost>(parameters => parameters.Add(view => view.ViewId, "example"));
+        component.WaitForAssertion(() => Assert.Equal("Apply change", component.Find("button").TextContent));
+        component.Find("button").Click();
+        component.WaitForAssertion(() => Assert.Contains(SafeFailure, component.Find("[role=alert]").TextContent, StringComparison.Ordinal));
+        component.Find("[role=alert] button").Click();
+        component.WaitForAssertion(() => Assert.Empty(component.FindAll("[role=alert]")));
+        Assert.Single(browser.Calls, call => call == "invoke");
+        Assert.Equal(2, browser.Calls.Count(call => call == "load"));
+    }
+
+    [Theory]
+    [InlineData("import")]
+    [InlineData("createPackActionRuntime")]
+    public void Failed_initialization_recovers_only_after_explicit_reload_with_fresh_import(string failingCall)
+    {
+        var browser = new BrowserRuntime { FailingCall = failingCall };
+        Services.AddSingleton<IJSRuntime>(browser);
+        var component = Render<PackActionHost>(parameters => parameters.Add(view => view.ViewId, "example"));
+        component.WaitForAssertion(() => Assert.Contains("Reload view", component.Find("[role=alert]").TextContent, StringComparison.Ordinal));
+        Assert.Contains(SafeFailure, component.Markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Private browser", component.Markup, StringComparison.Ordinal);
+        Assert.Equal(1, browser.Calls.Count(call => call == failingCall));
+        Assert.DoesNotContain("invoke", browser.Calls);
+        component.Find("button").Click();
+        component.WaitForAssertion(() => Assert.Equal("Apply change", component.Find("button").TextContent));
+        Assert.Equal(2, browser.Calls.Count(call => call == "import"));
+        Assert.Single(browser.Calls, call => call == "load");
+        Assert.DoesNotContain("invoke", browser.Calls);
+    }
+
     [Fact]
     public async Task Disposal_revokes_the_browser_runtime_before_releasing_its_reference()
     {
@@ -74,6 +168,13 @@ public sealed class PackActionHostTests : BunitContext
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
         public List<string> Calls { get; } = [];
         public bool Details { get; init; }
+        public string? FailingCall { get; init; }
+        public bool TimeoutFailure { get; init; }
+        public string? CancellationBlockedCall { get; init; }
+        public TaskCompletionSource CancellationEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task? CancellationWork { get; private set; }
+        public CancellationToken ObservedToken { get; private set; }
+        private bool failed;
         public string? DelayedCall { get; init; }
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public string Correlation { get; private set; } = "43300000-0000-4000-8000-000000000010";
@@ -86,6 +187,24 @@ public sealed class PackActionHostTests : BunitContext
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args)
         {
             Calls.Add(identifier);
+            if (identifier == CancellationBlockedCall)
+            {
+                ObservedToken = cancellationToken;
+                CancellationEntered.TrySetResult();
+                try
+                {
+                    var work = AwaitCancellationAsync<TValue>(cancellationToken);
+                    CancellationWork = work;
+                    return new ValueTask<TValue>(work);
+                }
+                catch (JSException) { throw; }
+            }
+            if (identifier == FailingCall && !failed)
+            {
+                failed = true;
+                if (TimeoutFailure) return ValueTask.FromCanceled<TValue>(new CancellationToken(true));
+                throw new JSException("Private browser initialization detail");
+            }
             if (identifier == DelayedCall)
             {
                 try { return new ValueTask<TValue>(ReleaseReferenceAsync<TValue>()); }
@@ -111,6 +230,11 @@ public sealed class PackActionHostTests : BunitContext
         {
             await Release.Task;
             return (TValue)(object)this;
+        }
+        private static async Task<TValue> AwaitCancellationAsync<TValue>(CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return default!;
         }
     }
 }

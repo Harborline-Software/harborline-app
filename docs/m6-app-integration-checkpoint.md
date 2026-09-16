@@ -62,3 +62,46 @@ Local evidence lives under `artifacts/m6-integration/`:
 Remaining release work: independent review; pin the released T427 Platform SHA;
 rebuild both feeds from that exact source; run the full App gate and the clean-node
 two-person/browser acceptance. No M8/M9 work or release claim is included here.
+
+## Mounted host review repairs (2026-09-16)
+
+Three independently reproduced defects were repaired on top of `9617a9f`:
+
+- Blazor initialization records an attempted view without treating failed import or
+  runtime creation as a usable runtime. Explicit Reload performs fresh initialization;
+  it never replays an action automatically.
+- Blazor interop failures display fixed safe text rather than exception prose.
+  Unowned cancellation/timeout becomes that visible failure; actual caller/lifetime
+  cancellation remains cancellation. Linked interop tokens retain the configured
+  circuit timeout. Host disposal still revokes the shared JavaScript runtime before
+  reference release; canceling a .NET await alone does not claim to undo browser work.
+- React keys form/file inputs per action opening. Reopening clears native file state,
+  and selecting the same File again enables submission.
+
+Mounted red tests reproduced import/create recovery failures (2), unowned interop
+timeouts (4), disabled configured deadline (1), and retained native file selection
+(1). The final mounted Blazor host suite passes all 16 cases, including caller and
+lifetime cancellation controls. No mutation retry was introduced.
+
+The final rerun uses the same provisional feeds described above:
+
+- Shared Node: 61 passed.
+- React: 137 passed, one existing live skip, 18 files passed.
+- Blazor Release: 210 passed, one existing live skip, 211 total.
+- React typecheck/build, dev/preview proxy and bundle checks (2), Blazor Release
+  publish, and whitespace check all passed.
+
+Preserved evidence under `artifacts/m6-integration/`:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `p2-full-react-v2.log` | `ca1c09ae854623a0833f20fac009caf8005794db5ff137270d35024de14778a5` |
+| `p2-blazor/full-v2.trx` | `f43b83c34d44e2d6e3b9295562dfa4f629e0aabd4793a2903eb56625cef5a962` |
+| `p2-preview-v2.log` | `7bb9fead9338fc3f8788320b476b16bdb4bf3981e0c734a08eeef387c849bdda` |
+| `p2-file-red.log` | `82bbd148bf7faa05a7442b9a94899731d87ebc8ecb8b05931cf9239b3bab0a60` |
+| `p2-blazor/init-red.trx` | `b86ce27cbab19f3e34eb2b6117f819fffa8d110066933cc666352f92746d8ad5` |
+| `p2-blazor/timeout-red.trx` | `8fd79ecc1269bccaaea012f2af639e08db6f6f7c9e6a6f753597b2c32fb28eb9` |
+| `p2-blazor/deadline-red.trx` | `7239a05b8fd323ded95ea2e153c29a54b9c937cd0b74d26a1d3874a56e9bfd12` |
+| `p2-blazor/deadline-green.trx` | `af4fb8d2f58d097719b49f1a9b07339df193967278377fdfbbbca2621a89f0cd` |
+
+The Platform pin and release/acceptance boundary remain unchanged.

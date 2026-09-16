@@ -9,6 +9,7 @@ export function PackActionHost({ viewId, onNavigationChanged }: { readonly viewI
   const [state, setState] = useState<PackRuntimeState | null>(null)
   const [values, setValues] = useState<Readonly<Record<string, unknown>>>({})
   const [file, setFile] = useState<File>()
+  const [actionKey, setActionKey] = useState(0)
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     const current = createPackActionRuntime()
@@ -21,7 +22,7 @@ export function PackActionHost({ viewId, onNavigationChanged }: { readonly viewI
   const begin = async (id: string) => {
     const current = runtime.current
     if (!current) return
-    setBusy(true); setValues({}); setFile(undefined)
+    setBusy(true); setValues({}); setFile(undefined); setActionKey(value => value + 1)
     try { const next = await current.begin(id); if (runtime.current === current) setState(next) }
     finally { if (runtime.current === current) setBusy(false) }
   }
@@ -62,13 +63,13 @@ export function PackActionHost({ viewId, onNavigationChanged }: { readonly viewI
         </fieldset>
         <button type="button" disabled={busy} onClick={() => { if (runtime.current) setState(runtime.current.newRequest()) }}>New request</button>
       </details>}
-      {form ? <SchemaForm key={state.activeAction.id} view={form} values={values} onValuesChange={setValues}
+      {form ? <SchemaForm key={actionKey} view={form} values={values} onValuesChange={setValues}
         disabled={busy} strings={{ submit: state.activeAction.label, submitting: state.activeAction.label }}
         onSubmit={async input => { await invoke(input) }} />
         : <fieldset disabled={busy}>
           <legend>{state.activeAction.label}</legend>
           {state.activeAction.fileInput && <label>Package file
-            <input key={state.activeAction.id} type="file" accept={state.activeAction.fileInput.accept}
+            <input key={actionKey} type="file" accept={state.activeAction.fileInput.accept}
               onChange={event => setFile(event.target.files?.[0])} />
           </label>}
           <button type="button" disabled={!!state.activeAction.fileInput && !file} onClick={() => { void invoke() }}>{state.activeAction.label}</button>
