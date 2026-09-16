@@ -75,12 +75,14 @@ test('mutation forwards only the selected cookie and the browser antiforgery tok
   const response = await request('__Host-hl-selected=alice; __Host-hl-install=installation-admin', {
     method: 'POST', body: '{}', headers: {
       'Content-Type': 'application/json', 'X-Harborline-Antiforgery': 'one-time-token',
+      'Idempotency-Key': 'example-submit-v1',
       'X-Untrusted-Actor': 'administrator',
     },
   })
   assert.equal(response.status, 200)
   const last = received.at(-1)
   assert.equal(last.headers['x-harborline-antiforgery'], 'one-time-token')
+  assert.equal(last.headers['idempotency-key'], 'example-submit-v1')
   assert.equal(last.headers['x-untrusted-actor'], undefined)
   assert.equal(last.headers.cookie, '__Host-hl-selected=alice')
 })
@@ -97,4 +99,13 @@ test('raw path escapes cannot select another upstream route or target', async ()
       { writeHead(code) { status = code; return this }, end() {} }, () => assert.fail('escaped proxy namespace'))
     assert.equal(status, 400, path)
   }
+})
+
+test('joined duplicate idempotency headers refuse before upstream', async () => {
+  const count = received.length
+  const response = await request('__Host-hl-selected=alice', {
+    headers: { 'Idempotency-Key': 'first, second' },
+  })
+  assert.equal(response.status, 400)
+  assert.equal(received.length, count)
 })

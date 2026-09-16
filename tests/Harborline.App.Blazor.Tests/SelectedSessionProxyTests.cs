@@ -61,6 +61,28 @@ public sealed class SelectedSessionProxyTests
         Assert.Equal(400, context.Response.StatusCode);
     }
 
+    [Fact]
+    public async Task Safe_idempotency_header_is_forwarded_without_any_credential_override()
+    {
+        using var proxy = new SelectedSessionProxy(new Uri("https://node.example"), new HttpMessageInvoker(new NodeHandler("example-submit-v1")));
+        var context = Context("alice");
+        context.Request.Method = "POST";
+        context.Request.Headers["X-Harborline-Antiforgery"] = "server-token";
+        context.Request.Headers["Idempotency-Key"] = "example-submit-v1";
+        await proxy.ForwardAsync(context);
+        Assert.Equal(200, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Duplicate_idempotency_headers_refuse_before_upstream()
+    {
+        using var proxy = new SelectedSessionProxy(new Uri("https://node.example"), new HttpMessageInvoker(new NeverSendHandler()));
+        var context = Context("alice");
+        context.Request.Headers["Idempotency-Key"] = new Microsoft.Extensions.Primitives.StringValues(["first", "second"]);
+        await proxy.ForwardAsync(context);
+        Assert.Equal(400, context.Response.StatusCode);
+    }
+
     private static DefaultHttpContext Context(string selected)
     {
         var context = new DefaultHttpContext();
@@ -81,13 +103,14 @@ public sealed class SelectedSessionProxyTests
             throw new InvalidOperationException("Refused requests must not contact the node.");
     }
 
-    private sealed class NodeHandler : HttpMessageHandler
+    private sealed class NodeHandler(string? expectedRequestId = null) : HttpMessageHandler
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Assert.Equal("https://node.example/api/local-node/records/entities/example", request.RequestUri!.AbsoluteUri);
             Assert.Null(request.Headers.Authorization);
             Assert.False(request.Headers.Contains("X-Untrusted-Actor"));
+            if (expectedRequestId is not null) Assert.Equal(expectedRequestId, Assert.Single(request.Headers.GetValues("Idempotency-Key")));
             var cookie = Assert.Single(request.Headers.GetValues("Cookie"));
             Assert.DoesNotContain("legacy-admin", cookie, StringComparison.Ordinal);
             await Task.Delay(cookie.Contains("alice", StringComparison.Ordinal) ? 15 : 1, cancellationToken);

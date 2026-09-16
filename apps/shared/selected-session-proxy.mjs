@@ -37,9 +37,13 @@ export function createSelectedSessionProxy(nodeOrigin) {
     const token = request.headers[antiforgeryHeader]
     if (!read && (typeof token !== 'string' || !/^[A-Za-z0-9_-]{1,256}$/.test(token)))
       return refuse(403, 'selected_session_antiforgery_required')
+    const requestId = request.headers['idempotency-key']
+    if (requestId !== undefined && (typeof requestId !== 'string' || !/^[A-Za-z0-9._:-]{1,128}$/.test(requestId)))
+      return refuse(400, 'selected_session_headers_invalid')
 
     // Positive allowlist: neither inbound Authorization nor server bootstrap credentials can flow.
     const headers = { Cookie: cookies[0], Accept: 'application/json' }
+    if (requestId !== undefined) headers['Idempotency-Key'] = requestId
     if (!read) headers[antiforgeryHeader] = token
     if (request.headers['content-type']) headers['Content-Type'] = request.headers['content-type']
     try {

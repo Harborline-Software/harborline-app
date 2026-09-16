@@ -2,6 +2,24 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createSelectedSessionTransport } from '../selected-session-transport.mjs'
 
+test('forwards only the declared safe idempotency header and refuses credential overrides before issuance', async () => {
+  let calls = 0
+  const transport = createSelectedSessionTransport(async (path, options) => {
+    calls++
+    if (path.endsWith('/antiforgery')) return new Response(null, { status: 204,
+      headers: { 'X-Harborline-Antiforgery': 'server-token' } })
+    assert.equal(options.headers['Idempotency-Key'], 'example-submit-v1')
+    return new Response('{}')
+  })
+  for (const header of ['Authorization', 'Cookie', 'X-Harborline-Antiforgery', 'X-Forwarded-Host', 'idempotency-key']) {
+    await assert.rejects(transport.send('/api/session/actions/apply', 'POST', '{}', 'application/json', { [header]: 'unsafe' }),
+      /selected_session_headers_invalid/)
+  }
+  assert.equal(calls, 0)
+  await transport.send('/api/session/actions/apply', 'POST', '{}', 'application/json', { 'Idempotency-Key': 'example-submit-v1' })
+  assert.equal(calls, 2)
+})
+
 test('serializes one-time antiforgery issuance and mutations, including a denial', async () => {
   const sent = []
   let token = 0

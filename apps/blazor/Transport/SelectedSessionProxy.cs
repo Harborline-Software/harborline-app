@@ -12,6 +12,7 @@ public sealed class SelectedSessionProxy : IDisposable
     private const string AntiforgeryHeader = "X-Harborline-Antiforgery";
     private const int MaximumBodyBytes = 10 * 1024 * 1024;
     private static readonly Regex Token = new("^[A-Za-z0-9_-]{1,256}$", RegexOptions.CultureInvariant);
+    private static readonly Regex RequestId = new("^[A-Za-z0-9._:-]{1,128}$", RegexOptions.CultureInvariant);
     private static readonly Regex PathEscape = new(@"[\\#\x00-\x20]|%2e|%2f|%5c", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly string[] ResponseHeaders = [AntiforgeryHeader, "X-Harborline-Audit-Id", "X-Harborline-Audit-Correlation", "X-Correlation-Id"];
     private readonly Uri _origin;
@@ -79,7 +80,14 @@ public sealed class SelectedSessionProxy : IDisposable
             return;
         }
 
+        var requestIds = request.Headers["Idempotency-Key"];
+        if (requestIds.Count > 1 || (requestIds.Count == 1 && !RequestId.IsMatch(requestIds.ToString())))
+        {
+            await RefuseAsync(context, 400, "selected_session_headers_invalid");
+            return;
+        }
         using var outgoing = new HttpRequestMessage(new HttpMethod(request.Method), new Uri(_origin, "/api/" + path));
+        if (requestIds.Count == 1) outgoing.Headers.Add("Idempotency-Key", requestIds.ToString());
         outgoing.Headers.Add("Cookie", cookies[0]);
         outgoing.Headers.Add("Accept", "application/json");
         if (!read)

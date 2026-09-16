@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <ItemGroup>
     <Content Include="../shared/selected-session-transport.mjs" Link="wwwroot/selected-session-transport.mjs" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../shared/pack-request.mjs" Link="wwwroot/pack-request.mjs" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <!-- src/Harborline.App.Blazor was referenced here but never rendered: this host composes the
