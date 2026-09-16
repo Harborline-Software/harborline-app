@@ -4,6 +4,7 @@ export interface PackRequestSources {
   selection?: Readonly<Record<string, unknown>>
   input?: Readonly<Record<string, unknown>>
   file?: ArrayBuffer | Uint8Array | Blob
+  invocation?: Readonly<{ id?: string; idempotencyKey?: string; correlationId?: string }>
 }
 export interface PreparedPackRequest {
   path: string

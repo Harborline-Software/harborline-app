@@ -80,3 +80,16 @@ test('binary whole-body input preserves bytes and cannot masquerade as a JSON fo
   request.dispatch.descriptor.contentType = 'application/json'
   assert.equal(preparePackRequest(request, { file }), null)
 })
+
+test('invocation binding carries stable safe correlation and rejects undeclared invocation fields', () => {
+  const request = structuredClone(action)
+  request.dispatch.descriptor.inputs.push({ name: 'correlation', kind: 'Text', placement: 'Header', wireName: 'X-Correlation-ID' })
+  request.dispatch.bindings.correlation = { source: 'invocation', pointer: '/correlationId' }
+  const sources = { input: {}, invocation: { correlationId: '43300000-0000-4000-8000-000000000010' } }
+  assert.equal(preparePackRequest(request, sources).headers['X-Correlation-ID'], sources.invocation.correlationId)
+  request.dispatch.bindings.correlation.pointer = '/actor'
+  assert.equal(preparePackRequest(request, { ...sources, invocation: { actor: sources.invocation.correlationId } }), null)
+  request.dispatch.bindings.correlation.pointer = '/correlationId'
+  for (const value of ['bad', '00000000-0000-0000-0000-000000000000', sources.invocation.correlationId + ', other'])
+    assert.equal(preparePackRequest(request, { ...sources, invocation: { correlationId: value } }), null)
+})

@@ -76,6 +76,7 @@ test('mutation forwards only the selected cookie and the browser antiforgery tok
     method: 'POST', body: '{}', headers: {
       'Content-Type': 'application/json', 'X-Harborline-Antiforgery': 'one-time-token',
       'Idempotency-Key': 'example-submit-v1',
+      'X-Correlation-ID': '43300000-0000-4000-8000-000000000010',
       'X-Untrusted-Actor': 'administrator',
     },
   })
@@ -83,6 +84,7 @@ test('mutation forwards only the selected cookie and the browser antiforgery tok
   const last = received.at(-1)
   assert.equal(last.headers['x-harborline-antiforgery'], 'one-time-token')
   assert.equal(last.headers['idempotency-key'], 'example-submit-v1')
+  assert.equal(last.headers['x-correlation-id'], '43300000-0000-4000-8000-000000000010')
   assert.equal(last.headers['x-untrusted-actor'], undefined)
   assert.equal(last.headers.cookie, '__Host-hl-selected=alice')
 })
@@ -107,5 +109,15 @@ test('joined duplicate idempotency headers refuse before upstream', async () => 
     headers: { 'Idempotency-Key': 'first, second' },
   })
   assert.equal(response.status, 400)
+  assert.equal(received.length, count)
+})
+
+test('malformed and duplicate correlation headers refuse before upstream', async () => {
+  const count = received.length
+  for (const value of ['bad', '00000000-0000-0000-0000-000000000000',
+    '43300000-0000-4000-8000-000000000010, 43300000-0000-4000-8000-000000000010']) {
+    const response = await request('__Host-hl-selected=alice', { headers: { 'X-Correlation-ID': value } })
+    assert.equal(response.status, 400)
+  }
   assert.equal(received.length, count)
 })

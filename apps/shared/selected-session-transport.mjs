@@ -1,3 +1,10 @@
+export const validCorrelationId = value => typeof value === 'string'
+  && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+  && value !== '00000000-0000-0000-0000-000000000000'
+export const validRequestHeader = (name, value) => typeof value === 'string'
+  && (name === 'Idempotency-Key' ? /^[A-Za-z0-9._:-]{1,128}$/.test(value)
+    : name === 'X-Correlation-ID' && validCorrelationId(value))
+
 /** Both lanes execute this in the browser; cookie handles never cross a Blazor circuit. */
 export function createSelectedSessionTransport(fetchRequest = globalThis.fetch.bind(globalThis)) {
   let pending = Promise.resolve()
@@ -8,8 +15,7 @@ export function createSelectedSessionTransport(fetchRequest = globalThis.fetch.b
       || !['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method))
       throw new Error('selected_session_request_invalid')
     if (!extraHeaders || typeof extraHeaders !== 'object' || Array.isArray(extraHeaders)
-      || Object.entries(extraHeaders).some(([name, value]) => name !== 'Idempotency-Key'
-        || typeof value !== 'string' || !/^[A-Za-z0-9._:-]{1,128}$/.test(value)))
+      || Object.entries(extraHeaders).some(([name, value]) => !validRequestHeader(name, value)))
       throw new Error('selected_session_headers_invalid')
     const headers = { Accept: 'application/json', ...extraHeaders }
     const options = { method, headers, credentials: 'same-origin', redirect: 'error', cache: 'no-store' }
@@ -37,7 +43,8 @@ export function createSelectedSessionTransport(fetchRequest = globalThis.fetch.b
 }
 
 async function envelope(response) {
-  return { status: response.status, body: await response.text(), auditId: response.headers.get('X-Harborline-Audit-Id') }
+  return { status: response.status, body: await response.text(), auditId: response.headers.get('X-Harborline-Audit-Id'),
+    correlationId: response.headers.get('X-Harborline-Audit-Correlation') }
 }
 
 const browserTransport = createSelectedSessionTransport()

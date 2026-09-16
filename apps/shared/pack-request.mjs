@@ -1,4 +1,4 @@
-import { send } from './selected-session-transport.mjs'
+import { send, validRequestHeader } from './selected-session-transport.mjs'
 
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const safeName = value => typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_-]*$/.test(value)
@@ -36,7 +36,7 @@ export function preparePackRequest(action, sources = {}) {
           || !value || /[\/\\?#\x00-\x20]|%2e|%2f|%5c/i.test(value) || ['.', '..'].includes(value)) return null
         path = path.replace(token, encodeURIComponent(value))
       } else if (input.placement === 'Header') {
-        if (input.kind !== 'Text' || input.wireName !== 'Idempotency-Key' || !/^[A-Za-z0-9._:-]{1,128}$/.test(value)) return null
+        if (input.kind !== 'Text' || !validRequestHeader(input.wireName, value)) return null
         headers[input.wireName] = value
       } else if (input.placement === 'BodyRoot') {
         if (rootPresent || input.wireName !== '' || !['Object', 'Binary'].includes(input.kind)) return null
@@ -70,6 +70,8 @@ function bindingValue(binding, sources) {
   if (keys.length === 1 && keys[0] === 'literal') return binding.literal
   if (keys.length !== 2 || !keys.includes('source') || !keys.includes('pointer')) return undefined
   if (binding.source === 'file' && binding.pointer === '') return sources.file
+  if (binding.source === 'invocation') return ['/id', '/idempotencyKey', '/correlationId'].includes(binding.pointer)
+    ? sources.invocation?.[binding.pointer.slice(1)] : undefined
   if (!['input', 'selection'].includes(binding.source)) return undefined
   const source = sources[binding.source]
   if (binding.source === 'input' && binding.pointer === '') return source

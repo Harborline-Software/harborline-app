@@ -87,6 +87,14 @@ public sealed class SelectedSessionProxy : IDisposable
             return;
         }
         using var outgoing = new HttpRequestMessage(new HttpMethod(request.Method), new Uri(_origin, "/api/" + path));
+        var correlations = request.Headers["X-Correlation-ID"];
+        if (correlations.Count > 1 || (correlations.Count == 1
+            && (!Guid.TryParseExact(correlations.ToString(), "D", out var correlation) || correlation == Guid.Empty)))
+        {
+            await RefuseAsync(context, 400, "selected_session_headers_invalid");
+            return;
+        }
+        if (correlations.Count == 1) outgoing.Headers.Add("X-Correlation-ID", correlations.ToString());
         if (requestIds.Count == 1) outgoing.Headers.Add("Idempotency-Key", requestIds.ToString());
         outgoing.Headers.Add("Cookie", cookies[0]);
         outgoing.Headers.Add("Accept", "application/json");

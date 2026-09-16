@@ -97,13 +97,38 @@ public sealed class SelectedSessionProxyTests
         return context;
     }
 
+    [Fact]
+    public async Task Correlation_header_reaches_node_and_preserves_server_receipt()
+    {
+        const string correlation = "43300000-0000-4000-8000-000000000010";
+        using var proxy = new SelectedSessionProxy(new Uri("https://node.example"), new HttpMessageInvoker(new NodeHandler(expectedCorrelation: correlation)));
+        var context = Context("alice");
+        context.Request.Headers["X-Correlation-ID"] = correlation;
+        await proxy.ForwardAsync(context);
+        Assert.Equal(200, context.Response.StatusCode);
+        Assert.Equal(correlation, context.Response.Headers["X-Harborline-Audit-Correlation"].ToString());
+    }
+
+    [Theory]
+    [InlineData("bad")]
+    [InlineData("00000000-0000-0000-0000-000000000000")]
+    [InlineData("43300000-0000-4000-8000-000000000010, 43300000-0000-4000-8000-000000000010")]
+    public async Task Malformed_correlation_refuses_before_upstream(string value)
+    {
+        using var proxy = new SelectedSessionProxy(new Uri("https://node.example"), new HttpMessageInvoker(new NeverSendHandler()));
+        var context = Context("alice");
+        context.Request.Headers["X-Correlation-ID"] = value;
+        await proxy.ForwardAsync(context);
+        Assert.Equal(400, context.Response.StatusCode);
+    }
+
     private sealed class NeverSendHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Refused requests must not contact the node.");
     }
 
-    private sealed class NodeHandler(string? expectedRequestId = null) : HttpMessageHandler
+    private sealed class NodeHandler(string? expectedRequestId = null, string? expectedCorrelation = null) : HttpMessageHandler
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -111,6 +136,7 @@ public sealed class SelectedSessionProxyTests
             Assert.Null(request.Headers.Authorization);
             Assert.False(request.Headers.Contains("X-Untrusted-Actor"));
             if (expectedRequestId is not null) Assert.Equal(expectedRequestId, Assert.Single(request.Headers.GetValues("Idempotency-Key")));
+            if (expectedCorrelation is not null) Assert.Equal(expectedCorrelation, Assert.Single(request.Headers.GetValues("X-Correlation-ID")));
             var cookie = Assert.Single(request.Headers.GetValues("Cookie"));
             Assert.DoesNotContain("legacy-admin", cookie, StringComparison.Ordinal);
             await Task.Delay(cookie.Contains("alice", StringComparison.Ordinal) ? 15 : 1, cancellationToken);
@@ -119,6 +145,7 @@ public sealed class SelectedSessionProxyTests
                 Content = new StringContent(JsonSerializer.Serialize(new { principal = cookie, auditId = "server-audit-42" }), Encoding.UTF8, "application/json")
             };
             response.Headers.Add("X-Harborline-Audit-Id", "server-audit-42");
+            if (expectedCorrelation is not null) response.Headers.Add("X-Harborline-Audit-Correlation", expectedCorrelation);
             response.Headers.Add("Authorization", "must-not-reach-browser");
             return response;
         }

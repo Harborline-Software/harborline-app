@@ -46,7 +46,7 @@ test('serializes one-time antiforgery issuance and mutations, including a denial
     '/api/selected-node/session/antiforgery', '/api/selected-node/session/actions/second',
   ])
   assert.deepEqual(results, Array(2).fill({
-    status: 403, body: '{"code":"authorization.permission_required","auditId":"server-42"}', auditId: 'server-42',
+    status: 403, body: '{"code":"authorization.permission_required","auditId":"server-42"}', auditId: 'server-42', correlationId: null,
   }))
 })
 
@@ -77,4 +77,18 @@ test('unknown methods and arbitrary targets are inert before fetch', async () =>
   for (const path of ['https://hostile.example', '//hostile.example', '/api/local-node/../session', '/api/local-node/%2e%2e/session'])
     await assert.rejects(transport.send(path), /invalid/)
   await assert.rejects(transport.send('/api/session/actions/example', 'CONNECT'), /invalid/)
+})
+
+test('safe correlation survives request and server receipt without accepting malformed or duplicate values', async () => {
+  const id = '43300000-0000-4000-8000-000000000010'
+  let calls = 0
+  const transport = createSelectedSessionTransport(async (_path, options) => {
+    calls++
+    assert.equal(options.headers['X-Correlation-ID'], id)
+    return new Response('{}', { headers: { 'X-Harborline-Audit-Correlation': id } })
+  })
+  for (const value of ['bad', '00000000-0000-0000-0000-000000000000', `${id}, ${id}`])
+    await assert.rejects(transport.send('/api/session/example', 'GET', null, 'application/json', { 'X-Correlation-ID': value }), /headers_invalid/)
+  assert.equal(calls, 0)
+  assert.equal((await transport.send('/api/session/example', 'GET', null, 'application/json', { 'X-Correlation-ID': id })).correlationId, id)
 })

@@ -2,7 +2,7 @@ using Microsoft.JSInterop;
 
 namespace Harborline.App.Blazor.ReferenceHost.Transport;
 
-public sealed record SelectedSessionResponse(int Status, string Body, string? AuditId);
+public sealed record SelectedSessionResponse(int Status, string Body, string? AuditId, string? CorrelationId = null);
 
 /// <summary>Calls the same browser-owned session transport as React, without a server cookie jar.</summary>
 public sealed class BrowserSelectedSessionTransport(IJSRuntime javascript) : IAsyncDisposable
