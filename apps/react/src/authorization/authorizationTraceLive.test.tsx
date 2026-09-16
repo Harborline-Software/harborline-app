@@ -6,7 +6,7 @@ import { createHttpAuthorizationAdminClient } from '../admin/authorization/clien
 import { CAPABILITY_DEFINITIONS, ROLE_DEFINITIONS } from '../admin/authorization/client/fixtureClient'
 import { AuthorizationAdminClientProvider } from '../admin/authorization/AuthorizationAdminClientContext'
 import { AuthorizationAdminPage } from '../admin/authorization/AuthorizationAdminPage'
-import { AccessHoldersPage } from '../admin/authorization/AccessHoldersPage'
+import { LegacyAccessHoldersPage } from './__tests__/fixtures/LegacyAccessHoldersPage'
 import { CapabilityBindingEditor } from '../admin/authorization/CapabilityBindingEditor'
 import type { AuthorizationTraceRead } from './AuthorizationTrace'
 
@@ -32,7 +32,7 @@ for (const surface of ['settings', 'holders', 'binding']) {
       return new Response(JSON.stringify({ code: 'authorization.permission_required', ...(linked ? { auditId: fixture.auditId } : {}) }), { status: 403 })
     } })
     render(<AuthorizationAdminClientProvider client={client}>{surface === 'settings' ? <AuthorizationAdminPage />
-      : surface === 'holders' ? <AccessHoldersPage /> : <CapabilityBindingEditor definition={CAPABILITY_DEFINITIONS[0]}
+      : surface === 'holders' ? <LegacyAccessHoldersPage /> : <CapabilityBindingEditor definition={CAPABILITY_DEFINITIONS[0]}
         roleDefinitions={ROLE_DEFINITIONS} onNarrow={client.narrowCapabilityBinding} readTrace={client.readTrace} onSaved={vi.fn()} />}</AuthorizationAdminClientProvider>)
     if (surface === 'binding') {
       const user = userEvent.setup()

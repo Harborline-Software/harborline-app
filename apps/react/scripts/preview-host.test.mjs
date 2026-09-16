@@ -29,6 +29,9 @@ for (const mode of ['dev', 'preview']) test(`${mode} host reaches selected sessi
       const asset = html.match(/src="(\/assets\/[^\"]+\.js)"/)?.[1]
       assert.ok(asset, 'Preview must serve the built entry point, not a development module.')
       assert.equal((await fetch(origin + asset)).status, 200)
+      const bundle = await (await fetch(origin + asset)).text()
+      assert.ok(!bundle.includes('access-holders-heading'), 'The legacy compiled Access page must not enter the production bundle.')
+      assert.ok(!bundle.includes('Retry holders'), 'Only the generic runtime may own the production holder flow.')
     }
     await Promise.all([['administrator', 200], ['holder', 403]].map(async ([principal, status]) => {
       const response = await fetch(origin + '/api/selected-node/session/example', { headers: {

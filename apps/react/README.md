@@ -40,6 +40,23 @@ npm run preview    # serve the built bundle
 npm run typecheck
 ```
 
+The built-bundle preview host supports the same cookie-only selected-session transport as
+development. Configure `VITE_FORMS_API_ORIGIN` with the fixed local-node origin, build, then run:
+
+```sh
+pnpm build
+node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 5322 --strictPort
+```
+
+This command owns a single foreground listener and serves `dist/`; the build's
+`dist/.vite/manifest.json` names its hashed assets. A supervising process can record the checkout
+revision, build/asset hashes, process ID, and listener without a diagnostics endpoint. Browser
+requests use same-origin `/api/selected-node/` routes, selected-session cookies, and antiforgery.
+Preview explicitly disables the legacy development bearer proxy. A missing selected session
+never borrows `LOCAL_NODE_SESSION_TOKEN`. This is a local preview host, not an internet-facing
+deployment server. `pnpm test:preview` builds and tests the real preview listener against two
+isolated session identities.
+
 ## Verified
 
 - `tsc -b --noEmit` passes against the packaged type definitions, not the platform source.

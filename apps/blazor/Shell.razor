@@ -4,6 +4,7 @@
 @inject IAuthorizationAdminClient AuthorizationClient
 @using Harborline.App.Blazor.ReferenceHost.Navigation
 @using Harborline.App.Blazor.ReferenceHost.Workshop
+@using Harborline.App.Blazor.ReferenceHost.Runtime
 @using Harborline.UIAdapters.Blazor.Components.DataDisplay
 @using System.Text.Json
 @using Microsoft.AspNetCore.WebUtilities
@@ -40,11 +41,7 @@
                   OpenPanelIdsChanged="@SetOpenPanelIdsAsync"
                   PanelToolbar="@PanelToolbar"
                   PanelContent="@PanelContent">
-    @if (activeItemId == "access.holders")
-    {
-        <main class="happ-page"><AccessHoldersPage /></main>
-    }
-    else if (activeItemId == "admin-authorization")
+    @if (activeItemId == "admin-authorization")
     {
         <main class="happ-page">
             <AuthorizationAdminPage />
@@ -53,6 +50,10 @@
     else if (WorkshopItems.Contains(activeItemId))
     {
         <main class="happ-page"><h1>@ActiveLabel</h1><SeededListPage ItemId="@activeItemId" ViewId="@(surface is null ? null : $"platform.{surface}.{activeItemId}")" SelectedRowId="@selectedRowId" RowActivated="@SelectDefinitionAsync" SelectionRestored="@(row => selectedDefinition = row)" /></main>
+    }
+    else if (packNavigation is not null && DeclaredItemIds(packNavigation).Contains(activeItemId, StringComparer.Ordinal))
+    {
+        <main class="happ-page"><h1>@ActiveLabel</h1><PackActionHost @key="activeItemId" ViewId="@activeItemId" NavigationChanged="LoadNavigationAsync" /></main>
     }
     else
     {

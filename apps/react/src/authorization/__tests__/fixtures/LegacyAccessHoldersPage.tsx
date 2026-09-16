@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { AuthorizationTrace } from '../../authorization/AuthorizationTrace'
-import { useAuthorizationAdminClient } from './AuthorizationAdminClientContext'
-import { AuthorizationAdminError, type AccessHolder } from './client'
+import { AuthorizationTrace } from '../../AuthorizationTrace'
+import { useAuthorizationAdminClient } from '../../../admin/authorization/AuthorizationAdminClientContext'
+import { AuthorizationAdminError, type AccessHolder } from '../../../admin/authorization/client'
 
-export function AccessHoldersPage() {
+export function LegacyAccessHoldersPage() {
   const client = useAuthorizationAdminClient()
   const [holders, setHolders] = useState<readonly AccessHolder[] | null>(null)
   const [refusalId, setRefusalId] = useState<string>()
