@@ -1,5 +1,47 @@
 # T-433 producer/consumer contract gap
 
+## Current implementation checkpoint — 2026-09-16
+
+The investigation below records the original release gap, not the current branch.
+API `0f917d59` now declares and admits closed host-owned request descriptors for
+submission, review, ordinary record read, atomic scope narrowing, ordinary grant
+revocation, and two-stage pack replacement. App `e792450` consumes those declarations
+in one browser controller shared by React and Blazor. Neither shell routes Access
+through a compiled Access page; the legacy pages exist only in isolated test code.
+Unknown definitions/actions stay inert, and server refusals retain their raw
+status, body, audit ID, and correlation ID.
+
+The ordinary **Request details** disclosure exposes only invocation inputs bound
+by the admitted descriptor: Request ID, Idempotency key, and/or Correlation ID.
+Generated defaults remain stable for an intention. A user may replace them before
+dispatch; an attempt locks them, and explicit retry preserves them. Changed payload
+or selection requires **New request**, which regenerates identifiers. Actor, tenant,
+route, method, audience, credentials, and arbitrary headers are never editable.
+This is production request management, not a harness injection mechanism.
+
+Both shells resolve an active pack navigation item to the generic host using its
+item ID. The Access route is `/?item=access.holders`; replacement refreshes the
+active view plan and selected-session navigation. Blazor loads that navigation
+only after its first interactive render. Browser-owned selected cookies and
+antiforgery travel through the separate same-origin proxy; legacy bootstrap clients
+remain separate.
+
+Both lanes use the `Pack actions` region and an action section named by its pack
+label. Request inputs have stable names `request.id`, `request.idempotencyKey`, and
+`request.correlationId` when declared. Results use the `Action result` region and
+display native `Audit:` and `Correlation:` values. The replacement picker is
+labelled `Package file` and accepts `.json`; the descriptor still owns the binary
+`application/octet-stream` wire content type.
+
+The exact-five final replacement and distinct public signed prerelease refusal
+probe are source fixtures, not acceptance results. Their producer manifests pin
+the actual bytes and content pointer. Integrated rollback/422 verification still
+depends on the central activation transaction work. The local App gate passes all
+eight checks; live two-person clean-node acceptance and released artifact pins
+remain required after branch reconciliation.
+
+## Original investigation
+
 Inspected 2026-09-15 against API `1703dc3c` and App `68306d28`.
 This is a proposed extension and an implementation handoff, not released behavior
 or acceptance evidence.
