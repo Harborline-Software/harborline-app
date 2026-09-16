@@ -13,6 +13,7 @@ export interface PackRuntimeState {
 }
 export interface PackActionRuntime {
   snapshot(): PackRuntimeState
+  dispose(): void
   load(viewId: string): Promise<PackRuntimeState>
   select(id: string): PackRuntimeState
   begin(id: string): Promise<PackRuntimeState>

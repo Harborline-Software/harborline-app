@@ -36,10 +36,10 @@ export function normalizePackReceipt(response) {
 export function createPackActionRuntime(transport = { send }, uuid = () => crypto.randomUUID()) {
   let state = { plan: null, rows: [], actions: [], selectedId: null, activeAction: null, inputPlan: null,
     receipt: null, error: null, busy: false, navigationRevision: 0, requestDetails: {}, requestLocked: false }
-  let fingerprint, generation = 0, requestEditRefused = false
+  let fingerprint, generation = 0, requestEditRefused = false, disposed = false
   let currentScope = { generation, controller: new AbortController() }
   const snapshot = () => structuredClone(state)
-  const isCurrent = scope => scope === currentScope
+  const isCurrent = scope => !disposed && scope === currentScope
   function assertCurrent(scope) {
     scope.controller.signal.throwIfAborted()
     if (!isCurrent(scope)) throw new DOMException('Superseded pack request.', 'AbortError')
@@ -91,7 +91,15 @@ export function createPackActionRuntime(transport = { send }, uuid = () => crypt
   }
   return {
     snapshot,
+    dispose() {
+      if (disposed) return
+      disposed = true; generation++; currentScope.controller.abort()
+      state = { ...state, plan: null, rows: [], actions: [], selectedId: null, activeAction: null, inputPlan: null,
+        receipt: null, error: 'pack_runtime_disposed', busy: false, requestDetails: {}, requestLocked: false }
+      fingerprint = undefined
+    },
     async load(viewId) {
+      if (disposed) return snapshot()
       currentScope.controller.abort()
       const request = ++generation
       const scope = currentScope = { generation: request, controller: new AbortController() }
@@ -113,11 +121,12 @@ export function createPackActionRuntime(transport = { send }, uuid = () => crypt
       return snapshot()
     },
     select(id) {
+      if (disposed) return snapshot()
       if (!state.busy) state.selectedId = state.rows.some(row => row.id === id) ? id : null
       return snapshot()
     },
     async begin(id) {
-      if (state.busy) return snapshot()
+      if (disposed || state.busy) return snapshot()
       const scope = currentScope
       state.activeAction = state.actions.find(action => action.id === id) ?? null
       state.inputPlan = null; state.error = null; state.receipt = null; resetRequest()
@@ -137,7 +146,7 @@ export function createPackActionRuntime(transport = { send }, uuid = () => crypt
       return snapshot()
     },
     setRequestDetails(entries) {
-      if (state.busy || state.requestLocked) return snapshot()
+      if (disposed || state.busy || state.requestLocked) return snapshot()
       const expected = Object.keys(state.requestDetails), names = new Set()
       if (!Array.isArray(entries) || entries.length !== expected.length || entries.some(entry => {
         if (!Array.isArray(entry) || entry.length !== 2 || !expected.includes(entry[0])
@@ -148,11 +157,11 @@ export function createPackActionRuntime(transport = { send }, uuid = () => crypt
       return snapshot()
     },
     newRequest() {
-      if (!state.busy && state.activeAction) { resetRequest(); state.error = null; state.receipt = null }
+      if (!disposed && !state.busy && state.activeAction) { resetRequest(); state.error = null; state.receipt = null }
       return snapshot()
     },
     async invoke(values = {}, file) {
-      if (state.busy || !state.activeAction) return snapshot()
+      if (disposed || state.busy || !state.activeAction) return snapshot()
       const scope = currentScope
       state.busy = true; state.error = null
       try {

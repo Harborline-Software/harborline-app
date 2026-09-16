@@ -149,3 +149,44 @@ test('superseding a queued action prevents CSRF issuance and mutation through th
   assert.equal(runtime.snapshot().error, null)
   assert.equal(calls.some(call => call.method !== 'GET' || call.path.endsWith('/antiforgery')), false)
 })
+
+test('disposing a runtime revokes its queued action before CSRF and permanently refuses reuse', async () => {
+  const entered = deferred(), release = deferred(), calls = []
+  const transport = createSelectedSessionTransport(async (path, options) => {
+    calls.push({ path, method: options.method })
+    if (path.endsWith('/block')) { entered.resolve(); await release.promise }
+    return new Response(JSON.stringify(path.endsWith('/A') ? definition('A') : { rows: [] }))
+  })
+  const runtime = createPackActionRuntime(transport)
+  await runtime.load('A'); await runtime.begin('apply-A')
+  const blocker = transport.send('/api/session/block')
+  await entered.promise
+  const old = runtime.invoke()
+  try { runtime.dispose(); runtime.dispose() } finally { release.resolve() }
+  await Promise.all([blocker, old])
+  const disposed = runtime.snapshot(), count = calls.length
+  await runtime.load('B'); await runtime.begin('apply-A'); await runtime.invoke()
+  assert.deepEqual(runtime.snapshot(), disposed)
+  assert.equal(disposed.plan, null)
+  assert.equal(disposed.activeAction, null)
+  assert.equal(calls.length, count)
+  assert.equal(calls.some(call => call.method !== 'GET' || call.path.endsWith('/antiforgery')), false)
+})
+
+test('disposing an already-dispatched action never retries or publishes its late result', async () => {
+  const entered = deferred(), release = deferred(), calls = []
+  const transport = createSelectedSessionTransport(async (path, options) => {
+    calls.push({ path, method: options.method })
+    if (path.endsWith('/antiforgery')) return new Response(null, { status: 204, headers: { 'X-Harborline-Antiforgery': 'once' } })
+    if (options.method === 'POST') { entered.resolve(); await release.promise; return new Response('{}') }
+    return new Response(JSON.stringify(path.endsWith('/A') ? definition('A') : { rows: [] }))
+  })
+  const runtime = createPackActionRuntime(transport)
+  await runtime.load('A'); await runtime.begin('apply-A')
+  const old = runtime.invoke(); await entered.promise
+  try { runtime.dispose() } finally { release.resolve() }
+  const disposed = runtime.snapshot()
+  await old
+  assert.deepEqual(runtime.snapshot(), disposed)
+  assert.equal(calls.filter(call => call.method === 'POST').length, 1)
+})

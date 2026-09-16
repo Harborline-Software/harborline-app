@@ -85,10 +85,15 @@
         busy = true;
         try
         {
-            module ??= await Javascript.InvokeAsync<IJSObjectReference>("import", "./pack-action-runtime.mjs");
-            if (runtime is not null) await runtime.DisposeAsync();
-            runtime = await module.InvokeAsync<IJSObjectReference>("createPackActionRuntime");
-            snapshot = await runtime.InvokeAsync<PackActionSnapshot>("load", ViewId);
+            var imported = module ?? await Javascript.InvokeAsync<IJSObjectReference>("import", "./pack-action-runtime.mjs");
+            if (disposed) { await imported.DisposeAsync(); return; }
+            module = imported;
+            if (runtime is not null) { await runtime.InvokeVoidAsync("dispose"); await runtime.DisposeAsync(); }
+            var created = await module.InvokeAsync<IJSObjectReference>("createPackActionRuntime");
+            if (disposed) { await created.InvokeVoidAsync("dispose"); await created.DisposeAsync(); return; }
+            runtime = created;
+            var next = await runtime.InvokeAsync<PackActionSnapshot>("load", ViewId);
+            if (!disposed) snapshot = next;
         }
         catch (JSException exception) { error = exception.Message; }
         finally { busy = false; }
@@ -97,13 +102,13 @@
 
     private async Task SelectAsync(string id)
     {
-        try { if (runtime is not null && !busy) snapshot = await runtime.InvokeAsync<PackActionSnapshot>("select", id); }
+        try { if (!disposed && runtime is not null && !busy) snapshot = await runtime.InvokeAsync<PackActionSnapshot>("select", id); }
         catch (JSException exception) { error = exception.Message; }
     }
 
     private async Task ReloadAsync()
     {
-        if (runtime is null || busy) return;
+        if (disposed || runtime is null || busy) return;
         busy = true; error = null;
         try { snapshot = await runtime.InvokeAsync<PackActionSnapshot>("load", ViewId); }
         catch (JSException exception) { error = exception.Message; }
@@ -112,7 +117,7 @@
 
     private async Task BeginAsync(string id)
     {
-        if (runtime is null || busy) return;
+        if (disposed || runtime is null || busy) return;
         busy = true; error = null; values = new Dictionary<string, object?>(); actionKey++;
         try { snapshot = await runtime.InvokeAsync<PackActionSnapshot>("begin", id); }
         catch (JSException exception) { error = exception.Message; }
@@ -121,20 +126,20 @@
 
     private async Task InvokeAsync()
     {
-        if (runtime is null || busy) return;
+        if (disposed || runtime is null || busy) return;
         busy = true; error = null;
         var revision = snapshot?.NavigationRevision ?? 0;
         try { snapshot = snapshot?.ActiveAction?.FileInput is not null
             ? await runtime.InvokeAsync<PackActionSnapshot>("invokeWithFile", values, fileElement)
             : await runtime.InvokeAsync<PackActionSnapshot>("invoke", values);
-            if (snapshot.NavigationRevision != revision) await NavigationChanged.InvokeAsync(); }
+            if (!disposed && snapshot.NavigationRevision != revision) await NavigationChanged.InvokeAsync(); }
         catch (JSException exception) { error = exception.Message; }
         finally { busy = false; }
     }
 
     private async Task SetRequestDetailAsync(string name, string value)
     {
-        if (runtime is null || busy || snapshot?.RequestDetails is not { } details || snapshot.RequestLocked) return;
+        if (disposed || runtime is null || busy || snapshot?.RequestDetails is not { } details || snapshot.RequestLocked) return;
         var entries = details.Select(pair => new[] { pair.Key, pair.Key == name ? value : pair.Value }).ToArray();
         try { snapshot = await runtime.InvokeAsync<PackActionSnapshot>("setRequestDetails", (object)entries); }
         catch (JSException exception) { error = exception.Message; }
@@ -142,7 +147,7 @@
 
     private async Task NewRequestAsync()
     {
-        if (runtime is null || busy) return;
+        if (disposed || runtime is null || busy) return;
         try { snapshot = await runtime.InvokeAsync<PackActionSnapshot>("newRequest"); }
         catch (JSException exception) { error = exception.Message; }
     }
@@ -156,10 +161,11 @@
 
     public async ValueTask DisposeAsync()
     {
+        if (disposed) return;
         disposed = true;
         try
         {
-            if (runtime is not null) await runtime.DisposeAsync();
+            if (runtime is not null) { await runtime.InvokeVoidAsync("dispose"); await runtime.DisposeAsync(); }
             if (module is not null) await module.DisposeAsync();
         }
         catch (JSDisconnectedException) { }
