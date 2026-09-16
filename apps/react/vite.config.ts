@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { createSelectedSessionProxy } from '../shared/selected-session-proxy.mjs'
 
 // The React lane consumes @harborline-software/ui-react as a PACKAGE, never as source.
 // See README.md: a source or project reference would resolve assets from disk and hide the
@@ -23,7 +24,12 @@ export default defineConfig(({ mode }) => {
   const sessionToken = env.LOCAL_NODE_SESSION_TOKEN
 
   return {
-    plugins: [react()],
+    plugins: [react(), {
+      name: 'selected-session-node-transport',
+      configureServer(server) {
+        if (origin) server.middlewares.use(createSelectedSessionProxy(origin))
+      },
+    }],
     server: {
       port: 5322,
       proxy: origin
