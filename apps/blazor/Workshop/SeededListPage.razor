@@ -7,7 +7,12 @@
 
 @if (error is not null)
 {
-    <section role="alert"><p>@error</p></section>
+    <section role="alert"><p>@error</p>
+        @if (retryAvailable)
+        {
+            <button type="button" @onclick="LoadAsync">Retry Workshop list</button>
+        }
+    </section>
 }
 else if (plan is null)
 {
@@ -62,15 +67,30 @@ else if (supported)
     private IReadOnlyList<ViewRuntimeRow> rows = [];
     private string? restoredSelection;
     private string? error;
+    private bool retryAvailable;
     private WorkshopWorkflow? workflow;
     private bool supported;
     private int requestVersion;
+    private bool interactive;
     private string RequestedViewId => ViewId ?? $"platform.list.{ItemId}";
 
     protected override async Task OnParametersSetAsync()
     {
+        if (interactive) await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        interactive = true;
+        await LoadAsync();
+        if (!cancellation.IsCancellationRequested) StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
         var request = ++requestVersion;
-        plan = null; list = null; rows = []; error = null; supported = false;
+        plan = null; list = null; rows = []; error = null; supported = false; retryAvailable = false;
         workflow = new WorkshopWorkflow(CatalogueClient);
         if (!Kinds.TryGetValue(ItemId, out var kind)) { error = "This Workshop list is not declared by the platform pack."; return; }
         try
@@ -90,7 +110,14 @@ else if (supported)
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or JsonException)
         {
-            if (request == requestVersion) error = exception.Message;
+            if (request == requestVersion)
+            {
+                error = exception.Message;
+                // Retrying reads is explicit and only offered for transport failures. Refused or
+                // unavailable definitions stay inert; this never repeats a workflow mutation.
+                retryAvailable = exception is InvalidOperationException
+                    { InnerException: Microsoft.JSInterop.JSException or OperationCanceledException };
+            }
         }
     }
 

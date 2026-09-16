@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
+import { requestSelectedCatalogue } from './selectedCatalogue'
+import { createSelectedSessionTransport, send } from '../../../shared/selected-session-transport.mjs'
 import {
   SchemaForm,
   ViewRuntime,
@@ -133,15 +135,51 @@ class ServerResponseError extends Error {
 const origin = () => import.meta.env.DEV ? '' : (import.meta.env.VITE_FORMS_API_ORIGIN?.replace(/\/$/, '') ?? '')
 
 async function responseBody(response: Response): Promise<ResponseBody> {
-  const text = await response.text()
+  return parseResponseBody(await response.text())
+}
+
+function parseResponseBody(text: string): ResponseBody {
   if (!text) return { value: null, text: '' }
   try { return { value: JSON.parse(text) as unknown, text } } catch { return { value: text, text } }
 }
 
-async function requestJson(path: string, init?: RequestInit): Promise<ResponseBody> {
-  const response = await fetch(`${origin()}${path}`, { credentials: 'include', ...init })
+async function requestCatalogueJson(path: string, signal: AbortSignal): Promise<ResponseBody> {
+  const response = await requestSelectedCatalogue(path, signal)
+  const body = parseResponseBody(response.body)
+  if (response.status < 200 || response.status >= 300) throw new ServerResponseError(response.status, body)
+  return body
+}
+
+// API4750c148: HostedPackComposerApiEndpoint81 and HostedAuthorizationAdminApiEndpoint28
+// positively require DesktopPlaneRequestFeature for these families. This is an explicit
+// desktop operation, never a fallback from a refused selected-session request.
+async function desktopRequest(path: string, init?: RequestInit): Promise<Response> {
+  const method = init?.method ?? 'GET'
+  const pack = method === 'POST' && ['/api/local-node/packs/export', '/api/local-node/packs/export?validateOnly=true',
+    '/api/local-node/packs/verify'].includes(path)
+  const trace = method === 'GET' && /^\/api\/local-node\/authorization\/traces\/[^/?#]+$/.test(path)
+  if (!pack && !trace) throw new Error('Unsupported desktop Workshop request.')
+  return fetch(`${origin()}${path}`, { credentials: 'include', ...init })
+}
+
+async function requestDesktopJson(path: string, init?: RequestInit): Promise<ResponseBody> {
+  const response = await desktopRequest(path, init)
   const body = await responseBody(response)
   if (!response.ok) throw new ServerResponseError(response.status, body)
+  return body
+}
+
+type WorkshopRequestInit = Omit<RequestInit, 'body' | 'signal'> & { body?: string | Blob; signal?: AbortSignal }
+async function requestJson(path: string, init?: WorkshopRequestInit): Promise<ResponseBody> {
+  init?.signal?.throwIfAborted()
+  const transport = (init?.method ?? 'GET') === 'GET'
+    ? createSelectedSessionTransport((url, options) => globalThis.fetch(url, { ...options, signal: init?.signal }))
+    : { send }
+  const response = await transport.send(path, init?.method ?? 'GET', init?.body ?? null,
+    new Headers(init?.headers).get('content-type') ?? 'application/json', {}, { signal: init?.signal })
+  init?.signal?.throwIfAborted()
+  const body = parseResponseBody(response.body)
+  if (response.status < 200 || response.status >= 300) throw new ServerResponseError(response.status, body)
   return body
 }
 
@@ -329,7 +367,7 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
 
   const loadForm = async (action: WorkshopAction, id: string, version?: string) => {
     const query = version ? `?version=${encodeURIComponent(version)}` : ''
-    const body = await requestJson(`/api/local-node/catalogue/definitions/FormDefinition/${encodeURIComponent(id)}${query}`, { signal: lifetime.current.signal })
+    const body = await requestCatalogueJson(`/api/local-node/catalogue/definitions/FormDefinition/${encodeURIComponent(id)}${query}`, lifetime.current.signal)
     const entry = object(body.value) as FormCatalogueEntry | null
     if (!entry?.renderPlan) throw new Error('The declared input form has no active compiled render plan.')
     setActiveForm({ action, kind: action.operation === 'pack.validate' ? 'pack' : 'record', entry })
@@ -345,7 +383,7 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
     const detailBody = await requestJson(`/api/local-node/asset-registry/types/${encodeURIComponent(asset.key)}`, { signal: lifetime.current.signal })
     const detail = object(detailBody.value) as AssetTypeDetail | null
     if (!detail?.propertyForm?.definition || !detail.propertyForm.version) throw new Error('The active record type has no pinned property form.')
-    const formBody = await requestJson(`/api/local-node/catalogue/definitions/FormDefinition/${encodeURIComponent(detail.propertyForm.definition)}?version=${encodeURIComponent(detail.propertyForm.version)}`, { signal: lifetime.current.signal })
+    const formBody = await requestCatalogueJson(`/api/local-node/catalogue/definitions/FormDefinition/${encodeURIComponent(detail.propertyForm.definition)}?version=${encodeURIComponent(detail.propertyForm.version)}`, lifetime.current.signal)
     const propertyForm = object(formBody.value) as FormCatalogueEntry | null
     if (!propertyForm?.renderPlan) throw new Error('The active property form has no compiled render plan.')
     setWorkflow(current => ({ ...current, activation, assetType: detail, assetContent: asset, propertyForm }))
@@ -367,7 +405,7 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
           break
         case 'pack.export': {
           if (!requires(proof(workflow.validation, 'valid') && Boolean(workflow.candidate), label('pack.validate'))) break
-          const response = await fetch(`${origin()}/api/local-node/packs/export`, {
+          const response = await desktopRequest('/api/local-node/packs/export', {
             method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
             body: JSON.stringify(workflow.candidate), signal: lifetime.current.signal,
           })
@@ -381,7 +419,7 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
         case 'pack.verify': {
           if (!requires(Boolean(workflow.artifact), label('pack.export'))) break
           setWorkflow(current => ({ ...current, verification: undefined, installation: undefined, activation: undefined, assetType: undefined, assetContent: undefined, propertyForm: undefined, receipt: undefined }))
-          const body = await requestJson('/api/local-node/packs/verify', { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: workflow.artifact, signal: lifetime.current.signal })
+          const body = await requestDesktopJson('/api/local-node/packs/verify', { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: workflow.artifact, signal: lifetime.current.signal })
           const verification = object(body.value) ?? {}
           setWorkflow(current => ({ ...current, verification, installation: undefined, activation: undefined, assetType: undefined, propertyForm: undefined, receipt: undefined }))
           append(action, body.value)
@@ -419,7 +457,7 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
           if (!requires(Boolean(workflow.receipt?.id && workflow.receipt.auditId), label('record.create'))) break
           const [entity, trace] = await Promise.allSettled([
             requestJson(`/api/local-node/asset-registry/entities/${encodeURIComponent(workflow.receipt!.id!)}`, { signal: lifetime.current.signal }),
-            requestJson(`/api/local-node/authorization/traces/${encodeURIComponent(workflow.receipt!.auditId!)}`, { signal: lifetime.current.signal }),
+            requestDesktopJson(`/api/local-node/authorization/traces/${encodeURIComponent(workflow.receipt!.auditId!)}`, { signal: lifetime.current.signal }),
           ])
           const evidence = {
             entity: entity.status === 'fulfilled' ? entity.value.value : entity.reason instanceof ServerResponseError ? entity.reason.body.value : String(entity.reason),
@@ -452,7 +490,7 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
         throw new SyntaxError('The pack document must include key, version, and contents.')
       }
       const candidate = document as PackCandidate
-      const body = await requestJson('/api/local-node/packs/export?validateOnly=true', {
+      const body = await requestDesktopJson('/api/local-node/packs/export?validateOnly=true', {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(candidate), signal: lifetime.current.signal,
       })
       append(action, body.value)

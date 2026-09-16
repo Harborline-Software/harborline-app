@@ -34,11 +34,12 @@ public sealed record WorkshopCatalogueEntry(
     public bool Sealed { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
     public string? DefinitionHash { get; init; }
+    public JsonElement? CatalogueFieldBinding { get; init; }
     [JsonIgnore] public JsonElement CompiledBindings { get; init; }
 }
 
 public sealed class WorkshopRequestException(int statusCode, string responseBody)
-    : HttpRequestException($"Request failed ({statusCode}): {responseBody}")
+    : HttpRequestException($"Request failed ({statusCode}): {responseBody}", null, (System.Net.HttpStatusCode)statusCode)
 {
     public string ResponseBody { get; } = responseBody;
 }

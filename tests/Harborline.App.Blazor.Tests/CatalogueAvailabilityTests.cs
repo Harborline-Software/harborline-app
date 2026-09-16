@@ -86,6 +86,7 @@ public sealed class CatalogueAvailabilityTests : BunitContext
     {
         public Task Load { get; private set; } = Task.CompletedTask;
         protected override Task OnParametersSetAsync() => Load = base.OnParametersSetAsync();
+        protected override Task OnAfterRenderAsync(bool firstRender) => firstRender ? Load = base.OnAfterRenderAsync(firstRender) : base.OnAfterRenderAsync(firstRender);
     }
 
     [Theory]

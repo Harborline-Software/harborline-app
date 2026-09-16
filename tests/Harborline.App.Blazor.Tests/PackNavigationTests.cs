@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Bunit;
 using Bunit.TestDoubles;
 using Harborline.App.Blazor.ReferenceHost;
@@ -131,11 +132,11 @@ public sealed class PackNavigationTests : BunitContext
     }
 
     [Theory]
-    [InlineData("", "inspection@1.0.0")]
-    [InlineData(" \t\r\n ", "inspection@1.0.0")]
-    [InlineData("Inspection", "Inspection")]
-    [InlineData("  Inspection  ", "Inspection")]
-    public void Inspector_shows_a_stable_identity_on_activation_and_restore(string title, string expectedIdentity)
+    [InlineData("")]
+    [InlineData(" \t\r\n ")]
+    [InlineData("Inspection")]
+    [InlineData("  Inspection  ")]
+    public void Inspector_shows_exact_authorized_values_on_activation_and_restore(string title)
     {
         Services.AddHarborlineUiAdapters();
         Services.AddSingleton<IMediaQueryObserver>(new Media());
@@ -153,8 +154,9 @@ public sealed class PackNavigationTests : BunitContext
         void AssertIdentity(IRenderedComponent<Shell> rendered)
         {
             var inspector = rendered.Find("[data-shell-panel-id='inspector']");
-            Assert.Equal(expectedIdentity, inspector.QuerySelector("h2")!.TextContent);
-            Assert.Contains($"{expectedIdentity} · follows selection", inspector.QuerySelectorAll("p").Select(paragraph => paragraph.TextContent));
+            Assert.Equal("inspection", inspector.QuerySelector("output#formId")!.TextContent);
+            Assert.Equal(title.Replace("\r\n", "\n", StringComparison.Ordinal), inspector.QuerySelector("output#title")!.TextContent);
+            Assert.Contains("Selection · follows selection", inspector.QuerySelectorAll("p").Select(paragraph => paragraph.TextContent));
             var address = QueryHelpers.ParseQuery(new Uri(navigation.Uri).Query);
             Assert.Equal("inspection@1.0.0", address["selected"].ToString());
             Assert.Equal("inspector", address["panels"].ToString());
@@ -233,7 +235,7 @@ public sealed class PackNavigationTests : BunitContext
              address["selected"].ToString(), inspector.QuerySelector("[role='tablist']") is null ? "default" : null,
              Assert.Single(shell.FindAll("[data-shell-panel-id]")).GetAttribute("data-shell-panel-id"),
              inspector.GetAttribute("data-shell-container-kind")));
-        Assert.Equal(new[] { "inspection@1.0.0" }, inspector.QuerySelectorAll("h2").Select(heading => heading.TextContent == "Inspection" ? "inspection@1.0.0" : null));
+        Assert.Equal(new[] { "inspection@1.0.0" }, inspector.QuerySelectorAll("output#formId").Select(output => $"{output.TextContent}@1.0.0"));
         Assert.Equal(panel.Id, address["panels"].ToString());
         var beforeUndeclared = navigation.Uri;
         shell.Find("[data-shell-id]").KeyDown(new KeyboardEventArgs { Key = "p", MetaKey = true, ShiftKey = true });
@@ -459,15 +461,26 @@ public sealed class PackNavigationTests : BunitContext
             new ViewRenderPlanBindings("views.entity-list/grid", new ViewRenderPlanParameters([
                 new("formId", "Key"), new("title", "Title"), new("version", "Version"), new("cascadeLayer", "Cascade layer")] )));
         private static readonly JsonElement Body = JsonElement.Parse("""{"cascadeLayer":"Pack","privateNote":"Private body is not an identity"}""");
-        private readonly WorkshopCatalogueEntry Entry = new("inspection", "1.0.0", "Active", new WorkshopLocalizedText("en", new Dictionary<string, string> { ["en"] = title }), Body, null);
+        private static readonly JsonObject Detail = JsonNode.Parse(ReadFixture("catalogue-detail.json"))!.AsObject();
+        private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+        private readonly WorkshopCatalogueEntry Entry = new("inspection", "1.0.0", "Active", new WorkshopLocalizedText("en", new Dictionary<string, string> { ["en"] = title }), Body, null)
+        { CatalogueFieldBinding = JsonSerializer.SerializeToElement(Detail["source"]!["catalogueFieldBinding"]) };
 
         public Task<WorkshopCatalogueEntry> ReadViewAsync(string viewId, CancellationToken cancellationToken = default) =>
             Task.FromResult(Entry with { Id = viewId, RenderPlan = Plan with { DefinitionId = viewId } });
         public Task<WorkshopCatalogueList> ListAsync(string kind, CancellationToken cancellationToken = default) =>
             Task.FromResult(new WorkshopCatalogueList([Entry], []));
-        public Task<WorkshopCatalogueEntry> ReadFormAsync(string id, string? version = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkshopCatalogueEntry> ReadFormAsync(string id, string? version = null, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Detail["definition"]!.Deserialize<WorkshopCatalogueEntry>(Options)! with
+            { CompiledBindings = JsonSerializer.SerializeToElement(Detail["definition"]!["renderPlan"]!["bindings"]) });
         public Task<JsonElement> ReadJsonAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<JsonElement> PostJsonAsync(string path, object body, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<JsonElement> PostJsonAsync(string path, object body, CancellationToken cancellationToken = default)
+        {
+            var response = Detail["response"]!.DeepClone();
+            response["projection"]!["values"]!["formId"] = "inspection";
+            response["projection"]!["values"]!["title"]!["values"]!["en"] = title;
+            return Task.FromResult(JsonSerializer.SerializeToElement(response));
+        }
         public Task<JsonElement> PostArtifactAsync(string path, byte[] artifact, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<byte[]> ExportAsync(JsonElement candidate, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }

@@ -2,6 +2,22 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import fixture from '../../../../tests/fixtures/access-navigation.json'
 import workshop from '../../../../tests/fixtures/workshop-navigation.json'
+import detailFixture from '../../../../tests/fixtures/catalogue-detail.json'
+
+function detailResponse(path: string, init?: RequestInit, title = 'Inspection'): Response | undefined {
+  if (path === '/api/selected-node/session/antiforgery')
+    return new Response(null, { headers: { 'X-Harborline-Antiforgery': 'selected-token' } })
+  if (path.includes('/FormDefinition/platform.detail.form?')) return Response.json(detailFixture.definition)
+  if (path.includes('/catalogue/details/')) {
+    expect(path).toMatch(/^\/api\/selected-node\/local-node\/catalogue\/details\//)
+    expect(new Headers(init?.headers).get('X-Harborline-Antiforgery')).toBe('selected-token')
+    const id = JSON.parse(String(init?.body))[0].coordinate.id
+    const response = structuredClone(detailFixture.response)
+    response.projection.values.formId = id
+    response.projection.values.title.values.en = id === 'work-order' ? 'Work order' : title
+    return Response.json(response)
+  }
+}
 
 const media = window.matchMedia
 const innerWidth = window.innerWidth
@@ -48,11 +64,13 @@ it.each(['health', 'browse'])('restores an explicit %s surface for a declared Wo
   const plan = { definitionHash: 'hash', definitionId: viewId, definitionVersion: '1.0.0',
     packKey: 'harborline.platform', packVersion: '1.0.0', definitionKind: 'ViewDefinition',
     bindings: { viewKind: 'views.entity-list/grid', parameters: { fields: [{ id: 'formId', label: 'Key' }] } } }
-  const fetchMock = vi.fn(async (url: string | URL | Request) => {
+  const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     const path = String(url)
+    const detail = detailResponse(path, init)
+    if (detail) return detail
     if (path.endsWith('/navigation/workspaces')) return Response.json(workshop)
     if (path.includes('/ViewDefinition/')) return Response.json({ renderPlan: plan })
-    if (path.includes('/catalogue/definitions?')) return Response.json({ entries: [{ id: 'inspection', version: '1.0.0', status: 'Published' }], kindsUnavailable: [] })
+    if (path.includes('/catalogue/definitions?')) return Response.json({ entries: [{ catalogueFieldBinding: detailFixture.source.catalogueFieldBinding, id: 'inspection', version: '1.0.0', status: 'Published' }], kindsUnavailable: [] })
     return Response.json([])
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -60,7 +78,7 @@ it.each(['health', 'browse'])('restores an explicit %s surface for a declared Wo
   const cut = render(<App />)
   await waitFor(() => expect(cut.container.querySelector('[aria-label="Definition inspector"]')).toHaveTextContent('inspection'))
   expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/ViewDefinition/')).map(([url]) => url))
-    .toEqual([`/api/local-node/catalogue/definitions/ViewDefinition/${viewId}`])
+    .toEqual([`/api/selected-node/local-node/catalogue/definitions/ViewDefinition/${viewId}`])
   expect(new URLSearchParams(window.location.search).get('surface')).toBe(surface)
 })
 
@@ -77,7 +95,7 @@ it('renders the declared Access workspace and panels, removes them with the decl
   const { App } = await import('../App')
   const first = render(<App />)
   await waitFor(() => expect(first.container.textContent).toContain('Access'))
-  expect(request.mock.calls.some(([url]) => String(url).endsWith('/api/local-node/navigation/workspaces'))).toBe(true)
+  expect(request.mock.calls.some(([url]) => String(url) === '/api/selected-node/local-node/navigation/workspaces')).toBe(true)
   if (screen.queryByRole('button', { name: 'Panels' })) await act(async () => screen.getByRole('button', { name: 'Panels' }).click())
   expect(first.container.querySelector('[data-action-id="access-details"]')).not.toBeNull()
   await act(async () => first.container.querySelector<HTMLButtonElement>('[data-action-id="access-details"] button')!.click())
@@ -120,12 +138,14 @@ it.each([[480, 'compact', 'bottom-sheet', false], [720, 'medium', 'side-sheet', 
     bindings: { viewKind: 'views.entity-list/grid', parameters: { fields: [{ id: 'formId', label: 'Key' }, { id: 'title', label: 'Title' }, { id: 'version', label: 'Version' }] } },
   }
   const entries = [
-    { id: 'work-order', version: '1.0.0', status: 'Published', title: { defaultLocale: 'en', values: { en: 'Work order' } }, body: { cascadeLayer: 'Tenant' } },
-    { id: 'inspection', version: '1.0.0', status: 'Published', title: { defaultLocale: 'en', values: { en: 'Inspection' } }, body: { cascadeLayer: 'Pack' } },
+    { catalogueFieldBinding: detailFixture.source.catalogueFieldBinding, id: 'work-order', version: '1.0.0', status: 'Published', title: { defaultLocale: 'en', values: { en: 'Work order' } }, body: { cascadeLayer: 'Tenant' } },
+    { catalogueFieldBinding: detailFixture.source.catalogueFieldBinding, id: 'inspection', version: '1.0.0', status: 'Published', title: { defaultLocale: 'en', values: { en: 'Inspection' } }, body: { cascadeLayer: 'Pack' } },
   ]
-  vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     const path = String(url)
-    if (path.endsWith('/api/local-node/navigation/workspaces')) {
+    const detail = detailResponse(path, init)
+    if (detail) return detail
+    if (path === '/api/selected-node/local-node/navigation/workspaces') {
       await navigationReady
       return Response.json(declaration)
     }
@@ -171,7 +191,7 @@ it.each([[480, 'compact', 'bottom-sheet', false], [720, 'medium', 'side-sheet', 
   expect(await screen.findByRole('grid', {}, { timeout: 10_000 })).toBeInTheDocument()
   await waitFor(() => expect(view.container.querySelector('[data-shell-panel-id="inspector"]')).not.toBeNull())
   const inspector = view.container.querySelector<HTMLElement>('[data-shell-panel-id="inspector"]')!
-  expect(inspector).toHaveTextContent('"cascadeLayer": "Pack"')
+  expect(inspector.querySelector('output#cascadeLayer')).toHaveTextContent('Pack')
   const address = new URLSearchParams(window.location.search)
   // This fixture has one implicit facet and one open record: the selected definition.
   expect({
@@ -179,7 +199,7 @@ it.each([[480, 'compact', 'bottom-sheet', false], [720, 'medium', 'side-sheet', 
     rail: view.container.querySelector('[data-shell-breakpoint]')!.getAttribute('data-shell-breakpoint'),
     mode: address.get('mode'), selection: address.get('selected'),
     facet: inspector.querySelector('[role="tablist"]') === null ? 'default' : null,
-    openRecords: [...inspector.querySelectorAll('h2')].map(heading => heading.textContent === 'Inspection' ? 'inspection@1.0.0' : null),
+    openRecords: [...inspector.querySelectorAll('output#formId')].map(output => `${output.textContent}@1.0.0`),
     panels: [...view.container.querySelectorAll('[data-shell-panel-id]')].map(root => root.getAttribute('data-shell-panel-id')),
     container: inspector.getAttribute('data-shell-container-kind'),
   }).toEqual({ workspace: workspace.id, rail: breakpoint, mode: null, selection: 'inspection@1.0.0', facet: 'default', openRecords: ['inspection@1.0.0'], panels: [panel.id], container: containerKind })
@@ -203,7 +223,7 @@ it.each([[480, 'compact', 'bottom-sheet', false], [720, 'medium', 'side-sheet', 
   expect(new URLSearchParams(window.location.search).get('panels')).toBe(panel.id)
   fireEvent.click(screen.getByRole('button', { name: /Close inspector/i }))
   fireEvent.keyDown(document, { key: panel.shortcut.split('+').at(-1), metaKey: panel.shortcut.includes('mod'), shiftKey: panel.shortcut.includes('shift') })
-  expect(view.container.querySelector('[data-shell-panel-id="inspector"]')).toHaveTextContent('Work order')
+  await waitFor(() => expect(view.container.querySelector('[data-shell-panel-id="inspector"]')).toHaveTextContent('Work order'))
   expect(new URLSearchParams(window.location.search).get('panels')).toBe(panel.id)
   if (multipleWorkspaces) {
     expect(new URLSearchParams(window.location.search).get('source')).toBe('shared link')
@@ -227,12 +247,7 @@ it.each([[480, 'compact', 'bottom-sheet', false], [720, 'medium', 'side-sheet', 
   }
 }, 120_000)
 
-it.each([
-  ['', 'inspection@1.0.0'],
-  [' \t\r\n ', 'inspection@1.0.0'],
-  ['Inspection', 'Inspection'],
-  ['  Inspection  ', 'Inspection'],
-])('shows a stable Inspector identity for title %j on activation and restore', async (title, expectedIdentity) => {
+it.each(['', ' \t\r\n ', 'Inspection', '  Inspection  '])('shows exact authorized title %j on activation and restore', async (title) => {
   vi.stubEnv('VITE_FORMS_FIXTURE', '1')
   vi.stubEnv('VITE_AUTHORIZATION_FIXTURE', '1')
   vi.stubEnv('VITE_AUTHORIZATION_API_ORIGIN', 'http://localhost:7308')
@@ -243,10 +258,12 @@ it.each([
     packKey: 'harborline.platform', packVersion: '1.0.0', definitionKind: 'ViewDefinition',
     bindings: { viewKind: 'views.entity-list/grid', parameters: { fields: [{ id: 'formId', label: 'Key' }, { id: 'title', label: 'Title' }] } },
   }
-  const entry = { id: 'inspection', version: '1.0.0', status: 'Active', title: { defaultLocale: 'en', values: { en: title } }, body: { cascadeLayer: 'Pack', privateNote: 'Private body is not an identity' } }
-  vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => {
+  const entry = { catalogueFieldBinding: detailFixture.source.catalogueFieldBinding, id: 'inspection', version: '1.0.0', status: 'Active', title: { defaultLocale: 'en', values: { en: title } }, body: { cascadeLayer: 'Pack', privateNote: 'Private body is not an identity' } }
+  vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     const path = String(url)
-    if (path.endsWith('/api/local-node/navigation/workspaces')) return Response.json(workshop)
+    const detail = detailResponse(path, init, title)
+    if (detail) return detail
+    if (path === '/api/selected-node/local-node/navigation/workspaces') return Response.json(workshop)
     if (path.includes('/ViewDefinition/')) return Response.json({ renderPlan: plan })
     if (path.includes('/catalogue/definitions?kind=FormDefinition')) return Response.json({ entries: [entry], kindsUnavailable: [] })
     return Response.json([])
@@ -257,8 +274,9 @@ it.each([
   fireEvent.doubleClick(view.container.querySelector('[data-row-id="inspection@1.0.0"]')!)
   const assertIdentity = (container: HTMLElement) => {
     const inspector = container.querySelector('[data-shell-panel-id="inspector"]')!
-    expect(inspector.querySelector('h2')?.textContent).toBe(expectedIdentity)
-    expect([...inspector.querySelectorAll('p')].map(paragraph => paragraph.textContent)).toContain(`${expectedIdentity} · follows selection`)
+    expect(inspector.querySelector('output#formId')?.textContent).toBe('inspection')
+    expect(inspector.querySelector('output#title')?.textContent).toBe(title)
+    expect([...inspector.querySelectorAll('p')].map(paragraph => paragraph.textContent)).toContain('Selection · follows selection')
     const address = new URLSearchParams(window.location.search)
     expect(address.get('selected')).toBe('inspection@1.0.0')
     expect(address.get('panels')).toBe('inspector')
@@ -281,7 +299,7 @@ it.each(['missing', 'assets', 'unavailable', 'forms', 'empty'])('clears a stale 
   const declaration = structuredClone(accessFirst)
   if (item === 'forms') declaration.pack.seedWorkspaces = declaration.pack.seedWorkspaces.filter(workspace => workspace.id !== 'workshop')
   if (item === 'empty') { declaration.pack.seedWorkspaces = []; declaration.pack.panelSet = [] }
-  vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => String(url).endsWith('/api/local-node/navigation/workspaces') ? Response.json(declaration) : Response.json([])))
+  vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => String(url) === '/api/selected-node/local-node/navigation/workspaces' ? Response.json(declaration) : Response.json([])))
   const { App } = await import('../App')
   const view = render(<App />)
   await waitFor(() => expect(view.container.querySelector('main h1')).toHaveTextContent('Assets'))

@@ -1,0 +1,61 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Workshop
+@using Harborline.UIAdapters.Blazor.Components.DataDisplay
+@using Harborline.UIAdapters.Blazor.Components.Forms
+@using System.Text.Json
+@inject IWorkshopCatalogueClient CatalogueClient
+@implements IDisposable
+
+@if (form is not null && renderedRow == Row)
+{
+    <HarborlineSchemaForm @key="form" View="@form" Values="@values" ReadOnly="true" OnSubmit="@InertSubmit" />
+}
+
+@code {
+    [Parameter, EditorRequired] public ViewRuntimeRow Row { get; set; } = default!;
+    private ViewRuntimeRow? requestedRow;
+    private ViewRuntimeRow? renderedRow;
+    private SchemaFormView? form;
+    private IReadOnlyDictionary<string, object?> values = new Dictionary<string, object?>();
+    private CancellationTokenSource? request;
+    private bool interactive;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (interactive) await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        interactive = true;
+        await LoadAsync();
+        if (request?.IsCancellationRequested == false) StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (requestedRow == Row) return;
+        requestedRow = Row;
+        var selected = Row;
+        request?.Cancel();
+        request?.Dispose();
+        request = new CancellationTokenSource();
+        var token = request.Token;
+        form = null; renderedRow = null;
+        if (!Row.Values.TryGetValue("catalogue", out var raw) || raw is not WorkshopCatalogueEntry { CatalogueFieldBinding: not null } source) return;
+        try
+        {
+            var definition = await CatalogueClient.ReadFormAsync(CatalogueDetailProjection.Id, CatalogueDetailProjection.Version, token);
+            var coordinates = CatalogueDetailProjection.Requests(definition, source);
+            var response = await CatalogueClient.PostJsonAsync($"api/local-node/catalogue/details/{CatalogueDetailProjection.Id}/{CatalogueDetailProjection.Version}", coordinates, token);
+            var projected = CatalogueDetailProjection.From(definition, response);
+            if (token.IsCancellationRequested) return;
+            form = projected.Form; values = projected.Values; renderedRow = selected;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or JsonException or KeyNotFoundException or OperationCanceledException)
+        { /* Missing, refused and unsupported definitions are absent. */ }
+    }
+
+    private static ValueTask<SchemaFormValidationResult?> InertSubmit(IReadOnlyDictionary<string, object?> _) => ValueTask.FromResult<SchemaFormValidationResult?>(null);
+    public void Dispose() { request?.Cancel(); request?.Dispose(); }
+}

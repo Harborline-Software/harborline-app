@@ -12,8 +12,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "test:preview": "pnpm build && node --test scripts/preview-host.test.mjs",
     "typecheck": "tsc -b --noEmit",
-    "test": "vitest run"
+    "test": "node --test ../shared/tests/*.test.mjs && vitest run"
   },
   "dependencies": {
     "@harborline-software/contracts": "file:.feed/contracts",

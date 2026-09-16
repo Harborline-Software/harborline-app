@@ -3,14 +3,19 @@ using Harborline.App.Blazor.ReferenceHost.Navigation;
 using Harborline.App.Blazor.ReferenceHost;
 using Harborline.App.Blazor.ReferenceHost.Admin.Authorization;
 using Harborline.App.Blazor.ReferenceHost.Workshop;
+using Harborline.App.Blazor.ReferenceHost.Transport;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+builder.Services.AddSelectedSessionBrowser();
 // The platform UI package ships its own DI registration. Its app layout injects
 // IMediaQueryObserver, so composing platform components without this throws at render.
 builder.Services.AddHarborlineUiAdapters();
 
-// Ticket 093. The local node's listener gate is gate-all-by-default, so an admin HTTP client that
+// Ticket 093. Retained for authorization-admin and the explicitly desktop-only Workshop
+// export/verify/trace families. Interactive catalogue, navigation, install and activate use
+// the browser's selected-session transport and cannot inherit this credential.
+// The local node's listener gate is gate-all-by-default, so an admin HTTP client that
 // presents nothing gets 401 and the surface shows an error where data should be. This lane is
 // server-rendered, so the credential stays in server configuration and never reaches the browser.
 // Set LocalNode:SessionToken (env: LocalNode__SessionToken) to the same per-boot token the node was
@@ -29,8 +34,10 @@ void ConfigureNodeClient(HttpClient client, string baseUrl)
 var workshopBaseUrl = builder.Configuration["Workshop:BaseUrl"];
 if (!string.IsNullOrWhiteSpace(workshopBaseUrl))
 {
-    builder.Services.AddHttpClient<IWorkshopCatalogueClient, HttpWorkshopCatalogueClient>(
-        client => ConfigureNodeClient(client, workshopBaseUrl));
+    builder.Services.AddSingleton(_ => new SelectedSessionProxy(new Uri(workshopBaseUrl)));
+    builder.Services.AddHttpClient<HttpWorkshopCatalogueClient>(client => ConfigureNodeClient(client, workshopBaseUrl));
+    builder.Services.AddScoped<BrowserWorkshopCatalogueClient>();
+    builder.Services.AddScoped<IWorkshopCatalogueClient, WorkshopAudienceClient>();
 }
 else
 {
@@ -43,8 +50,7 @@ else
 var authorizationAdminBaseUrl = builder.Configuration["AuthorizationAdmin:BaseUrl"];
 if (!string.IsNullOrWhiteSpace(authorizationAdminBaseUrl))
 {
-    builder.Services.AddHttpClient<IPackNavigationClient, HttpPackNavigationClient>(
-        client => ConfigureNodeClient(client, authorizationAdminBaseUrl));
+    builder.Services.AddScoped<IPackNavigationClient, BrowserPackNavigationClient>();
     builder.Services.AddHttpClient<IAuthorizationAdminClient, HttpAuthorizationAdminClient>(
         client => ConfigureNodeClient(client, authorizationAdminBaseUrl));
 }
@@ -64,5 +70,7 @@ else
 var app = builder.Build();
 app.UseAntiforgery();
 app.MapStaticAssets();
+app.MapMethods(SelectedSessionProxy.Route, ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    (HttpContext context, SelectedSessionProxy proxy) => proxy.ForwardAsync(context));
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.Run();

@@ -36,3 +36,30 @@ The focused wire fixtures are synthetic contract examples, based on
 evidence. Both host suites exercise numeric unavailability, immutable identity and
 provenance, ordered fields, exact surface requests, refusal, inert plans, and late
 responses. Shell tests restore both surface families through the same URL shape.
+
+## Read-only Form detail (T-427)
+
+Selecting a row with a typed `catalogueFieldBinding` resolves
+`platform.detail.form@1.0.0` through the same catalogue. Both lanes require its
+`forms.catalogue-field-source` capability, coordinate and mapping schema version 1,
+and ordered `formId`, `title`, `version`, `cascadeLayer` source mapping. They post
+exact source coordinates and the released source binding to the catalogue detail
+endpoint; the ordinary entry `definitionHash` is not that binding.
+
+The returned detail binding must match the resolved render-plan hash (the binding
+uses a `sha256:` prefix) and pack provenance. The adapter enumerates admitted
+`fieldsMeta`, prunes denied field declarations and section references before the
+shared form adapter, and reads values only for those admitted fields. The shared
+SchemaForm host read-only mode renders values without editor controls, submission,
+or action callbacks. The inspector has no raw-body or compiled-page fallback:
+missing, refused, unsupported and stale-selection responses leave it empty.
+
+`tests/fixtures/catalogue-detail.json` copies the API T-427 seed content and its
+canonical hash; its transport envelopes model the API PR160 contract rather than
+claiming a live-node capture. React and Blazor tests consume that same fixture and
+compare ordered labels/values plus absence of actions. React additionally uses
+throwing transport getters to prove zero denied-value and source-body reads;
+Blazor carries an invalid denied-value sentinel that would fail if decoded.
+The API runtime's `CatalogueFieldRuntimeTests` separately proves denied title
+access never invokes the protected source getter. Existing T-428 unavailable,
+empty and restored-selection fences remain in the full App suites.

@@ -1,0 +1,337 @@
+{
+  "note": "Contract fixture: detail content copied verbatim from the T427 platform pack seed; envelopes model API PR160. Live clean-node release evidence is recorded separately.",
+  "definition": {
+    "id": "platform.detail.form",
+    "version": "1.0.0",
+    "status": "Published",
+    "body": {
+      "catalogueFieldSource": {
+        "capabilityId": "forms.catalogue-field-source",
+        "coordinateSchemaVersion": 1,
+        "sourceMappingSchemaVersion": 1,
+        "sourceKind": "FormDefinition",
+        "fields": [
+          {
+            "fieldId": "formId",
+            "source": "catalogue.entry.formId"
+          },
+          {
+            "fieldId": "title",
+            "source": "catalogue.entry.title"
+          },
+          {
+            "fieldId": "version",
+            "source": "catalogue.entry.version"
+          },
+          {
+            "fieldId": "cascadeLayer",
+            "source": "catalogue.entry.cascadeLayer"
+          }
+        ]
+      },
+      "overlay": {
+        "title": {
+          "kind": "Literal",
+          "value": "Form details"
+        },
+        "fields": {
+          "formId": {
+            "label": {
+              "kind": "Literal",
+              "value": "Form ID"
+            },
+            "controlHint": "text",
+            "readOnly": true,
+            "piiSensitivity": "None"
+          },
+          "title": {
+            "label": {
+              "kind": "Literal",
+              "value": "Title"
+            },
+            "controlHint": "text",
+            "readOnly": true,
+            "piiSensitivity": "None"
+          },
+          "version": {
+            "label": {
+              "kind": "Literal",
+              "value": "Version"
+            },
+            "controlHint": "text",
+            "readOnly": true,
+            "piiSensitivity": "None"
+          },
+          "cascadeLayer": {
+            "label": {
+              "kind": "Literal",
+              "value": "Cascade layer"
+            },
+            "controlHint": "text",
+            "readOnly": true,
+            "piiSensitivity": "None"
+          }
+        },
+        "sections": [
+          {
+            "id": "details",
+            "title": {
+              "kind": "Literal",
+              "value": "Details"
+            },
+            "fields": [
+              "formId",
+              "title",
+              "version",
+              "cascadeLayer"
+            ]
+          }
+        ],
+        "rules": []
+      },
+      "fieldsMeta": {
+        "formId": {
+          "type": "text",
+          "required": false
+        },
+        "title": {
+          "type": "text",
+          "required": false
+        },
+        "version": {
+          "type": "text",
+          "required": false
+        },
+        "cascadeLayer": {
+          "type": "text",
+          "required": false
+        }
+      }
+    },
+    "renderPlan": {
+      "definitionId": "platform.detail.form",
+      "definitionVersion": "1.0.0",
+      "definitionKind": "FormDefinition",
+      "definitionHash": "7a13d034b984b1e05afa21780b5e015de2c16f29ac0303641fb4fbfb6468fa02",
+      "packKey": "harborline.platform",
+      "packVersion": "1.3.0",
+      "bindings": {
+        "fields": {
+          "formId": {
+            "type": "text",
+            "required": false
+          },
+          "title": {
+            "type": "text",
+            "required": false
+          },
+          "version": {
+            "type": "text",
+            "required": false
+          },
+          "cascadeLayer": {
+            "type": "text",
+            "required": false
+          }
+        },
+        "overlay": {
+          "title": {
+            "kind": "Literal",
+            "value": "Form details"
+          },
+          "fields": {
+            "formId": {
+              "label": {
+                "kind": "Literal",
+                "value": "Form ID"
+              },
+              "controlHint": "text",
+              "readOnly": true,
+              "piiSensitivity": "None"
+            },
+            "title": {
+              "label": {
+                "kind": "Literal",
+                "value": "Title"
+              },
+              "controlHint": "text",
+              "readOnly": true,
+              "piiSensitivity": "None"
+            },
+            "version": {
+              "label": {
+                "kind": "Literal",
+                "value": "Version"
+              },
+              "controlHint": "text",
+              "readOnly": true,
+              "piiSensitivity": "None"
+            },
+            "cascadeLayer": {
+              "label": {
+                "kind": "Literal",
+                "value": "Cascade layer"
+              },
+              "controlHint": "text",
+              "readOnly": true,
+              "piiSensitivity": "None"
+            }
+          },
+          "sections": [
+            {
+              "id": "details",
+              "title": {
+                "kind": "Literal",
+                "value": "Details"
+              },
+              "fields": [
+                "formId",
+                "title",
+                "version",
+                "cascadeLayer"
+              ]
+            }
+          ],
+          "rules": []
+        }
+      }
+    }
+  },
+  "source": {
+    "id": "platform.pack.author",
+    "version": "1.0.0",
+    "status": "Published",
+    "kind": 0,
+    "catalogueFieldBinding": {
+      "definitionHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "provenance": {
+        "kind": "pack",
+        "packKey": "harborline.platform",
+        "packVersion": "1.3.0"
+      }
+    }
+  },
+  "response": {
+    "projection": {
+      "detailId": "platform.detail.form",
+      "detailVersion": "1.0.0",
+      "detailBinding": {
+        "definitionHash": "sha256:7a13d034b984b1e05afa21780b5e015de2c16f29ac0303641fb4fbfb6468fa02",
+        "provenance": {
+          "kind": "pack",
+          "packKey": "harborline.platform",
+          "packVersion": "1.3.0"
+        }
+      },
+      "overlay": {
+        "title": {
+          "kind": "Literal",
+          "value": "Form details"
+        },
+        "fields": {
+          "formId": {
+            "label": {
+              "kind": "Literal",
+              "value": "Form ID"
+            },
+            "controlHint": "text",
+            "readOnly": true,
+            "piiSensitivity": "None"
+          },
+          "title": {
+            "label": {
+              "kind": "Literal",
+              "value": "Title"
+            },
+            "controlHint": "text",
+            "readOnly": true,
+            "piiSensitivity": "None"
+          },
+          "version": {
+            "label": {
+              "kind": "Literal",
+              "value": "Version"
+            },
+            "controlHint": "text",
+            "readOnly": true,
+            "piiSensitivity": "None"
+          },
+          "cascadeLayer": {
+            "label": {
+              "kind": "Literal",
+              "value": "Cascade layer"
+            },
+            "controlHint": "text",
+            "readOnly": true,
+            "piiSensitivity": "None"
+          }
+        },
+        "sections": [
+          {
+            "id": "details",
+            "title": {
+              "kind": "Literal",
+              "value": "Details"
+            },
+            "fields": [
+              "formId",
+              "title",
+              "version",
+              "cascadeLayer"
+            ]
+          }
+        ],
+        "rules": []
+      },
+      "fieldsMeta": {
+        "formId": {
+          "type": "text",
+          "required": false
+        },
+        "title": {
+          "type": "text",
+          "required": false
+        },
+        "version": {
+          "type": "text",
+          "required": false
+        },
+        "cascadeLayer": {
+          "type": "text",
+          "required": false
+        }
+      },
+      "values": {
+        "formId": "platform.pack.author",
+        "title": {
+          "defaultLocale": "en",
+          "values": {
+            "en": "Author a domain pack"
+          }
+        },
+        "version": "1.0.0",
+        "cascadeLayer": "Pack"
+      },
+      "readOnly": true
+    },
+    "refusals": []
+  },
+  "normalized": [
+    [
+      "Form ID",
+      "platform.pack.author"
+    ],
+    [
+      "Title",
+      "Author a domain pack"
+    ],
+    [
+      "Version",
+      "1.0.0"
+    ],
+    [
+      "Cascade layer",
+      "Pack"
+    ]
+  ]
+}

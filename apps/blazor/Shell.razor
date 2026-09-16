@@ -106,7 +106,6 @@
     private readonly CancellationTokenSource navigationCancellation = new();
     private RoleVocabulary roleVocabulary = RoleVocabulary.FromApi([]);
     private static readonly HeldRoleSet HeldRoles = new([]);
-    private static readonly JsonSerializerOptions InspectorJsonOptions = new() { WriteIndented = true };
 
     private string ActiveLabel => activeItemId switch
     {
@@ -130,7 +129,7 @@
     private RenderFragment<PackPanelDeclaration> PanelToolbar => panel => @<span>
         @if (panel.Id == "inspector")
         {
-            <p>@(selectedDefinition is null ? "No selection · follows selection" : $"{DisplayTitle(selectedDefinition)} · follows selection")</p>
+            <p>@(selectedDefinition is null ? "No selection · follows selection" : "Selection · follows selection")</p>
         }
     </span>;
     private RenderFragment<PackPanelDeclaration> PanelContent => panel => @<section class="happ-pilot">
@@ -143,8 +142,7 @@
                 }
                 else
                 {
-                    <h2>@DisplayTitle(selectedDefinition)</h2>
-                    <pre>@JsonSerializer.Serialize(selectedDefinition.Values, InspectorJsonOptions)</pre>
+                    <CatalogueDetail Row="@selectedDefinition" />
                 }
             </section>
         }
@@ -218,7 +216,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadNavigationAsync();
         try
         {
             var rows = await AuthorizationClient.ListRoleVocabularyAsync();
@@ -239,18 +236,19 @@
         }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadNavigationAsync();
+        if (!navigationCancellation.IsCancellationRequested) StateHasChanged();
+    }
+
     private IReadOnlyList<string> DeclaredPanels() => DeclaredPanels(packNavigation ?? Navigation);
     private static IReadOnlyList<string> DeclaredPanels(PackNavigationDeclaration navigation) => navigation.PanelSet?.Select(panel => panel.Id).ToArray() ?? [];
     private static IReadOnlyList<string> DeclaredItemIds(PackNavigationDeclaration navigation) => navigation.SeedWorkspaces
         .SelectMany(workspace => workspace.Groups ?? [])
         .SelectMany(group => group.ItemIds)
         .ToArray();
-    private static string DisplayTitle(ViewRuntimeRow row)
-    {
-        var title = row.Values.TryGetValue("title", out var value) ? value?.ToString()?.Trim() : null;
-        return string.IsNullOrEmpty(title) ? row.Id : title;
-    }
-
     private sealed record ChromeAddress(string? ItemId, string? SelectedRowId, IReadOnlyList<string> OpenPanelIds, bool HasPanelState, string? Surface);
 
     private ChromeAddress ReadAddress()

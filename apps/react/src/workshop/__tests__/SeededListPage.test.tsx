@@ -87,7 +87,7 @@ describe('seeded Workshop list', () => {
     const plan = { ...actionPlan, definitionId: viewId, bindings: { ...actionPlan.bindings,
       parameters: { fields: [{ id: 'status', label: 'Lifecycle' }, { id: 'formId', label: 'Key' }] }, actions: [],
     } }
-    const fetchMock = vi.fn(async (input: string) => Response.json(input.includes('/ViewDefinition/')
+    const fetchMock = vi.fn(async (input: string, _options?: RequestInit) => Response.json(input.includes('/ViewDefinition/')
       ? { renderPlan: plan }
       : { entries: [{ id: 'inspection', version: '1.0.0', status: 'Published' }], kindsUnavailable: [] }))
     vi.stubGlobal('fetch', fetchMock)
@@ -95,9 +95,13 @@ describe('seeded Workshop list', () => {
     render(<SeededListPage itemId="forms" {...{ viewId }} selectedRowId="inspection@1.0.0" onSelectionRestored={restored} />)
     await screen.findByRole('grid')
     expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
-      `/api/local-node/catalogue/definitions/ViewDefinition/${viewId}`,
-      '/api/local-node/catalogue/definitions?kind=FormDefinition',
+      `/api/selected-node/local-node/catalogue/definitions/ViewDefinition/${viewId}`,
+      '/api/selected-node/local-node/catalogue/definitions?kind=FormDefinition',
     ])
+    for (const [, options] of fetchMock.mock.calls) {
+      expect(options).toMatchObject({ method: 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'error' })
+      expect(new Headers(options?.headers).has('Authorization')).toBe(false)
+    }
     expect(screen.getAllByRole('columnheader').map(node => node.textContent)).toEqual(['Lifecycle', 'Key'])
     await waitFor(() => expect(restored).toHaveBeenCalledWith(expect.objectContaining({ id: 'inspection@1.0.0' })))
   })
@@ -138,7 +142,7 @@ describe('seeded Workshop list', () => {
     expect(screen.queryByRole('grid')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
     expect(fetchMock.mock.calls.filter(([input]) => input.includes('/ViewDefinition/')).map(([input]) => input))
-      .toEqual([`/api/local-node/catalogue/definitions/ViewDefinition/${viewId}`])
+      .toEqual([`/api/selected-node/local-node/catalogue/definitions/ViewDefinition/${viewId}`])
   })
 
   it('keeps an available empty view actionable and suppresses restoration for an inert plan', async () => {
@@ -222,6 +226,10 @@ describe('seeded Workshop list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Draft check' }))
 
     expect(await screen.findByRole('textbox', { name: 'Pack document' })).toBeInTheDocument()
+    const formRequest = fetchMock.mock.calls.find(([url]) => url.endsWith('/FormDefinition/platform.pack.author'))!
+    expect(formRequest[0]).toBe('/api/selected-node/local-node/catalogue/definitions/FormDefinition/platform.pack.author')
+    expect(formRequest[1]).toMatchObject({ credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: expect.any(AbortSignal) })
+    expect(new Headers(formRequest[1]?.headers).has('Authorization')).toBe(false)
   })
 
   it('restores selection without activation, then forwards an explicit inspect action on the same row', async () => {
@@ -235,8 +243,8 @@ describe('seeded Workshop list', () => {
     render(<SeededListPage itemId="forms" selectedRowId="work-order@1.0.0" onRowActivate={activated} onSelectionRestored={restored} />)
     expect(await screen.findByRole('grid')).toHaveAttribute('aria-label', 'View results')
     expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
-      '/api/local-node/catalogue/definitions/ViewDefinition/platform.list.forms',
-      '/api/local-node/catalogue/definitions?kind=FormDefinition',
+      '/api/selected-node/local-node/catalogue/definitions/ViewDefinition/platform.list.forms',
+      '/api/selected-node/local-node/catalogue/definitions?kind=FormDefinition',
     ])
     expect(screen.getAllByRole('columnheader').map(node => node.textContent)).toEqual(['Key', 'Title', 'Version', 'Cascade layer'])
     expect(screen.getByText('work-order')).toBeInTheDocument()
@@ -247,15 +255,18 @@ describe('seeded Workshop list', () => {
   })
 
   it('executes only seed-declared commands through the full pack and record workflow', async () => {
-    const packBytes = new Uint8Array([1, 2, 3, 4])
+    const packBytes = new Uint8Array([0, 255, 128, 4])
     const requests: Array<{ url: string; init?: RequestInit }> = []
     let createAttempts = 0
     let activationAttempts = 0
     let listReads = 0
     const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
       requests.push({ url: input, init })
+      if (input === '/api/selected-node/session/antiforgery') return new Response(null, {
+        headers: { 'X-Harborline-Antiforgery': 'selected-token' },
+      })
       if (input.includes('/ViewDefinition/')) return Response.json({ renderPlan: actionPlan })
-      if (input === '/api/local-node/catalogue/definitions?kind=FormDefinition') {
+      if (input === '/api/selected-node/local-node/catalogue/definitions?kind=FormDefinition') {
         listReads += 1
         return Response.json({
           entries: listReads === 1 ? [] : [{ id: 'acme.capture', version: '2.0.0', status: 'Published', title: { defaultLocale: 'en', values: { en: 'Capture asset' } } }],
@@ -331,6 +342,21 @@ describe('seeded Workshop list', () => {
     await screen.findByText(/"outcome": "Allowed"/)
 
     const request = (suffix: string) => requests.find(entry => entry.url.endsWith(suffix))!
+    for (const suffix of ['/packs/install', '/packs/activate', '/asset-registry/entities']) {
+      const selected = request(suffix)
+      expect(selected.url).toBe(`/api/selected-node/local-node${suffix}`)
+      expect(selected.init).toMatchObject({ credentials: 'same-origin', cache: 'no-store', redirect: 'error' })
+      expect(new Headers(selected.init?.headers).get('X-Harborline-Antiforgery')).toBe('selected-token')
+      expect(new Headers(selected.init?.headers).has('Authorization')).toBe(false)
+    }
+    // API4750c148 HostedPackComposerApiEndpoint81 and HostedAuthorizationAdminApiEndpoint28
+    // register these families as desktop-only; no selected refusal may fall back to them.
+    for (const suffix of ['/packs/export?validateOnly=true', '/packs/export', '/packs/verify', '/authorization/traces/audit-9'])
+      expect(request(suffix).url).toBe(`/api/local-node${suffix}`)
+    const propertyRequest = request('/FormDefinition/acme.capture?version=2.0.0')
+    expect(propertyRequest.url).toBe('/api/selected-node/local-node/catalogue/definitions/FormDefinition/acme.capture?version=2.0.0')
+    expect(propertyRequest.init).toMatchObject({ credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: expect.any(AbortSignal) })
+    expect(new Headers(propertyRequest.init?.headers).has('Authorization')).toBe(false)
     expect(JSON.parse(String(request('/packs/export?validateOnly=true').init?.body))).toEqual(candidate)
     expect(JSON.parse(String(request('/packs/activate').init?.body))).toEqual({ packKey: 'acme.assets', version: '1.0.0' })
     expect(JSON.parse(String(request('/asset-registry/entities').init?.body))).toEqual({
@@ -339,9 +365,9 @@ describe('seeded Workshop list', () => {
     const verifyBody = request('/packs/verify').init?.body as Blob
     const installBody = request('/packs/install').init?.body as Blob
     expect({ size: verifyBody.size, type: verifyBody.type }).toEqual({ size: 4, type: 'application/octet-stream' })
-    expect(Array.from(new Uint8Array(await verifyBody.arrayBuffer()))).toEqual([1, 2, 3, 4])
+    expect(Array.from(new Uint8Array(await verifyBody.arrayBuffer()))).toEqual([0, 255, 128, 4])
     expect({ size: installBody.size, type: installBody.type }).toEqual({ size: 4, type: 'application/octet-stream' })
-    expect(Array.from(new Uint8Array(await installBody.arrayBuffer()))).toEqual([1, 2, 3, 4])
+    expect(Array.from(new Uint8Array(await installBody.arrayBuffer()))).toEqual([0, 255, 128, 4])
 
     fireEvent.click(screen.getByRole('button', { name: 'Go live' }))
     await screen.findByText(/Activation completed with projection refusals/)
@@ -373,6 +399,51 @@ describe('seeded Workshop list', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Draft check')
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/packs/export'))).toBe(false)
+  })
+
+  it.each(['denied', 'cancelled'] as const)('selected install is %s without retry or desktop fallback', async mode => {
+    const calls: Array<{ path: string; options?: RequestInit }> = []
+    let releaseToken!: (response: Response) => void
+    const pendingToken = new Promise<Response>(resolve => { releaseToken = resolve })
+    const request = vi.fn(async (path: string, options?: RequestInit): Promise<Response> => {
+      calls.push({ path, options })
+      if (path.includes('/ViewDefinition/')) return Response.json({ renderPlan: actionPlan })
+      if (path.includes('/FormDefinition/platform.pack.author')) return Response.json(authorForm)
+      if (path.includes('/catalogue/definitions?')) return Response.json({ entries: [], kindsUnavailable: [] })
+      if (path === '/api/local-node/packs/export?validateOnly=true') return Response.json({ valid: true })
+      if (path === '/api/local-node/packs/export') return new Response(new Uint8Array([0, 255, 128]), { headers: { 'Content-Type': 'application/octet-stream' } })
+      if (path === '/api/local-node/packs/verify') return Response.json({ verdict: 'Verified' })
+      if (path === '/api/selected-node/session/antiforgery') return mode === 'cancelled' ? pendingToken
+        : new Response(null, { headers: { 'X-Harborline-Antiforgery': 'token' } })
+      if (path === '/api/selected-node/local-node/packs/install')
+        return new Response('{"code":"authorization.permission_required","auditId":"native-denial"}', { status: 403 })
+      throw new Error(`Unexpected fallback: ${path}`)
+    })
+    vi.stubGlobal('fetch', request)
+    vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:pack'), revokeObjectURL: vi.fn() })
+    const cut = render(<SeededListPage itemId="forms" />)
+    await screen.findByRole('grid')
+    fireEvent.click(screen.getByRole('button', { name: 'Draft check' }))
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Pack document' }), { target: { value: JSON.stringify(candidate) } })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Draft check' }).at(-1)!)
+    await screen.findByText(/"valid": true/)
+    fireEvent.click(screen.getByRole('button', { name: 'Make bundle' }))
+    await screen.findByRole('link', { name: 'acme.assets-1.0.0.pack' })
+    fireEvent.click(screen.getByRole('button', { name: 'Check signature' }))
+    await screen.findByText(/"verdict": "Verified"/)
+    fireEvent.click(screen.getByRole('button', { name: 'Stage bundle' }))
+    await waitFor(() => expect(calls.some(call => call.path.endsWith('/session/antiforgery'))).toBe(true))
+    if (mode === 'cancelled') {
+      cut.unmount()
+      expect(calls.find(call => call.path.endsWith('/session/antiforgery'))?.options?.signal?.aborted).toBe(true)
+      await act(async () => releaseToken(new Response(null, { headers: { 'X-Harborline-Antiforgery': 'token' } })))
+    } else {
+      expect(await screen.findByRole('alert')).toHaveTextContent('authorization.permission_required')
+      expect(screen.getByRole('alert')).toHaveTextContent('native-denial')
+    }
+    expect(calls.filter(call => call.path === '/api/selected-node/local-node/packs/install')).toHaveLength(mode === 'cancelled' ? 0 : 1)
+    expect(calls.filter(call => call.path === '/api/selected-node/session/antiforgery')).toHaveLength(1)
+    expect(calls.some(call => call.path === '/api/local-node/packs/install')).toBe(false)
   })
 
   it.each([false, true])('drops retained workflow state for unknown view kind=%s', async unknownViewKind => {

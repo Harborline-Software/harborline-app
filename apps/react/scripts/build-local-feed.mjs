@@ -7,7 +7,7 @@
 // exactly the defect the Blazor lane shipped (assets present in obj/, absent from the served
 // app). Packing proves the files listed in "files" are the files the app actually gets.
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gunzipSync } from 'node:zlib'
@@ -41,7 +41,9 @@ const quote = value => (shell && /\s/.test(value) ? `"${value}"` : value)
 const run = (cwd, ...args) =>
   execFileSync('npm', args.map(quote), { cwd, stdio: 'inherit', shell })
 for (const pkg of packages) {
-  run(pkg, 'ci')
+  if (existsSync(path.join(pkg, 'pnpm-lock.yaml'))) {
+    execFileSync('pnpm', ['install', '--frozen-lockfile'], { cwd: pkg, stdio: 'inherit', shell })
+  } else run(pkg, 'ci')
   run(pkg, 'run', 'build')
   run(pkg, 'pack', '--pack-destination', feed)
 }
