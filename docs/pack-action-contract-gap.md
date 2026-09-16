@@ -288,3 +288,20 @@ scheduler or claim cross-database atomicity in this change. Preserve these as a
 follow-up alongside existing deferred rotation work (ADR 0009 / T-018); ordinary
 grant revocation must remain explicitly labelled as such. Scope narrowing still
 requires a real atomic revoke/reissue and the exact frozen scope transition.
+
+## Pre-execution scope fixture correction
+
+The original candidate used slash-bearing record identities. The production
+authorization gate intentionally rejects those identities; this change does not
+extend that gate or add an alternative query-bound record-read route. Before
+acceptance execution, the harness owner corrected the candidate to ordinary IDs
+`m6-t433-allowed-record-1` and `m6-t433-outside-record-1`, with initial grant scope
+`/records` narrowed to `/records/m6-t433-allowed-record-1`. The existing entity-read
+route can address both IDs without encoded path separators.
+
+The corrected contract must prove both records readable before narrowing, only
+the allowed record readable afterward, and neither readable after ordinary grant
+revocation. The store tests assert containment against targets produced by the
+unchanged canonical authorization request builder. This records a pre-run fixture
+correction, not an acceptance result. The exact-five replacement definition set
+is unchanged.
