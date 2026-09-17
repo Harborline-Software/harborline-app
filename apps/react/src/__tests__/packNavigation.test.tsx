@@ -64,6 +64,26 @@ it.each(['health', 'browse'])('restores an explicit %s surface for a declared Wo
   expect(new URLSearchParams(window.location.search).get('surface')).toBe(surface)
 })
 
+it('restores the packaged Views authoring editor on the declared Workshop surface', async () => {
+  vi.stubEnv('VITE_FORMS_FIXTURE', '1')
+  vi.stubEnv('VITE_AUTHORIZATION_FIXTURE', '1')
+  vi.stubEnv('VITE_AUTHORIZATION_API_ORIGIN', 'http://localhost:7308')
+  window.history.replaceState({}, '', '/?item=views&surface=platform.editor.views')
+  const request = vi.fn(async (url: string | URL | Request) => String(url).endsWith('/navigation/workspaces')
+    ? Response.json(workshop)
+    : Response.json([]))
+  vi.stubGlobal('fetch', request)
+
+  const { App } = await import('../App')
+  const view = render(<App />)
+
+  await waitFor(() => expect(view.container.querySelector('[aria-label="View authoring"]')).not.toBeNull())
+  expect(screen.getByRole('textbox', { name: 'View name' })).toBeInTheDocument()
+  expect(screen.getByRole('combobox', { name: 'Who it belongs to' })).toBeInTheDocument()
+  expect(request.mock.calls.some(([url]) => String(url).includes('/ViewDefinition/'))).toBe(false)
+  expect(new URLSearchParams(window.location.search).get('surface')).toBe('platform.editor.views')
+})
+
 it('renders the declared Access workspace and panels, removes them with the declaration, and retries a refused read', async () => {
   vi.stubEnv('VITE_FORMS_FIXTURE', '1')
   vi.stubEnv('VITE_AUTHORIZATION_FIXTURE', '1')

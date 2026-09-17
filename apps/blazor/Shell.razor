@@ -52,7 +52,16 @@
     }
     else if (WorkshopItems.Contains(activeItemId))
     {
-        <main class="happ-page"><h1>@ActiveLabel</h1><SeededListPage ItemId="@activeItemId" ViewId="@(surface is null ? null : $"platform.{surface}.{activeItemId}")" SelectedRowId="@selectedRowId" RowActivated="@SelectDefinitionAsync" SelectionRestored="@(row => selectedDefinition = row)" /></main>
+        <main class="happ-page"><h1>@ActiveLabel</h1>
+            @if (activeItemId == "views" && surface == "platform.editor.views")
+            {
+                <ViewAuthoringPage />
+            }
+            else
+            {
+                <SeededListPage ItemId="@activeItemId" ViewId="@(surface is null || surface == "platform.editor.views" ? null : $"platform.{surface}.{activeItemId}")" SelectedRowId="@selectedRowId" RowActivated="@SelectDefinitionAsync" SelectionRestored="@(row => selectedDefinition = row)" />
+            }
+        </main>
     }
     else
     {
@@ -261,7 +270,7 @@
             query.TryGetValue("selected", out var selected) ? selected.ToString() : null,
             query.TryGetValue("panels", out var panels) ? panels.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries) : [],
             query.ContainsKey("panels"),
-            query.TryGetValue("surface", out var value) && value.ToString() is "health" or "browse" ? value.ToString() : null);
+            query.TryGetValue("surface", out var value) && value.ToString() is "health" or "browse" or "platform.editor.views" ? value.ToString() : null);
     }
 
     private void ReplaceAddress()

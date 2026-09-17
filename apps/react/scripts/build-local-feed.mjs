@@ -33,15 +33,15 @@ mkdirSync(feed, { recursive: true })
 // only ever appeared to work here because a developer machine has a dist/ left over from earlier.
 // Building unconditionally also removes the subtler version of the same hazard: packing a STALE
 // dist and shipping yesterday's component while today's source sits beside it (control ticket 089).
-// npm is a .cmd shim on Windows, and since CVE-2024-27980 Node refuses to spawn one without
+// pnpm is a .cmd shim on Windows, and since CVE-2024-27980 Node refuses to spawn one without
 // shell: true (EINVAL). The shell then CONCATENATES arguments rather than escaping them, so any
 // argument that could contain a space is quoted here explicitly.
 const shell = process.platform === 'win32'
 const quote = value => (shell && /\s/.test(value) ? `"${value}"` : value)
 const run = (cwd, ...args) =>
-  execFileSync('npm', args.map(quote), { cwd, stdio: 'inherit', shell })
+  execFileSync('pnpm', args.map(quote), { cwd, stdio: 'inherit', shell })
 for (const pkg of packages) {
-  run(pkg, 'ci')
+  run(pkg, 'install', '--frozen-lockfile', '--ignore-scripts')
   run(pkg, 'run', 'build')
   run(pkg, 'pack', '--pack-destination', feed)
 }

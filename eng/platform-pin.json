@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "repository": "Harborline-Software/harborline-platform",
-  "commit": "5656aa518fea4a19ef692c6687a38d981fe727fb",
-  "recordedAt": "2026-09-15 (released shared DataGrid dark-shell token fix; publish run 34984704377, job 104433701489)",
+  "commit": "3e62dd67447853587e49c8097e554745e0d89db8",
+  "recordedAt": "2026-09-17 (T-486 packaged Views authoring editors)",
   "why": [
     "Both app lanes consume the platform's UI packages from a local feed built out of a sibling",
     "platform checkout. The feed directories are gitignored, so a clean CI runner had no package",
