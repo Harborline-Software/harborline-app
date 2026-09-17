@@ -1,0 +1,12 @@
+@using Harborline.UIAdapters.Blazor.Components.DataDisplay
+
+<section aria-label="View authoring">
+    <HarborlineViewAuthoringEditor @bind-Value="draft" Catalogue="Catalogue" />
+</section>
+
+@code {
+    private ViewAuthoringDraft draft = ViewAuthoringDraft.Empty;
+
+    [Parameter]
+    public ViewAuthoringCatalogue Catalogue { get; set; } = new([], [], [], [], [], []);
+}

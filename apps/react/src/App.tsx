@@ -7,6 +7,7 @@ import { AuthorizationAdminPage } from './admin/authorization/AuthorizationAdmin
 import { AuthorizationAdminClientProvider } from './admin/authorization/AuthorizationAdminClientContext'
 import { createAuthorizationAdminClient, type AuthorizationAdminClient } from './admin/authorization/client'
 import { SeededListPage } from './workshop/SeededListPage'
+import { ViewAuthoringPage } from './workshop/ViewAuthoringPage'
 
 // Composed from the platform's hlp.ui.app-shell module rather than hand-written chrome, and kept
 // deliberately identical to apps/blazor/Shell.razor: same workspace, same item ids, same labels,
@@ -85,7 +86,7 @@ interface ChromeAddress {
   readonly selectedRowId: string | null
   readonly openPanelIds: readonly string[]
   readonly hasPanelState: boolean
-  readonly surface: 'health' | 'browse' | null
+  readonly surface: 'health' | 'browse' | 'platform.editor.views' | null
 }
 
 function readChromeAddress(): ChromeAddress {
@@ -97,7 +98,7 @@ function readChromeAddress(): ChromeAddress {
     selectedRowId: parameters.get('selected'),
     openPanelIds: parameters.get('panels')?.split(',').filter(Boolean) ?? [],
     hasPanelState: parameters.has('panels'),
-    surface: surface === 'health' || surface === 'browse' ? surface : null,
+    surface: surface === 'health' || surface === 'browse' || surface === 'platform.editor.views' ? surface : null,
   }
 }
 
@@ -229,9 +230,11 @@ export function App() {
         : <section className="happ-pilot"><p>{panel.id === 'pilot' ? `Pilot sees what you see — Portfolio · ${body.title}.` : `${resolveLabel(panel.labelKey ?? panel.id)}: This application surface is not available in this version.`}</p></section>}
       body={activeItemId === 'access.holders' ? <main className="happ-page"><AccessHoldersPage /></main>
         : WORKSHOP_ITEM_IDS.has(activeItemId)
-        ? <main className="happ-page"><h1>{body.title}</h1>{initialAddress.surface && !packNavigation
+        ? <main className="happ-page"><h1>{body.title}</h1>{initialAddress.surface === 'platform.editor.views' && activeItemId === 'views'
+          ? <ViewAuthoringPage />
+          : initialAddress.surface && !packNavigation
           ? <p role="status">Loading Workshop view…</p>
-          : <SeededListPage itemId={activeItemId} viewId={initialAddress.surface ? `platform.${initialAddress.surface}.${activeItemId}` : undefined} selectedRowId={selectedRowId} onRowActivate={inspectDefinition} onSelectionRestored={setSelectedDefinition} />}</main>
+          : <SeededListPage itemId={activeItemId} viewId={initialAddress.surface && initialAddress.surface !== 'platform.editor.views' ? `platform.${initialAddress.surface}.${activeItemId}` : undefined} selectedRowId={selectedRowId} onRowActivate={inspectDefinition} onSelectionRestored={setSelectedDefinition} />}</main>
         : activeItemId === 'admin-authorization'
         ? <main className="happ-page"><AuthorizationAdminPage /></main>
         : <main className="happ-page"><h1>{body.title}</h1><p>{body.description}</p></main>}
