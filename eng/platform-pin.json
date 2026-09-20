@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "repository": "Harborline-Software/harborline-platform",
-  "commit": "ff010b5dc52a94f06899138d2c8eb019b9eaead7",
-  "recordedAt": "2026-09-20 (T-461 released Proposed change / Saved version / Released package definitions; supersedes the T-460 pin at 519e8996, which this commit descends from)",
+  "commit": "7176ab5ae92f885901b3d8232300e6a49fcbee69",
+  "recordedAt": "2026-09-20 (T-461 released Proposed change / Saved version / Released package definitions; platform PR 80 merge commit 7176ab5a, which also carries PR 79 T-658/T-663; supersedes the T-460 pin at 519e8996, which this commit descends from)",
   "why": [
     "Both app lanes consume the platform's UI packages from a local feed built out of a sibling",
     "platform checkout. The feed directories are gitignored, so a clean CI runner had no package",
