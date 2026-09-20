@@ -55,7 +55,7 @@
             <AuthorizationAdminPage />
         </main>
     }
-    else if (WorkshopItems.Contains(activeItemId))
+    else if (WorkshopItemIds(packNavigation).Contains(activeItemId))
     {
         <main class="happ-page"><h1>@ActiveLabel</h1>
             @if (activeItemId == "views" && surface == "platform.editor.views")
@@ -99,7 +99,21 @@
         ["reports"] = "Reports", ["data-exchanges"] = "Data exchanges", ["standing-rules"] = "Standing rules",
         ["schedules"] = "Schedules", ["views"] = "Views",
     };
-    private static readonly IReadOnlySet<string> WorkshopItems = WorkshopLabels.Keys.ToHashSet();
+    // T-585 item 1, and kept identical to apps/react/src/App.tsx. A hand-written membership set is
+    // how a fourteenth member stops reaching the shared shell without anyone noticing: an item the
+    // pack declared and this set did not fell through to the generic body and rendered a placeholder,
+    // silently. The Workshop membership is the pack's to declare; the seeded keys stay as the
+    // no-declaration fallback only.
+    private const string WorkshopWorkspaceId = "workshop";
+    private static readonly IReadOnlySet<string> SeededWorkshopItems = WorkshopLabels.Keys.ToHashSet();
+    private static IReadOnlySet<string> WorkshopItemIds(PackNavigationDeclaration? navigation) =>
+        navigation is null
+            ? SeededWorkshopItems
+            : navigation.SeedWorkspaces
+                .Where(workspace => workspace.Id == WorkshopWorkspaceId)
+                .SelectMany(workspace => workspace.Groups ?? [])
+                .SelectMany(group => group.ItemIds)
+                .ToHashSet(StringComparer.Ordinal);
     private static readonly IReadOnlyList<ShellNavItem> NavigationItems =
     [
         new ShellNavItem("assets", "Assets"),
@@ -218,7 +232,7 @@
                 : navigation.PanelSet?.Where(panel => panel.DefaultOpen).Select(panel => panel.Id).ToArray() ?? [];
             activeItemId = address.ItemId is { } itemId && (itemId == "assets" || DeclaredItemIds(navigation).Contains(itemId, StringComparer.Ordinal))
                 ? itemId : "assets";
-            selectedRowId = WorkshopItems.Contains(activeItemId) ? address.SelectedRowId : null;
+            selectedRowId = WorkshopItemIds(packNavigation).Contains(activeItemId) ? address.SelectedRowId : null;
             selectedDefinition = null;
             if (address.ItemId is not null || address.SelectedRowId is not null || address.HasPanelState) ReplaceAddress();
         }
