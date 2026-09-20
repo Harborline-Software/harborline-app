@@ -49,6 +49,10 @@
     {
         <main class="happ-page"><ConfigurationActivationPage /></main>
     }
+    else if (activeItemId == ProposalItemId)
+    {
+        <main class="happ-page"><ConfigurationProposalPage ProposalId="@proposalId" /></main>
+    }
     else if (activeItemId == "admin-authorization")
     {
         <main class="happ-page">
@@ -81,9 +85,13 @@
     /// <summary>T-657. The api's navigation item id for the governed configuration activation surface.</summary>
     private const string ConfigurationItemId = "configuration.activation";
 
+    /// <summary>T-668. The api's navigation item id for the governed proposed-change surface.</summary>
+    private const string ProposalItemId = "configuration.proposal";
+
     private static string ResolveLabel(string key) => key switch
     {
         "configuration.workspace" => "Configuration", ConfigurationItemId => "Activation",
+        ProposalItemId => "Proposed change",
         "panels.inspector" => "Inspector", "panels.inspector.footerClaim" => "Follows selection",
         "access.workspace" => "Access", "access.holders" => "Holders",
         "access.details" or "access.details.footer" => "Access details",
@@ -132,6 +140,10 @@
     private IReadOnlyList<string> openPanelIds = [];
     private string? selectedRowId;
     private string? surface;
+    // T-668. The entry addresses this install's one working proposed change, named by the entry's own
+    // id; `?proposal=<id>` addresses any other. The api has no proposal-listing route, and inventing a
+    // picker here would be the new surface this ticket is not. Mirrors apps/react/src/App.tsx.
+    private string proposalId = ProposalItemId;
     private ViewRuntimeRow? selectedDefinition;
     private PackNavigationDeclaration? packNavigation;
     private string? navigationError;
@@ -144,6 +156,7 @@
     {
         "access.holders" => "Holders",
         ConfigurationItemId => "Configuration activation",
+        ProposalItemId => "Proposed change",
         "run-report" => "Run report",
         "admin-authorization" => "Settings › System",
         "assets" => "Assets",
@@ -227,6 +240,7 @@
             var navigation = packNavigation ?? Navigation;
             var address = ReadAddress();
             surface = address.Surface;
+            proposalId = address.ProposalId ?? ProposalItemId;
             openPanelIds = address.HasPanelState
                 ? address.OpenPanelIds.Where(DeclaredPanels(navigation).Contains).ToArray()
                 : navigation.PanelSet?.Where(panel => panel.DefaultOpen).Select(panel => panel.Id).ToArray() ?? [];
@@ -284,7 +298,7 @@
         return string.IsNullOrEmpty(title) ? row.Id : title;
     }
 
-    private sealed record ChromeAddress(string? ItemId, string? SelectedRowId, IReadOnlyList<string> OpenPanelIds, bool HasPanelState, string? Surface);
+    private sealed record ChromeAddress(string? ItemId, string? SelectedRowId, IReadOnlyList<string> OpenPanelIds, bool HasPanelState, string? Surface, string? ProposalId);
 
     private ChromeAddress ReadAddress()
     {
@@ -294,7 +308,8 @@
             query.TryGetValue("selected", out var selected) ? selected.ToString() : null,
             query.TryGetValue("panels", out var panels) ? panels.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries) : [],
             query.ContainsKey("panels"),
-            query.TryGetValue("surface", out var value) && value.ToString() is "health" or "browse" or "platform.editor.views" ? value.ToString() : null);
+            query.TryGetValue("surface", out var value) && value.ToString() is "health" or "browse" or "platform.editor.views" ? value.ToString() : null,
+            query.TryGetValue("proposal", out var proposal) && proposal.ToString().Length > 0 ? proposal.ToString() : null);
     }
 
     private void ReplaceAddress()
