@@ -6,6 +6,8 @@ import { AppShell, type PackNavigationDeclaration, type ShellNavigationState, ty
 import { AuthorizationAdminPage } from './admin/authorization/AuthorizationAdminPage'
 import { AuthorizationAdminClientProvider } from './admin/authorization/AuthorizationAdminClientContext'
 import { createAuthorizationAdminClient, type AuthorizationAdminClient } from './admin/authorization/client'
+import { ConfigurationActivationPage } from './admin/configuration/ConfigurationActivationPage'
+import { createHttpConfigurationActivationClient } from './admin/configuration/client/httpClient'
 import { SeededListPage } from './workshop/SeededListPage'
 import { ViewAuthoringPage } from './workshop/ViewAuthoringPage'
 
@@ -21,6 +23,17 @@ try {
 } catch (error) {
   authorizationAdminConfigError = error instanceof Error ? error : new Error(String(error))
 }
+
+// T-657. The configuration activation routes are served by the same local node origin as the
+// authorization admin ones, so this surface reuses it rather than adding a second configured origin.
+// The api projects CONFIGURATION_ITEM_ID only to a caller its routes would admit, so an unconfigured
+// origin never reaches this client: without a declaration there is no entry to activate.
+const configurationActivationClient = createHttpConfigurationActivationClient({
+  baseUrl: import.meta.env.DEV ? '' : import.meta.env.VITE_AUTHORIZATION_API_ORIGIN ?? '',
+})
+
+/** The api's navigation item id for the governed configuration activation surface. */
+const CONFIGURATION_ITEM_ID = 'configuration.activation'
 
 const EMPTY_ROLE_VOCABULARY = RoleVocabulary.fromApi([])
 const EMPTY_HELD_ROLES: HeldRoleSet = { roles: [] }
@@ -57,7 +70,8 @@ const workshopLabels: Record<string, string> = {
   'workshop.standing-rules': 'Standing rules', 'workshop.schedules': 'Schedules', 'workshop.views': 'Views',
 }
 const accessLabels: Record<string, string> = { 'access.workspace': 'Access', 'access.holders': 'Holders', 'access.details': 'Access details', 'access.details.footer': 'Access details' }
-const resolveLabel = (key: string) => ({ ...accessLabels, ...workshopLabels })[key] ?? key
+const configurationLabels: Record<string, string> = { 'configuration.workspace': 'Configuration', 'configuration.activation': 'Activation' }
+const resolveLabel = (key: string) => ({ ...accessLabels, ...configurationLabels, ...workshopLabels })[key] ?? key
 const WORKSHOP_ITEM_IDS = new Set(['asset-types', 'forms', 'workflows', 'standards', 'defaults', 'terminology', 'documents', 'taxonomies', 'reports', 'data-exchanges', 'standing-rules', 'schedules', 'views'])
 
 const NAVIGATION_STATE: ShellNavigationState = {
@@ -66,6 +80,10 @@ const NAVIGATION_STATE: ShellNavigationState = {
 
 const BODY: Record<string, { title: string; description: string }> = {
   'access.holders': { title: 'Holders', description: 'Inspect active access grants.' },
+  [CONFIGURATION_ITEM_ID]: {
+    title: 'Configuration activation',
+    description: 'Inspect the effective configuration generation and the reported activation outcome.',
+  },
   assets: {
     title: 'Assets',
     description: 'Browse and manage the physical assets your organization tracks.',
@@ -229,6 +247,8 @@ export function App() {
           : <p>Select a Workshop definition to inspect it.</p>}</section>
         : <section className="happ-pilot"><p>{panel.id === 'pilot' ? `Pilot sees what you see — Portfolio · ${body.title}.` : `${resolveLabel(panel.labelKey ?? panel.id)}: This application surface is not available in this version.`}</p></section>}
       body={activeItemId === 'access.holders' ? <main className="happ-page"><AccessHoldersPage /></main>
+        : activeItemId === CONFIGURATION_ITEM_ID
+        ? <main className="happ-page"><ConfigurationActivationPage client={configurationActivationClient} /></main>
         : WORKSHOP_ITEM_IDS.has(activeItemId)
         ? <main className="happ-page"><h1>{body.title}</h1>{initialAddress.surface === 'platform.editor.views' && activeItemId === 'views'
           ? <ViewAuthoringPage />

@@ -1,5 +1,6 @@
 @using Harborline.UIAdapters.Blazor.Components.Layout
 @using Harborline.App.Blazor.ReferenceHost.Admin.Authorization
+@using Harborline.App.Blazor.ReferenceHost.Admin.Configuration
 @using Harborline.Contracts.Authorization
 @inject IAuthorizationAdminClient AuthorizationClient
 @using Harborline.App.Blazor.ReferenceHost.Navigation
@@ -44,6 +45,10 @@
     {
         <main class="happ-page"><AccessHoldersPage /></main>
     }
+    else if (activeItemId == ConfigurationItemId)
+    {
+        <main class="happ-page"><ConfigurationActivationPage /></main>
+    }
     else if (activeItemId == "admin-authorization")
     {
         <main class="happ-page">
@@ -73,8 +78,12 @@
 </HarborlineAppShell>
 
 @code {
+    /// <summary>T-657. The api's navigation item id for the governed configuration activation surface.</summary>
+    private const string ConfigurationItemId = "configuration.activation";
+
     private static string ResolveLabel(string key) => key switch
     {
+        "configuration.workspace" => "Configuration", ConfigurationItemId => "Activation",
         "panels.inspector" => "Inspector", "panels.inspector.footerClaim" => "Follows selection",
         "access.workspace" => "Access", "access.holders" => "Holders",
         "access.details" or "access.details.footer" => "Access details",
@@ -120,6 +129,7 @@
     private string ActiveLabel => activeItemId switch
     {
         "access.holders" => "Holders",
+        ConfigurationItemId => "Configuration activation",
         "run-report" => "Run report",
         "admin-authorization" => "Settings › System",
         "assets" => "Assets",
