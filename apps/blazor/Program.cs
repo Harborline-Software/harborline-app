@@ -37,6 +37,9 @@ if (!string.IsNullOrWhiteSpace(workshopBaseUrl))
     // than introducing a second configured base URL and a second token source.
     builder.Services.AddHttpClient<IConfigurationActivationClient, HttpConfigurationActivationClient>(
         client => ConfigureNodeClient(client, workshopBaseUrl));
+    // T-668. The proposed-change routes are served by the same local node, for the same reason.
+    builder.Services.AddHttpClient<IConfigurationProposalClient, HttpConfigurationProposalClient>(
+        client => ConfigureNodeClient(client, workshopBaseUrl));
 }
 else
 {

@@ -8,6 +8,8 @@ import { AuthorizationAdminClientProvider } from './admin/authorization/Authoriz
 import { createAuthorizationAdminClient, type AuthorizationAdminClient } from './admin/authorization/client'
 import { ConfigurationActivationPage } from './admin/configuration/ConfigurationActivationPage'
 import { createHttpConfigurationActivationClient } from './admin/configuration/client/httpClient'
+import { ConfigurationProposalPage } from './admin/configuration/ConfigurationProposalPage'
+import { createHttpConfigurationProposalClient } from './admin/configuration/client/proposalClient'
 import { SeededListPage } from './workshop/SeededListPage'
 import { ViewAuthoringPage } from './workshop/ViewAuthoringPage'
 
@@ -32,8 +34,16 @@ const configurationActivationClient = createHttpConfigurationActivationClient({
   baseUrl: import.meta.env.DEV ? '' : import.meta.env.VITE_AUTHORIZATION_API_ORIGIN ?? '',
 })
 
+// T-668. The proposed-change routes are served by the same local node origin, for the same reason.
+const configurationProposalClient = createHttpConfigurationProposalClient({
+  baseUrl: import.meta.env.DEV ? '' : import.meta.env.VITE_AUTHORIZATION_API_ORIGIN ?? '',
+})
+
 /** The api's navigation item id for the governed configuration activation surface. */
 const CONFIGURATION_ITEM_ID = 'configuration.activation'
+
+/** The api's navigation item id for the governed proposed-change surface (T-668). */
+const PROPOSAL_ITEM_ID = 'configuration.proposal'
 
 const EMPTY_ROLE_VOCABULARY = RoleVocabulary.fromApi([])
 const EMPTY_HELD_ROLES: HeldRoleSet = { roles: [] }
@@ -70,7 +80,7 @@ const workshopLabels: Record<string, string> = {
   'workshop.standing-rules': 'Standing rules', 'workshop.schedules': 'Schedules', 'workshop.views': 'Views',
 }
 const accessLabels: Record<string, string> = { 'access.workspace': 'Access', 'access.holders': 'Holders', 'access.details': 'Access details', 'access.details.footer': 'Access details' }
-const configurationLabels: Record<string, string> = { 'configuration.workspace': 'Configuration', 'configuration.activation': 'Activation' }
+const configurationLabels: Record<string, string> = { 'configuration.workspace': 'Configuration', 'configuration.activation': 'Activation', 'configuration.proposal': 'Proposed change' }
 const resolveLabel = (key: string) => ({ ...accessLabels, ...configurationLabels, ...workshopLabels })[key] ?? key
 // T-585 item 1. This was a hand-written set of thirteen ids, and a hand-written set is how a
 // fourteenth member stops reaching the shared shell without anyone noticing: an item the pack
@@ -97,6 +107,10 @@ const BODY: Record<string, { title: string; description: string }> = {
     title: 'Configuration activation',
     description: 'Inspect the effective configuration generation and the reported activation outcome.',
   },
+  [PROPOSAL_ITEM_ID]: {
+    title: 'Proposed change',
+    description: 'Evolve the effective generation away from operational users, then save and release it.',
+  },
   assets: {
     title: 'Assets',
     description: 'Browse and manage the physical assets your organization tracks.',
@@ -118,6 +132,7 @@ interface ChromeAddress {
   readonly openPanelIds: readonly string[]
   readonly hasPanelState: boolean
   readonly surface: 'health' | 'browse' | 'platform.editor.views' | null
+  readonly proposalId: string
 }
 
 function readChromeAddress(): ChromeAddress {
@@ -125,6 +140,10 @@ function readChromeAddress(): ChromeAddress {
   const surface = parameters.get('surface')
   return {
     activeItemId: parameters.get('item') ?? 'assets',
+    // T-668. The entry addresses this install's one working proposed change, named by the entry's own
+    // id; `?proposal=<id>` addresses any other. The api has no proposal-listing route, and inventing a
+    // picker here would be the new surface this ticket is not.
+    proposalId: parameters.get('proposal') || PROPOSAL_ITEM_ID,
     hasItemState: parameters.has('item'),
     selectedRowId: parameters.get('selected'),
     openPanelIds: parameters.get('panels')?.split(',').filter(Boolean) ?? [],
@@ -262,6 +281,8 @@ export function App() {
       body={activeItemId === 'access.holders' ? <main className="happ-page"><AccessHoldersPage /></main>
         : activeItemId === CONFIGURATION_ITEM_ID
         ? <main className="happ-page"><ConfigurationActivationPage client={configurationActivationClient} /></main>
+        : activeItemId === PROPOSAL_ITEM_ID
+        ? <main className="happ-page"><ConfigurationProposalPage client={configurationProposalClient} proposalId={initialAddress.proposalId} /></main>
         : workshopItemIds(packNavigation).has(activeItemId)
         ? <main className="happ-page"><h1>{body.title}</h1>{initialAddress.surface === 'platform.editor.views' && activeItemId === 'views'
           ? <ViewAuthoringPage />
