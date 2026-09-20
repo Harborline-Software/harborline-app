@@ -2,6 +2,7 @@ using Harborline.UIAdapters.Blazor;
 using Harborline.App.Blazor.ReferenceHost.Navigation;
 using Harborline.App.Blazor.ReferenceHost;
 using Harborline.App.Blazor.ReferenceHost.Admin.Authorization;
+using Harborline.App.Blazor.ReferenceHost.Admin.Configuration;
 using Harborline.App.Blazor.ReferenceHost.Workshop;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,6 +31,11 @@ var workshopBaseUrl = builder.Configuration["Workshop:BaseUrl"];
 if (!string.IsNullOrWhiteSpace(workshopBaseUrl))
 {
     builder.Services.AddHttpClient<IWorkshopCatalogueClient, HttpWorkshopCatalogueClient>(
+        client => ConfigureNodeClient(client, workshopBaseUrl));
+    // T-460. The configuration activation routes are served by the same local node as the Workshop
+    // catalogue, so this surface reuses that origin and the existing server-side credential rather
+    // than introducing a second configured base URL and a second token source.
+    builder.Services.AddHttpClient<IConfigurationActivationClient, HttpConfigurationActivationClient>(
         client => ConfigureNodeClient(client, workshopBaseUrl));
 }
 else
