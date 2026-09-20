@@ -291,7 +291,13 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
   readonly onRowActivate: (rowId: string) => void
   readonly onActivated: () => Promise<void>
 }) {
-  const workshopPlan = plan as WorkshopPlan
+  // Platform T-581 renamed the grid view kind from views.entity-list/grid to layout.table, and
+  // ViewRuntime renders nothing for any other kind. The api still projects the released name, so
+  // the app translates at the one point a plan reaches the platform runtime rather than in every
+  // caller — and drops this when the api's projected kind catches up.
+  const workshopPlan = (plan.bindings.viewKind === 'views.entity-list/grid'
+    ? { ...plan, bindings: { ...plan.bindings, viewKind: 'layout.table' } }
+    : plan) as WorkshopPlan
   const actions = workshopPlan.bindings.parameters?.actions ?? []
   const [workflow, setWorkflow] = useState<WorkflowState>({})
   const [activeForm, setActiveForm] = useState<ActiveForm | null>(null)

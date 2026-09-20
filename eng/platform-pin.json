@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "repository": "Harborline-Software/harborline-platform",
-  "commit": "67538f480c634545b15782a2ac326a801d08aa6a",
-  "recordedAt": "2026-09-17 (T-492 released Data Exchange definitions and runtime)",
+  "commit": "519e899603ac15b481874d4e8c12e44d92c9307e",
+  "recordedAt": "2026-09-19 (T-460 released configuration activation status definitions)",
   "why": [
     "Both app lanes consume the platform's UI packages from a local feed built out of a sibling",
     "platform checkout. The feed directories are gitignored, so a clean CI runner had no package",

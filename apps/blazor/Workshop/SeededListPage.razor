@@ -80,7 +80,7 @@ else if (supported)
             await Task.WhenAll(viewTask, rowsTask);
             if (request != requestVersion || cancellation.IsCancellationRequested) return;
             var view = await viewTask;
-            plan = view.RenderPlan ?? throw new InvalidOperationException("The seeded view has no active compiled render plan.");
+            plan = LayoutKind(view.RenderPlan ?? throw new InvalidOperationException("The seeded view has no active compiled render plan."));
             workflow.Bind(view);
             supported = WorkshopWorkflow.Supports(view);
             list = await rowsTask;
@@ -93,6 +93,15 @@ else if (supported)
             if (request == requestVersion) error = exception.Message;
         }
     }
+
+    // Platform T-581 renamed the grid view kind from views.entity-list/grid to layout.table, and
+    // HarborlineViewRuntime renders nothing for any other kind. The api still projects the released
+    // name, so the app translates at the one point a plan reaches the platform runtime — and drops
+    // this when the api's projected kind catches up. The React lane does the same in WorkshopWorkflow.
+    private static ViewRenderPlan LayoutKind(ViewRenderPlan source) =>
+        source.Bindings.ViewKind == "views.entity-list/grid"
+            ? source with { Bindings = source.Bindings with { ViewKind = "layout.table" } }
+            : source;
 
     private static ViewRuntimeRow ToRow(WorkshopCatalogueEntry entry)
     {
