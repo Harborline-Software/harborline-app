@@ -20,6 +20,16 @@ public sealed class CompiledInspectorRetirementControlsTests
     private static readonly string[] ReactRoots = ["forms", "reports", "views", "data-exchange", "scheduling"];
     private static readonly string[] BlazorRoots = ["Forms", "Reports", "Views", "DataExchange", "Scheduling"];
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+
+    /// <summary>
+    /// Administration roots admitted after the baseline pin, named one by one rather than opening the
+    /// freeze. T-460's configuration activation surface is not a compiled inspector: it is read-only,
+    /// renders the platform's RELEASED activation definition, declares no <c>*AdminPage</c> entry
+    /// point, and is none of the five retired pillars. Every other path under the two administration
+    /// roots stays frozen to the baseline, and the entry-point half below still scans every file.
+    /// </summary>
+    private static readonly string[] AdmittedSinceBaseline =
+        ["apps/react/src/admin/configuration/", "apps/blazor/Admin/Configuration/"];
     private static readonly Regex DeclaredSymbols = new(
         @"\b(?:export|public)\s+(?:sealed\s+|abstract\s+|static\s+)*(?:class|record|interface|type|function|const)\s+(?<name>[A-Z][A-Za-z0-9_]*)",
         RegexOptions.CultureInvariant);
@@ -65,8 +75,9 @@ public sealed class CompiledInspectorRetirementControlsTests
         var baseline = RunGitText("ls-tree", "-r", "--name-only", SourcePin, "--", "apps/react/src/admin", "apps/blazor/Admin")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToHashSet(StringComparer.Ordinal);
-        var current = ProductionFiles().Where(path => path.StartsWith("apps/react/src/admin/", StringComparison.Ordinal)
-            || path.StartsWith("apps/blazor/Admin/", StringComparison.Ordinal)).ToArray();
+        var current = ProductionFiles().Where(path => (path.StartsWith("apps/react/src/admin/", StringComparison.Ordinal)
+            || path.StartsWith("apps/blazor/Admin/", StringComparison.Ordinal))
+            && !AdmittedSinceBaseline.Any(prefix => path.StartsWith(prefix, StringComparison.Ordinal))).ToArray();
         Assert.DoesNotContain(current, path => !baseline.Contains(path));
         foreach (var path in current)
         {
