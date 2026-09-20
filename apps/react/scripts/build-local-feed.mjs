@@ -129,6 +129,15 @@ writeFileSync(path.join(feed, 'platform/configuration-activation.json'), `${JSON
 }, null, 2)}\n`)
 writeFileSync(path.join(feed, 'platform/activation-cases.json'),
   readFileSync(path.join(platform, 'conformance/hlp.blocks.builder-definitions/activation.json')))
+// T-461: the released Proposed change / Saved version / Released package Form and vocabulary, and
+// the one Records-and-Forms example both lanes complete. Copied out of the pin for the same reason.
+writeFileSync(path.join(feed, 'platform/configuration-proposal.json'), `${JSON.stringify({
+  detail: activationPayload.configurationProposalDetail,
+  statuses: activationPayload.configurationProposalStatuses,
+}, null, 2)}
+`)
+writeFileSync(path.join(feed, 'platform/proposal-cases.json'),
+  readFileSync(path.join(platform, 'conformance/hlp.blocks.builder-definitions/proposal.json')))
 
 process.stdout.write(`${JSON.stringify({ feed, tarballs, sources: packages }, null, 2)}\n`)
 process.stdout.write('\nInstall them with:\n  pnpm install --frozen-lockfile\n')
