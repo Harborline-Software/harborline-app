@@ -72,7 +72,20 @@ const workshopLabels: Record<string, string> = {
 const accessLabels: Record<string, string> = { 'access.workspace': 'Access', 'access.holders': 'Holders', 'access.details': 'Access details', 'access.details.footer': 'Access details' }
 const configurationLabels: Record<string, string> = { 'configuration.workspace': 'Configuration', 'configuration.activation': 'Activation' }
 const resolveLabel = (key: string) => ({ ...accessLabels, ...configurationLabels, ...workshopLabels })[key] ?? key
-const WORKSHOP_ITEM_IDS = new Set(['asset-types', 'forms', 'workflows', 'standards', 'defaults', 'terminology', 'documents', 'taxonomies', 'reports', 'data-exchanges', 'standing-rules', 'schedules', 'views'])
+// T-585 item 1. This was a hand-written set of thirteen ids, and a hand-written set is how a
+// fourteenth member stops reaching the shared shell without anyone noticing: an item the pack
+// declared and this list did not fell through to the generic body below and rendered a placeholder,
+// silently, with no name and no error. The Workshop membership is the pack's to declare, so it is
+// read from the declaration; the seeded set stays as the no-declaration fallback only.
+const WORKSHOP_WORKSPACE_ID = 'workshop'
+const SEEDED_WORKSHOP_ITEM_IDS = ['asset-types', 'forms', 'workflows', 'standards', 'defaults', 'terminology', 'documents', 'taxonomies', 'reports', 'data-exchanges', 'standing-rules', 'schedules', 'views']
+function workshopItemIds(navigation: PackNavigationDeclaration | null): ReadonlySet<string> {
+  const declared = (navigation?.seedWorkspaces ?? [])
+    .filter(workspace => workspace.id === WORKSHOP_WORKSPACE_ID)
+    .flatMap(workspace => workspace.groups ?? [])
+    .flatMap(group => group.itemIds)
+  return new Set(navigation === null ? SEEDED_WORKSHOP_ITEM_IDS : declared)
+}
 
 const NAVIGATION_STATE: ShellNavigationState = {
   items: Object.fromEntries(NAV_ITEMS.map(item => [item.id, item])),
@@ -167,11 +180,11 @@ export function App() {
   }, [navigationAttempt])
 
   useEffect(() => {
-    if (!WORKSHOP_ITEM_IDS.has(activeItemId)) {
+    if (!workshopItemIds(packNavigation).has(activeItemId)) {
       setSelectedRowId(null)
       setSelectedDefinition(null)
     }
-  }, [activeItemId])
+  }, [activeItemId, packNavigation])
 
   useEffect(() => {
     const parameters = new URLSearchParams(window.location.search)
@@ -249,7 +262,7 @@ export function App() {
       body={activeItemId === 'access.holders' ? <main className="happ-page"><AccessHoldersPage /></main>
         : activeItemId === CONFIGURATION_ITEM_ID
         ? <main className="happ-page"><ConfigurationActivationPage client={configurationActivationClient} /></main>
-        : WORKSHOP_ITEM_IDS.has(activeItemId)
+        : workshopItemIds(packNavigation).has(activeItemId)
         ? <main className="happ-page"><h1>{body.title}</h1>{initialAddress.surface === 'platform.editor.views' && activeItemId === 'views'
           ? <ViewAuthoringPage />
           : initialAddress.surface && !packNavigation
