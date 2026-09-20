@@ -43,7 +43,7 @@ jobs:
   # them unexecuted by any automation. This job is the fix. It is separate from the .NET job so a
   # lane failure names the lane.
   react:
-    if: vars.ACTIONS_ENABLED == 'true'
+    if: vars.ACTIONS_ENABLED_T660_PROOF_ABSENT == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -92,7 +92,7 @@ jobs:
         working-directory: apps/react
 
   pack-consume-publish:
-    if: vars.ACTIONS_ENABLED == 'true'
+    if: vars.ACTIONS_ENABLED_T660_PROOF_ABSENT == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

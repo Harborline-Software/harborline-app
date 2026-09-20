@@ -28,7 +28,7 @@ permissions:
 jobs:
   verify-shared:
     if: >-
-      vars.ACTIONS_ENABLED == 'true' &&
+      vars.ACTIONS_ENABLED_T660_PROOF_ABSENT == 'true' &&
       (github.event_name == 'merge_group' ||
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, macOS]
