@@ -12,7 +12,7 @@ namespace Harborline.App.Blazor.Tests;
 public sealed class CatalogueAvailabilityTests : BunitContext
 {
     private const string View = """
-        {"id":"platform.list.forms","version":"1.0.0","status":"Published","renderPlan":{"definitionHash":"hash","definitionId":"platform.list.forms","definitionVersion":"1.0.0","packKey":"harborline.platform","packVersion":"1.0.0","definitionKind":"ViewDefinition","bindings":{"viewKind":"views.entity-list/grid","parameters":{"fields":[{"id":"status","label":"Lifecycle"},{"id":"formId","label":"Key"}]},"actions":[{"id":"inspect","label":"Inspect"}]}}}
+        {"id":"platform.list.forms","version":"1.0.0","status":"Published","renderPlan":{"definitionHash":"hash","definitionId":"platform.list.forms","definitionVersion":"1.0.0","packKey":"harborline.platform","packVersion":"1.0.0","definitionKind":"ViewDefinition","bindings":{"viewKind":"layout.table","parameters":{"fields":[{"id":"status","label":"Lifecycle"},{"id":"formId","label":"Key"}]},"actions":[{"id":"inspect","label":"Inspect"}]}}}
         """;
     private const string Entry = """
         {"id":"inspection","version":"2.0.0","kind":0,"status":"Published","sealed":true,"provenance":{"packKey":"acme.assets","packVersion":"1.0.0","kind":"pack"},"updatedAt":"2026-09-15T00:00:00Z","definitionHash":"sha256:definition","body":{"id":"body-id","version":"body-version","provenance":{"kind":"body"}}}

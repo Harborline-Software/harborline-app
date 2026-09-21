@@ -456,7 +456,7 @@ public sealed class PackNavigationTests : BunitContext
     {
         private static readonly ViewRenderPlan Plan = new(
             "sha256:test", "platform.list.forms", "1.0.0", "harborline.platform", "1.0.0", "ViewDefinition",
-            new ViewRenderPlanBindings("views.entity-list/grid", new ViewRenderPlanParameters([
+            new ViewRenderPlanBindings("layout.table", new ViewRenderPlanParameters([
                 new("formId", "Key"), new("title", "Title"), new("version", "Version"), new("cascadeLayer", "Cascade layer")] )));
         private static readonly JsonElement Body = JsonElement.Parse("""{"cascadeLayer":"Pack","privateNote":"Private body is not an identity"}""");
         private readonly WorkshopCatalogueEntry Entry = new("inspection", "1.0.0", "Active", new WorkshopLocalizedText("en", new Dictionary<string, string> { ["en"] = title }), Body, null);

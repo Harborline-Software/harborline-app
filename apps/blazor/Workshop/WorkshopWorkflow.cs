@@ -44,7 +44,7 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
     }
 
     public static bool Supports(WorkshopCatalogueEntry view) => view.RenderPlan is
-        { DefinitionKind: "ViewDefinition", Bindings: { ViewKind: "views.entity-list/grid", Parameters.Fields: not null } };
+        { DefinitionKind: "ViewDefinition", Bindings: { ViewKind: "layout.table", Parameters.Fields: not null } };
 
     public void ChangeValues(IReadOnlyDictionary<string, object?> values)
     {

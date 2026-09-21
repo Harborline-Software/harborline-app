@@ -22,7 +22,7 @@ const listPlan = (member: string) => ({
   packKey: 'harborline.platform',
   packVersion: '1.0.0',
   definitionKind: 'ViewDefinition',
-  bindings: { viewKind: 'views.entity-list/grid', parameters: { fields: [{ id: 'title', label: 'Title' }] } },
+  bindings: { viewKind: 'layout.table', parameters: { fields: [{ id: 'title', label: 'Title' }] } },
 })
 
 function shellFetch(member: string, declaration: unknown = workshop) {

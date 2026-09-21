@@ -229,7 +229,7 @@ public sealed class WorkshopWorkflowTests
             new(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 
         private static string ViewEntry() => """
-            {"id":"platform.list.forms","version":"1.0.0","status":"Published","body":{},"renderPlan":{"definitionHash":"hash","definitionId":"platform.list.forms","definitionVersion":"1.0.0","packKey":"platform","packVersion":"1.0.0","definitionKind":"ViewDefinition","bindings":{"viewKind":"views.entity-list/grid","parameters":{"fields":[{"id":"formId","label":"Key"}],"actions":ACTIONS},"actions":ACTIONS}}}
+            {"id":"platform.list.forms","version":"1.0.0","status":"Published","body":{},"renderPlan":{"definitionHash":"hash","definitionId":"platform.list.forms","definitionVersion":"1.0.0","packKey":"platform","packVersion":"1.0.0","definitionKind":"ViewDefinition","bindings":{"viewKind":"layout.table","parameters":{"fields":[{"id":"formId","label":"Key"}],"actions":ACTIONS},"actions":ACTIONS}}}
             """.Replace("ACTIONS", Actions, StringComparison.Ordinal);
 
         private static string FormEntry(string id, string version, string field, string hint) => JsonSerializer.Serialize(new

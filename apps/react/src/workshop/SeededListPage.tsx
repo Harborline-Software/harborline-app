@@ -101,6 +101,6 @@ export function SeededListPage({ itemId, viewId = `platform.list.${itemId}`, sel
 }
 
 function supported(plan: ViewRenderPlan): boolean {
-  return plan.definitionKind === 'ViewDefinition' && plan.bindings.viewKind === 'views.entity-list/grid'
+  return plan.definitionKind === 'ViewDefinition' && plan.bindings.viewKind === 'layout.table'
     && Array.isArray(plan.bindings.parameters?.fields)
 }
