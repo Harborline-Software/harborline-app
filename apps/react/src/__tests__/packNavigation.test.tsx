@@ -47,7 +47,7 @@ it.each(['health', 'browse'])('restores an explicit %s surface for a declared Wo
   const viewId = `platform.${surface}.forms`
   const plan = { definitionHash: 'hash', definitionId: viewId, definitionVersion: '1.0.0',
     packKey: 'harborline.platform', packVersion: '1.0.0', definitionKind: 'ViewDefinition',
-    bindings: { viewKind: 'views.entity-list/grid', parameters: { fields: [{ id: 'formId', label: 'Key' }] } } }
+    bindings: { viewKind: 'layout.table', parameters: { fields: [{ id: 'formId', label: 'Key' }] } } }
   const fetchMock = vi.fn(async (url: string | URL | Request) => {
     const path = String(url)
     if (path.endsWith('/navigation/workspaces')) return Response.json(workshop)
@@ -137,7 +137,7 @@ it.each([[480, 'compact', 'bottom-sheet', false], [720, 'medium', 'side-sheet', 
   const plan = {
     definitionHash: 'forms-hash', definitionId: 'platform.list.forms', definitionVersion: '1.0.0',
     packKey: 'harborline.platform', packVersion: '1.0.0', definitionKind: 'ViewDefinition',
-    bindings: { viewKind: 'views.entity-list/grid', parameters: { fields: [{ id: 'formId', label: 'Key' }, { id: 'title', label: 'Title' }, { id: 'version', label: 'Version' }] } },
+    bindings: { viewKind: 'layout.table', parameters: { fields: [{ id: 'formId', label: 'Key' }, { id: 'title', label: 'Title' }, { id: 'version', label: 'Version' }] } },
   }
   const entries = [
     { id: 'work-order', version: '1.0.0', status: 'Published', title: { defaultLocale: 'en', values: { en: 'Work order' } }, body: { cascadeLayer: 'Tenant' } },
@@ -261,7 +261,7 @@ it.each([
   const plan = {
     definitionHash: 'forms-hash', definitionId: 'platform.list.forms', definitionVersion: '1.0.0',
     packKey: 'harborline.platform', packVersion: '1.0.0', definitionKind: 'ViewDefinition',
-    bindings: { viewKind: 'views.entity-list/grid', parameters: { fields: [{ id: 'formId', label: 'Key' }, { id: 'title', label: 'Title' }] } },
+    bindings: { viewKind: 'layout.table', parameters: { fields: [{ id: 'formId', label: 'Key' }, { id: 'title', label: 'Title' }] } },
   }
   const entry = { id: 'inspection', version: '1.0.0', status: 'Active', title: { defaultLocale: 'en', values: { en: title } }, body: { cascadeLayer: 'Pack', privateNote: 'Private body is not an identity' } }
   vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request) => {

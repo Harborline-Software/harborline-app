@@ -9,7 +9,7 @@ const actionPlan = {
   definitionHash: 'hash', definitionId: 'platform.list.forms', definitionVersion: '1.0.0',
   packKey: 'harborline.platform', packVersion: '1.0.0', definitionKind: 'ViewDefinition',
   bindings: {
-    viewKind: 'views.entity-list/grid',
+    viewKind: 'layout.table',
     parameters: {
       entityType: 'FormDefinition',
       fields: [{ id: 'formId', label: 'Key' }, { id: 'title', label: 'Title' }],
@@ -225,7 +225,7 @@ describe('seeded Workshop list', () => {
   })
 
   it('restores selection without activation, then forwards an explicit inspect action on the same row', async () => {
-    const plan = { definitionHash: 'hash', definitionId: 'platform.list.forms', definitionVersion: '1.0.0', packKey: 'harborline.platform', packVersion: '1.0.0', definitionKind: 'ViewDefinition', bindings: { viewKind: 'views.entity-list/grid', parameters: { fields: [{ id: 'formId', label: 'Key' }, { id: 'title', label: 'Title' }, { id: 'version', label: 'Version' }, { id: 'cascadeLayer', label: 'Cascade layer' }] } } }
+    const plan = { definitionHash: 'hash', definitionId: 'platform.list.forms', definitionVersion: '1.0.0', packKey: 'harborline.platform', packVersion: '1.0.0', definitionKind: 'ViewDefinition', bindings: { viewKind: 'layout.table', parameters: { fields: [{ id: 'formId', label: 'Key' }, { id: 'title', label: 'Title' }, { id: 'version', label: 'Version' }, { id: 'cascadeLayer', label: 'Cascade layer' }] } } }
     const fetchMock = vi.fn(async (input: string) => new Response(JSON.stringify(input.includes('/ViewDefinition/')
       ? { renderPlan: plan }
       : { entries: [{ id: 'work-order', version: '1.0.0', status: 'Published', title: { defaultLocale: 'en', values: { en: 'Work order' } }, body: { cascadeLayer: 'Tenant' } }], kindsUnavailable: [] }), { status: 200 }))
