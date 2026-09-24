@@ -7,7 +7,7 @@
 // exactly the defect the Blazor lane shipped (assets present in obj/, absent from the served
 // app). Packing proves the files listed in "files" are the files the app actually gets.
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gunzipSync } from 'node:zlib'
@@ -33,15 +33,15 @@ mkdirSync(feed, { recursive: true })
 // only ever appeared to work here because a developer machine has a dist/ left over from earlier.
 // Building unconditionally also removes the subtler version of the same hazard: packing a STALE
 // dist and shipping yesterday's component while today's source sits beside it (control ticket 089).
-// npm is a .cmd shim on Windows, and since CVE-2024-27980 Node refuses to spawn one without
+// pnpm is a .cmd shim on Windows, and since CVE-2024-27980 Node refuses to spawn one without
 // shell: true (EINVAL). The shell then CONCATENATES arguments rather than escaping them, so any
 // argument that could contain a space is quoted here explicitly.
 const shell = process.platform === 'win32'
 const quote = value => (shell && /\s/.test(value) ? `"${value}"` : value)
 const run = (cwd, ...args) =>
-  execFileSync('npm', args.map(quote), { cwd, stdio: 'inherit', shell })
+  execFileSync('pnpm', args.map(quote), { cwd, stdio: 'inherit', shell })
 for (const pkg of packages) {
-  run(pkg, 'ci')
+  run(pkg, 'install', '--frozen-lockfile', '--ignore-scripts')
   run(pkg, 'run', 'build')
   run(pkg, 'pack', '--pack-destination', feed)
 }
@@ -77,19 +77,67 @@ function listEntries(archivePath) {
   return names
 }
 
-// Refresh THIS entry in the lockfile. npm records an integrity hash for a file: dependency, and a
-// rebuilt tarball hashes differently every time — so `npm ci` dies with EINTEGRITY the moment the
-// platform legitimately moves. The hash is no supply-chain guarantee here in any case: these bytes
-// are built locally from platform sources whose real pin is a git commit in eng/platform-pin.json,
-// not a checksum of whatever happened to be on disk when someone last ran npm install.
-//
-// --package-lock-only rewrites the entry without touching node_modules, so `npm ci` keeps full
-// strictness for every registry dependency and only the one unpinnable entry moves.
-//
-// Worth knowing, because it cost a CI run: a stale hash is MASKED BY NPM'S CACHE, which serves the
-// old content and lets `npm ci` pass on a machine that has built this before while failing on a
-// clean runner. Testing this without `npm cache clean --force` produces a false pass.
-run(app, 'install', ...tarballs.map(tarball => `./.feed/${tarball}`), '--package-lock-only', '--no-audit', '--no-fund')
+// Unpack each tarball into .feed/<name>/ and point the manifest's file: dependency at that
+// DIRECTORY. pnpm records a directory dependency as a link with no integrity hash, so a rebuilt
+// feed never invalidates the lockfile; a tarball dependency carries an integrity hash that changes
+// with every rebuild, and the refresh that fixed that under npm (--package-lock-only) dirtied the
+// attested tree under pnpm. The bytes are built locally from platform sources whose real pin is the
+// git commit in eng/platform-pin.json, not a checksum.
+for (const tarball of tarballs) {
+  const target = path.join(feed, tarball.replace(/^harborline-software-/, '').replace(/-\d.*$/, ''))
+  rmSync(target, { recursive: true, force: true })
+  extract(path.join(feed, tarball), target)
+}
+
+/**
+ * Extracts a gzipped tar archive, stripping the leading package/ segment.
+ * @param {string} archivePath Path to the .tgz file.
+ * @param {string} target Directory to write into.
+ */
+function extract(archivePath, target) {
+  const raw = gunzipSync(readFileSync(archivePath))
+  for (let offset = 0; offset + 512 <= raw.length; ) {
+    const name = raw.toString('utf8', offset, offset + 100).replace(/\0.*$/, '')
+    if (name === '') break
+    const size = Number.parseInt(raw.toString('ascii', offset + 124, offset + 136).replace(/\0.*$/, '').trim(), 8) || 0
+    const type = raw.toString('ascii', offset + 156, offset + 157)
+    const relative = name.replace(/^package\//, '')
+    // The archives are packed here from the pinned platform checkout, but an extractor still refuses
+    // an entry that would land outside its target (tar slip) and writes only regular files.
+    const file = path.resolve(target, relative)
+    if (path.isAbsolute(relative) || relative.split('/').includes('..') || !file.startsWith(path.resolve(target) + path.sep)) {
+      throw new Error(`${path.basename(archivePath)}: entry escapes the feed directory: ${name}`)
+    }
+    if (type === '0' || type === '\0' || type === '') {
+      mkdirSync(path.dirname(file), { recursive: true })
+      writeFileSync(file, raw.subarray(offset + 512, offset + 512 + size))
+    }
+    offset += 512 + Math.ceil(size / 512) * 512
+  }
+}
+
+// T-460. The configuration activation surface renders the platform's RELEASED status definition
+// (platform-package-ck-7) and its test drives the same conformance fixture the platform's own React
+// and Blazor renderers drive. Both are copied out of THIS pinned checkout rather than checked in,
+// so neither the definition the app ships nor the cases its test asserts can drift from the pin.
+const activationPayload = JSON.parse(readFileSync(path.join(platform, '_shared/packs/platform/platform-pack.export.json'), 'utf8'))
+  .items.find(item => item.id === 'platform-package-ck-7').content.payload
+mkdirSync(path.join(feed, 'platform'), { recursive: true })
+writeFileSync(path.join(feed, 'platform/configuration-activation.json'), `${JSON.stringify({
+  detail: activationPayload.configurationActivationDetail,
+  statuses: activationPayload.configurationActivationStatuses,
+}, null, 2)}\n`)
+writeFileSync(path.join(feed, 'platform/activation-cases.json'),
+  readFileSync(path.join(platform, 'conformance/hlp.blocks.builder-definitions/activation.json')))
+// T-461: the released Proposed change / Saved version / Released package Form and vocabulary, and
+// the one Records-and-Forms example both lanes complete. Copied out of the pin for the same reason.
+writeFileSync(path.join(feed, 'platform/configuration-proposal.json'), `${JSON.stringify({
+  detail: activationPayload.configurationProposalDetail,
+  statuses: activationPayload.configurationProposalStatuses,
+}, null, 2)}
+`)
+writeFileSync(path.join(feed, 'platform/proposal-cases.json'),
+  readFileSync(path.join(platform, 'conformance/hlp.blocks.builder-definitions/proposal.json')))
 
 process.stdout.write(`${JSON.stringify({ feed, tarballs, sources: packages }, null, 2)}\n`)
-process.stdout.write('\nInstall them with:\n  npm install ' + tarballs.map(tarball => `./.feed/${tarball}`).join(' ') + '\n')
+process.stdout.write('\nInstall them with:\n  pnpm install --frozen-lockfile\n')

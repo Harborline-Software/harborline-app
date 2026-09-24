@@ -139,6 +139,29 @@ writeFileSync(path.join(feed, 'packed-version.props'), [
   '',
 ].join('\n'))
 
+// T-460. The configuration activation surface renders the platform's RELEASED status definition
+// (platform-package-ck-7) and its test drives the same conformance fixture the platform's own React
+// and Blazor renderers drive. Both are copied out of THIS pinned checkout rather than checked in,
+// so neither the definition the app ships nor the cases its test asserts can drift from the pin.
+const activationPayload = JSON.parse(readFileSync(path.join(platform, '_shared/packs/platform/platform-pack.export.json'), 'utf8'))
+  .items.find(item => item.id === 'platform-package-ck-7').content.payload
+mkdirSync(path.join(feed, 'platform'), { recursive: true })
+writeFileSync(path.join(feed, 'platform/configuration-activation.json'), `${JSON.stringify({
+  detail: activationPayload.configurationActivationDetail,
+  statuses: activationPayload.configurationActivationStatuses,
+}, null, 2)}\n`)
+writeFileSync(path.join(feed, 'platform/activation-cases.json'),
+  readFileSync(path.join(platform, 'conformance/hlp.blocks.builder-definitions/activation.json')))
+// T-461: the released Proposed change / Saved version / Released package Form and vocabulary, and
+// the one Records-and-Forms example both lanes complete. Copied out of the pin for the same reason.
+writeFileSync(path.join(feed, 'platform/configuration-proposal.json'), `${JSON.stringify({
+  detail: activationPayload.configurationProposalDetail,
+  statuses: activationPayload.configurationProposalStatuses,
+}, null, 2)}
+`)
+writeFileSync(path.join(feed, 'platform/proposal-cases.json'),
+  readFileSync(path.join(platform, 'conformance/hlp.blocks.builder-definitions/proposal.json')))
+
 process.stdout.write(`${JSON.stringify({ feed, packed, packedVersion, projects, producers: built }, null, 2)}\n`)
 
 /**

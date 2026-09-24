@@ -6,4 +6,18 @@
     <!-- The platform UI package, consumed from the local feed in nuget.config. -->
     <PackageReference Include="Harborline.UIAdapters.Blazor" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- T-460. The platform's RELEASED configuration activation Form (platform-package-ck-7),
+         written into the local feed out of the pinned platform checkout by
+         scripts/build-local-feed.mjs. Embedded rather than checked in so the definition this host
+         ships cannot drift from eng/platform-pin.json. The feed is a build prerequisite here
+         exactly as the packages in it are. -->
+    <EmbeddedResource Include=".feed/platform/configuration-activation.json"
+                      LogicalName="Harborline.App.Blazor.ReferenceHost.configuration-activation.json" />
+    <!-- T-461. The released Proposed change / Saved version / Released package Form and vocabulary,
+         from the same ck-7 payload and the same pin. -->
+    <EmbeddedResource Include=".feed/platform/configuration-proposal.json"
+                      LogicalName="Harborline.App.Blazor.ReferenceHost.configuration-proposal.json" />
+    <Content Remove=".feed/**" />
+  </ItemGroup>
 </Project>

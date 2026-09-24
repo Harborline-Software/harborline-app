@@ -3,3 +3,7 @@ obj/
 artifacts/
 node_modules/
 .DS_Store
+
+# session and lane artefacts; nothing under either is tracked
+.claude/
+.codex/

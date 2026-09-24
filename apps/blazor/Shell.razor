@@ -1,14 +1,15 @@
 @using Harborline.UIAdapters.Blazor.Components.Layout
-@using Harborline.App.Blazor.ReferenceHost.Admin.Forms
-@using Harborline.App.Blazor.ReferenceHost.Admin.Reports
-@using Harborline.App.Blazor.ReferenceHost.Admin.Views
-@using Harborline.App.Blazor.ReferenceHost.Admin.DataExchange
-@using Harborline.App.Blazor.ReferenceHost.Admin.Scheduling
 @using Harborline.App.Blazor.ReferenceHost.Admin.Authorization
+@using Harborline.App.Blazor.ReferenceHost.Admin.Configuration
 @using Harborline.Contracts.Authorization
 @inject IAuthorizationAdminClient AuthorizationClient
 @using Harborline.App.Blazor.ReferenceHost.Navigation
+@using Harborline.App.Blazor.ReferenceHost.Workshop
+@using Harborline.UIAdapters.Blazor.Components.DataDisplay
+@using System.Text.Json
+@using Microsoft.AspNetCore.WebUtilities
 @inject IPackNavigationClient PackNavigationClient
+@inject NavigationManager BrowserNavigation
 @implements IDisposable
 
 @* Composed from the platform's hlp.ui.app-shell module rather than hand-written chrome. This
@@ -24,57 +25,51 @@
 {
     <section role="alert"><p>@navigationError</p><button type="button" @onclick="LoadNavigationAsync">Retry navigation</button></section>
 }
-<HarborlineAppShell ShellId="harborline-app"
+<HarborlineAppShell @key="@(packNavigation is not null)" ShellId="harborline-app"
                   BrandText="Harborline"
                   Navigation="@(packNavigation ?? Navigation)"
                   NavigationState="@NavigationState"
                   ResolveLabel="@ResolveLabel"
                   RoleVocabulary="@roleVocabulary"
                   HeldRoles="@HeldRoles"
+                  DefaultActiveWorkspaceId="@ActiveWorkspace?.Id"
                   ActiveItemId="@activeItemId"
-                  Navigated="@(item => activeItemId = item.Id)"
+                  Navigated="@NavigateAsync"
+                  InspectorCommand="@OpenInspectorAsync"
                   PageHeader="@PageHeaderFragment"
                   OpenPanelIds="@OpenPanelIds"
-                  OpenPanelIdsChanged="@SetOpenPanelIds"
+                  OpenPanelIdsChanged="@SetOpenPanelIdsAsync"
+                  PanelToolbar="@PanelToolbar"
                   PanelContent="@PanelContent">
     @if (activeItemId == "access.holders")
     {
         <main class="happ-page"><AccessHoldersPage /></main>
     }
-    else if (activeItemId == "admin-forms")
+    else if (activeItemId == ConfigurationItemId)
     {
-        <main class="happ-page">
-            <FormsAdminPage />
-        </main>
+        <main class="happ-page"><ConfigurationActivationPage /></main>
     }
-    else if (activeItemId == "admin-reports")
+    else if (activeItemId == ProposalItemId)
     {
-        <main class="happ-page">
-            <ReportsAdminPage />
-        </main>
-    }
-    else if (activeItemId == "admin-views")
-    {
-        <main class="happ-page">
-            <ViewsAdminPage />
-        </main>
-    }
-    else if (activeItemId == "admin-data-exchange")
-    {
-        <main class="happ-page">
-            <DataExchangeAdminPage />
-        </main>
-    }
-    else if (activeItemId == "admin-scheduling")
-    {
-        <main class="happ-page">
-            <SchedulingAdminPage />
-        </main>
+        <main class="happ-page"><ConfigurationProposalPage ProposalId="@proposalId" /></main>
     }
     else if (activeItemId == "admin-authorization")
     {
         <main class="happ-page">
             <AuthorizationAdminPage />
+        </main>
+    }
+    else if (WorkshopItemIds(packNavigation).Contains(activeItemId))
+    {
+        <main class="happ-page"><h1>@ActiveLabel</h1>
+            @if (activeItemId == "views" && surface == "platform.editor.views")
+            {
+                <ViewAuthoringPage />
+            }
+            else
+            {
+                <SeededListPage ItemId="@activeItemId" ViewId="@(surface is null || surface == "platform.editor.views" ? null : $"platform.{surface}.{activeItemId}")" SelectedRowId="@selectedRowId" RowActivated="@SelectDefinitionAsync" SelectionRestored="@(row => selectedDefinition = row)" />
+            }
         </main>
     }
     else
@@ -87,16 +82,50 @@
 </HarborlineAppShell>
 
 @code {
-    private static string ResolveLabel(string key) => key switch { "access.workspace" => "Access", "access.holders" => "Holders", "access.details" or "access.details.footer" => "Access details", _ => key };
+    /// <summary>T-657. The api's navigation item id for the governed configuration activation surface.</summary>
+    private const string ConfigurationItemId = "configuration.activation";
+
+    /// <summary>T-668. The api's navigation item id for the governed proposed-change surface.</summary>
+    private const string ProposalItemId = "configuration.proposal";
+
+    private static string ResolveLabel(string key) => key switch
+    {
+        "configuration.workspace" => "Configuration", ConfigurationItemId => "Activation",
+        ProposalItemId => "Proposed change",
+        "panels.inspector" => "Inspector", "panels.inspector.footerClaim" => "Follows selection",
+        "access.workspace" => "Access", "access.holders" => "Holders",
+        "access.details" or "access.details.footer" => "Access details",
+        "workshop.workspace" => "Workshop", "workshop.definitions" => "Definitions",
+        _ when key.StartsWith("workshop.", StringComparison.Ordinal)
+            && WorkshopLabels.TryGetValue(key["workshop.".Length..], out var label) => label,
+        _ => key,
+    };
+    private static readonly IReadOnlyDictionary<string, string> WorkshopLabels = new Dictionary<string, string>
+    {
+        ["asset-types"] = "Record types", ["forms"] = "Forms", ["workflows"] = "Workflows", ["standards"] = "Standards",
+        ["defaults"] = "Defaults", ["terminology"] = "Terminology", ["documents"] = "Documents", ["taxonomies"] = "Taxonomies",
+        ["reports"] = "Reports", ["data-exchanges"] = "Data exchanges", ["standing-rules"] = "Standing rules",
+        ["schedules"] = "Schedules", ["views"] = "Views",
+    };
+    // T-585 item 1, and kept identical to apps/react/src/App.tsx. A hand-written membership set is
+    // how a fourteenth member stops reaching the shared shell without anyone noticing: an item the
+    // pack declared and this set did not fell through to the generic body and rendered a placeholder,
+    // silently. The Workshop membership is the pack's to declare; the seeded keys stay as the
+    // no-declaration fallback only.
+    private const string WorkshopWorkspaceId = "workshop";
+    private static readonly IReadOnlySet<string> SeededWorkshopItems = WorkshopLabels.Keys.ToHashSet();
+    private static IReadOnlySet<string> WorkshopItemIds(PackNavigationDeclaration? navigation) =>
+        navigation is null
+            ? SeededWorkshopItems
+            : navigation.SeedWorkspaces
+                .Where(workspace => workspace.Id == WorkshopWorkspaceId)
+                .SelectMany(workspace => workspace.Groups ?? [])
+                .SelectMany(group => group.ItemIds)
+                .ToHashSet(StringComparer.Ordinal);
     private static readonly IReadOnlyList<ShellNavItem> NavigationItems =
     [
         new ShellNavItem("assets", "Assets"),
         new ShellNavItem("run-report", "Run report"),
-        new ShellNavItem("admin-forms", "Forms"),
-        new ShellNavItem("admin-reports", "Reports"),
-        new ShellNavItem("admin-views", "Views"),
-        new ShellNavItem("admin-data-exchange", "Data Exchange"),
-        new ShellNavItem("admin-scheduling", "Scheduling"),
         // Ticket 205 will gate this item from live scoped held roles. No existing admin item has
         // that server/session role snapshot yet, so the API route fence remains authoritative.
         new ShellNavItem("admin-authorization", "Settings"),
@@ -109,23 +138,29 @@
 
     private string activeItemId = "assets";
     private IReadOnlyList<string> openPanelIds = [];
+    private string? selectedRowId;
+    private string? surface;
+    // T-668. The entry addresses this install's one working proposed change, named by the entry's own
+    // id; `?proposal=<id>` addresses any other. The api has no proposal-listing route, and inventing a
+    // picker here would be the new surface this ticket is not. Mirrors apps/react/src/App.tsx.
+    private string proposalId = ProposalItemId;
+    private ViewRuntimeRow? selectedDefinition;
     private PackNavigationDeclaration? packNavigation;
     private string? navigationError;
     private readonly CancellationTokenSource navigationCancellation = new();
     private RoleVocabulary roleVocabulary = RoleVocabulary.FromApi([]);
     private static readonly HeldRoleSet HeldRoles = new([]);
+    private static readonly JsonSerializerOptions InspectorJsonOptions = new() { WriteIndented = true };
 
     private string ActiveLabel => activeItemId switch
     {
         "access.holders" => "Holders",
+        ConfigurationItemId => "Configuration activation",
+        ProposalItemId => "Proposed change",
         "run-report" => "Run report",
-        "admin-forms" => "Forms",
-        "admin-reports" => "Reports",
-        "admin-views" => "Views",
-        "admin-data-exchange" => "Data Exchange",
-        "admin-scheduling" => "Scheduling",
         "admin-authorization" => "Settings › System",
         "assets" => "Assets",
+        _ when WorkshopLabels.TryGetValue(activeItemId, out var label) => label,
         _ => activeItemId,
     };
     private string ActiveDescription => activeItemId == "run-report"
@@ -133,10 +168,68 @@
         : activeItemId == "assets" ? "Browse and manage the physical assets your organization tracks."
         : "This application surface is not available in this version.";
 
-    private RenderFragment PageHeaderFragment => @<nav aria-label="Breadcrumb" class="happ-breadcrumb">@if (activeItemId == "access.holders") { <text>Harborline / Access / Holders</text> } else { <text>Harborline / Portfolio / @ActiveLabel</text> }</nav>;
+    private PackNavigationWorkspace? ActiveWorkspace => (packNavigation ?? Navigation).SeedWorkspaces
+        .FirstOrDefault(workspace => workspace.Groups?.Any(group => group.ItemIds.Contains(activeItemId, StringComparer.Ordinal)) == true);
+    private string? ContentWorkspaceLabel => ActiveWorkspace is { } workspace ? ResolveLabel(workspace.LabelKey) : activeItemId == "assets" ? "Portfolio" : null;
+    private RenderFragment PageHeaderFragment => @<nav aria-label="Breadcrumb" class="happ-breadcrumb">Harborline / @(ContentWorkspaceLabel is { } label ? $"{label} / " : "")@ActiveLabel</nav>;
     private IReadOnlyList<string> OpenPanelIds => openPanelIds;
-    private RenderFragment<PackPanelDeclaration> PanelContent => panel => @<section class="happ-pilot"><p>@(panel.Id == "pilot" ? $"Pilot sees what you see — Portfolio · {ActiveLabel}." : $"{ResolveLabel(panel.LabelKey ?? panel.Id)}: This application surface is not available in this version.")</p></section>;
-    private void SetOpenPanelIds(IReadOnlyList<string> ids) => openPanelIds = ids;
+    private RenderFragment<PackPanelDeclaration> PanelToolbar => panel => @<span>
+        @if (panel.Id == "inspector")
+        {
+            <p>@(selectedDefinition is null ? "No selection · follows selection" : $"{DisplayTitle(selectedDefinition)} · follows selection")</p>
+        }
+    </span>;
+    private RenderFragment<PackPanelDeclaration> PanelContent => panel => @<section class="happ-pilot">
+        @if (panel.Id == "inspector")
+        {
+            <section aria-label="Definition inspector">
+                @if (selectedDefinition is null)
+                {
+                    <p>Select a Workshop definition to inspect it.</p>
+                }
+                else
+                {
+                    <h2>@DisplayTitle(selectedDefinition)</h2>
+                    <pre>@JsonSerializer.Serialize(selectedDefinition.Values, InspectorJsonOptions)</pre>
+                }
+            </section>
+        }
+        else
+        {
+            <p>@(panel.Id == "pilot" ? $"Pilot sees what you see — Portfolio · {ActiveLabel}." : $"{ResolveLabel(panel.LabelKey ?? panel.Id)}: This application surface is not available in this version.")</p>
+        }
+    </section>;
+
+    private async Task NavigateAsync(ShellNavItem item)
+    {
+        activeItemId = item.Id;
+        selectedRowId = null;
+        selectedDefinition = null;
+        ReplaceAddress();
+        await Task.CompletedTask;
+    }
+
+    private async Task SetOpenPanelIdsAsync(IReadOnlyList<string> ids)
+    {
+        openPanelIds = ids;
+        ReplaceAddress();
+        await Task.CompletedTask;
+    }
+
+    private async Task OpenInspectorAsync()
+    {
+        if (!DeclaredPanels().Contains("inspector", StringComparer.Ordinal)) return;
+        if (!openPanelIds.Contains("inspector", StringComparer.Ordinal)) openPanelIds = [.. openPanelIds, "inspector"];
+        ReplaceAddress();
+        await Task.CompletedTask;
+    }
+
+    private async Task SelectDefinitionAsync(ViewRuntimeRow row)
+    {
+        selectedDefinition = row;
+        selectedRowId = row.Id;
+        await OpenInspectorAsync();
+    }
 
     private async Task LoadNavigationAsync()
     {
@@ -144,8 +237,18 @@
         try
         {
             packNavigation = await PackNavigationClient.ReadAsync(navigationCancellation.Token);
-            openPanelIds = (packNavigation ?? Navigation).PanelSet?.Where(panel => panel.DefaultOpen).Select(panel => panel.Id).ToArray() ?? [];
-            activeItemId = "assets";
+            var navigation = packNavigation ?? Navigation;
+            var address = ReadAddress();
+            surface = address.Surface;
+            proposalId = address.ProposalId ?? ProposalItemId;
+            openPanelIds = address.HasPanelState
+                ? address.OpenPanelIds.Where(DeclaredPanels(navigation).Contains).ToArray()
+                : navigation.PanelSet?.Where(panel => panel.DefaultOpen).Select(panel => panel.Id).ToArray() ?? [];
+            activeItemId = address.ItemId is { } itemId && (itemId == "assets" || DeclaredItemIds(navigation).Contains(itemId, StringComparer.Ordinal))
+                ? itemId : "assets";
+            selectedRowId = WorkshopItemIds(packNavigation).Contains(activeItemId) ? address.SelectedRowId : null;
+            selectedDefinition = null;
+            if (address.ItemId is not null || address.SelectedRowId is not null || address.HasPanelState) ReplaceAddress();
         }
         catch (OperationCanceledException) when (navigationCancellation.IsCancellationRequested) { }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException)
@@ -181,5 +284,46 @@
             // route itself remains server-fenced and its page owns the visible load/retry error.
             roleVocabulary = RoleVocabulary.FromApi([]);
         }
+    }
+
+    private IReadOnlyList<string> DeclaredPanels() => DeclaredPanels(packNavigation ?? Navigation);
+    private static IReadOnlyList<string> DeclaredPanels(PackNavigationDeclaration navigation) => navigation.PanelSet?.Select(panel => panel.Id).ToArray() ?? [];
+    private static IReadOnlyList<string> DeclaredItemIds(PackNavigationDeclaration navigation) => navigation.SeedWorkspaces
+        .SelectMany(workspace => workspace.Groups ?? [])
+        .SelectMany(group => group.ItemIds)
+        .ToArray();
+    private static string DisplayTitle(ViewRuntimeRow row)
+    {
+        var title = row.Values.TryGetValue("title", out var value) ? value?.ToString()?.Trim() : null;
+        return string.IsNullOrEmpty(title) ? row.Id : title;
+    }
+
+    private sealed record ChromeAddress(string? ItemId, string? SelectedRowId, IReadOnlyList<string> OpenPanelIds, bool HasPanelState, string? Surface, string? ProposalId);
+
+    private ChromeAddress ReadAddress()
+    {
+        var query = QueryHelpers.ParseQuery(BrowserNavigation.ToAbsoluteUri(BrowserNavigation.Uri).Query);
+        return new(
+            query.TryGetValue("item", out var item) ? item.ToString() : null,
+            query.TryGetValue("selected", out var selected) ? selected.ToString() : null,
+            query.TryGetValue("panels", out var panels) ? panels.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries) : [],
+            query.ContainsKey("panels"),
+            query.TryGetValue("surface", out var value) && value.ToString() is "health" or "browse" or "platform.editor.views" ? value.ToString() : null,
+            query.TryGetValue("proposal", out var proposal) && proposal.ToString().Length > 0 ? proposal.ToString() : null);
+    }
+
+    private void ReplaceAddress()
+    {
+        var uri = BrowserNavigation.ToAbsoluteUri(BrowserNavigation.Uri);
+        var retained = QueryHelpers.ParseQuery(uri.Query)
+            .Where(pair => pair.Key is not ("item" or "selected" or "panels"))
+            .SelectMany(pair => pair.Value, (pair, value) => $"{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(value!)}")
+            .ToList();
+        retained.Add($"item={Uri.EscapeDataString(activeItemId)}");
+        if (selectedRowId is not null) retained.Add($"selected={Uri.EscapeDataString(selectedRowId)}");
+        if (openPanelIds.Count > 0) retained.Add($"panels={Uri.EscapeDataString(string.Join(',', openPanelIds))}");
+        var target = new Uri($"{uri.GetLeftPart(UriPartial.Path)}?{string.Join('&', retained)}{uri.Fragment}");
+        if (Uri.Compare(uri, target, UriComponents.AbsoluteUri, UriFormat.UriEscaped, StringComparison.Ordinal) == 0) return;
+        BrowserNavigation.NavigateTo(target.AbsoluteUri, replace: true);
     }
 }

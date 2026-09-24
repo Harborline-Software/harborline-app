@@ -12,6 +12,17 @@ namespace Harborline.App.Tests;
 /// </summary>
 public sealed class FixtureParityArchTests
 {
+    internal static (string[] Definitions, string[] Versions) ReadCanonicalRows(
+        string pillar,
+        string source,
+        bool react)
+    {
+        var pair = Pairs.Single(candidate => candidate.Pillar == pillar);
+        return react
+            ? (pair.ReactDefinitions(source).Order(StringComparer.Ordinal).ToArray(), pair.ReactVersions(source).Order(StringComparer.Ordinal).ToArray())
+            : (pair.BlazorDefinitions(source).Order(StringComparer.Ordinal).ToArray(), pair.BlazorVersions(source).Order(StringComparer.Ordinal).ToArray());
+    }
+
     private static readonly AuthorizationFixturePair AuthorizationPair = new(
         "apps/react/src/admin/authorization/client/fixtureClient.ts",
         "apps/blazor/Admin/Authorization/FixtureAuthorizationAdminClient.cs");
@@ -234,6 +245,11 @@ public sealed class FixtureParityArchTests
     /// <returns>The fixture source text.</returns>
     private static string ReadLane(string relativePath)
     {
+        if (Pairs.Any(pair => pair.ReactPath == relativePath || pair.BlazorPath == relativePath))
+        {
+            return CompiledInspectorRetirementControlsTests.ReadGitText(relativePath);
+        }
+
         var path = Path.Combine(
             LaneSourceScanner.LocateHostSourceRoot(),
             relativePath.Replace('/', Path.DirectorySeparatorChar));

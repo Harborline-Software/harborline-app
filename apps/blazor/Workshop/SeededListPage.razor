@@ -1,0 +1,162 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Workshop
+@using System.Text.Json
+@using Harborline.UIAdapters.Blazor.Components.DataDisplay
+@using Harborline.UIAdapters.Blazor.Components.Forms
+@inject IWorkshopCatalogueClient CatalogueClient
+@implements IDisposable
+
+@if (error is not null)
+{
+    <section role="alert"><p>@error</p></section>
+}
+else if (plan is null)
+{
+    <p role="status">Loading Workshop list…</p>
+}
+else if (list?.KindsUnavailable.Count > 0)
+{
+    <p role="status">@Kinds[ItemId] is unavailable in this host.</p>
+}
+else if (supported)
+{
+    <fieldset disabled="@workflow!.Busy" style="border:0;padding:0;margin:0;min-inline-size:0">
+        <HarborlineViewRuntime Plan="@plan" Rows="@rows" Empty="No definitions." ActionsDisabled="@workflow!.Busy" OnRowActivate="@SelectRowAsync" OnAction="@(EventCallback.Factory.Create<string>(this, ActivateActionAsync))" />
+    </fieldset>
+    @if (workflow.Form is not null)
+    {
+        <HarborlineSchemaForm @key="workflow.Form" View="@workflow.Form" Values="@workflow.Values"
+            OnValuesChange="@workflow.ChangeValues" Disabled="@workflow.Busy"
+            Strings="@(new SchemaFormStrings { Submit = workflow.FormLabel! })" OnSubmit="@SubmitAsync" />
+    }
+    @if (workflow.DownloadUrl is not null)
+    {
+        <a href="@workflow.DownloadUrl" download="@workflow.DownloadName">@workflow.DownloadLabel</a>
+    }
+    @if (workflow.Error is not null)
+    {
+        <section role="alert"><p>@workflow.Error</p></section>
+    }
+    @if (workflow.ResultText is not null)
+    {
+        <section aria-label="@workflow.ResultLabel" aria-live="polite"><h2>@workflow.ResultLabel</h2><pre>@workflow.ResultText</pre></section>
+    }
+}
+
+@code {
+    private static readonly IReadOnlyDictionary<string, string> Kinds = new Dictionary<string, string>
+    {
+        ["asset-types"] = "AssetTypeDefinition", ["forms"] = "FormDefinition", ["workflows"] = "WorkflowDefinition",
+        ["standards"] = "StandardsCatalog", ["defaults"] = "CascadeDefaults", ["terminology"] = "TerminologyOverride",
+        ["documents"] = "TemplateDefinition", ["taxonomies"] = "TaxonomyDefinition", ["reports"] = "ReportDefinition",
+        ["data-exchanges"] = "DataExchangeDefinition", ["standing-rules"] = "StandingRuleDefinition",
+        ["schedules"] = "ScheduleDefinition", ["views"] = "ViewDefinition",
+    };
+    [Parameter, EditorRequired] public string ItemId { get; set; } = string.Empty;
+    [Parameter] public string? ViewId { get; set; }
+    [Parameter] public string? SelectedRowId { get; set; }
+    [Parameter] public EventCallback<ViewRuntimeRow> RowActivated { get; set; }
+    [Parameter] public EventCallback<ViewRuntimeRow> SelectionRestored { get; set; }
+    private readonly CancellationTokenSource cancellation = new();
+    private ViewRenderPlan? plan;
+    private WorkshopCatalogueList? list;
+    private IReadOnlyList<ViewRuntimeRow> rows = [];
+    private string? restoredSelection;
+    private string? error;
+    private WorkshopWorkflow? workflow;
+    private bool supported;
+    private int requestVersion;
+    private string RequestedViewId => ViewId ?? $"platform.list.{ItemId}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var request = ++requestVersion;
+        plan = null; list = null; rows = []; error = null; supported = false;
+        workflow = new WorkshopWorkflow(CatalogueClient);
+        if (!Kinds.TryGetValue(ItemId, out var kind)) { error = "This Workshop list is not declared by the platform pack."; return; }
+        try
+        {
+            var viewTask = CatalogueClient.ReadViewAsync(RequestedViewId, cancellation.Token);
+            var rowsTask = CatalogueClient.ListAsync(kind, cancellation.Token);
+            await Task.WhenAll(viewTask, rowsTask);
+            if (request != requestVersion || cancellation.IsCancellationRequested) return;
+            var view = await viewTask;
+            plan = view.RenderPlan ?? throw new InvalidOperationException("The seeded view has no active compiled render plan.");
+            workflow.Bind(view);
+            supported = WorkshopWorkflow.Supports(view);
+            list = await rowsTask;
+            rows = list.KindsUnavailable.Count == 0 && supported ? list.Entries.Select(ToRow).ToArray() : [];
+            await RestoreSelectionAsync();
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or JsonException)
+        {
+            if (request == requestVersion) error = exception.Message;
+        }
+    }
+
+    private static ViewRuntimeRow ToRow(WorkshopCatalogueEntry entry)
+    {
+        var values = entry.Body.ValueKind == JsonValueKind.Object
+            ? entry.Body.EnumerateObject().ToDictionary(property => property.Name, property => (object?)JsonValue(property.Value))
+            : new Dictionary<string, object?>();
+        values["formId"] = entry.Id; values["title"] = EntryTitle(entry); values["version"] = entry.Version; values["status"] = entry.Status;
+        values["id"] = $"{entry.Id}@{entry.Version}"; values["catalogue"] = entry; values["body"] = entry.Body;
+        values["kind"] = entry.Kind; values["provenance"] = entry.Provenance; values["sealed"] = entry.Sealed;
+        values["updatedAt"] = entry.UpdatedAt; values["definitionHash"] = entry.DefinitionHash;
+        return new ViewRuntimeRow($"{entry.Id}@{entry.Version}", values);
+    }
+
+    private static object? JsonValue(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString(), JsonValueKind.Number when value.TryGetInt64(out var number) => number,
+        JsonValueKind.True => true, JsonValueKind.False => false, JsonValueKind.Null => null, _ => value.GetRawText(),
+    };
+    private static string EntryTitle(WorkshopCatalogueEntry entry) => entry.Title is { } title &&
+        (title.Values.TryGetValue(title.DefaultLocale, out var localized) || title.Values.TryGetValue("en", out localized)) ? localized : entry.Id;
+    private async Task RestoreSelectionAsync()
+    {
+        if (SelectedRowId is null) { restoredSelection = null; return; }
+        var selectionKey = $"{RequestedViewId}:{SelectedRowId}";
+        if (restoredSelection == selectionKey) return;
+        var restored = rows.FirstOrDefault(row => row.Id == SelectedRowId);
+        if (restored is null) return;
+        restoredSelection = selectionKey;
+        await SelectionRestored.InvokeAsync(restored);
+    }
+
+    private Task SelectRowAsync(string rowId)
+    {
+        var activated = rows.FirstOrDefault(row => row.Id == rowId);
+        return activated is null ? Task.CompletedTask : RowActivated.InvokeAsync(activated);
+    }
+    private async Task ActivateActionAsync(string actionId)
+    {
+        if (!supported || list?.KindsUnavailable.Count != 0) return;
+        var request = requestVersion;
+        var operation = workflow!.ActivateActionAsync(actionId, cancellation.Token);
+        try
+        {
+            if (await operation)
+            {
+                if (request != requestVersion) return;
+                var refreshed = await CatalogueClient.ListAsync(Kinds[ItemId], cancellation.Token);
+                if (request != requestVersion || cancellation.IsCancellationRequested) return;
+                list = refreshed;
+                rows = list.KindsUnavailable.Count == 0 ? list.Entries.Select(ToRow).ToArray() : [];
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or JsonException)
+        {
+            if (request == requestVersion) error = exception.Message;
+        }
+    }
+    private async ValueTask<SchemaFormValidationResult?> SubmitAsync(IReadOnlyDictionary<string, object?> values)
+    {
+        var operation = workflow!.SubmitAsync(values, cancellation.Token);
+        StateHasChanged();
+        try { return await operation; }
+        finally { StateHasChanged(); }
+    }
+    public void Dispose() { cancellation.Cancel(); cancellation.Dispose(); }
+}

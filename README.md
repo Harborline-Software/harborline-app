@@ -24,7 +24,7 @@ dotnet run --project apps/blazor
 
 Open the URL reported by the process. [Launch settings](apps/blazor/Properties/launchSettings.json) define the development environment and address; use `--urls` to override the address. Use published output for deployment so its static assets are materialized.
 
-Configure the Forms client with `FormsAdmin:BaseUrl`, or explicitly select the development fixture with `FormsAdmin:UseFixture=true`. Environment variables use `FormsAdmin__BaseUrl` and `FormsAdmin__UseFixture`. The [development settings](apps/blazor/appsettings.Development.json) record the host's defaults. React configuration belongs in its application guide. Fixture behavior does not establish a working API integration.
+Configure `Workshop:BaseUrl` (env: `Workshop__BaseUrl`) to the local node origin in every environment. Workshop renders released seed definitions through the shared runtime; the five compiled catalogue inspectors and their fixture configuration have retired. The React node transport retains `VITE_FORMS_API_ORIGIN` for compatibility. Configure the existing Authorization client separately with `AuthorizationAdmin__BaseUrl` / `VITE_AUTHORIZATION_API_ORIGIN`.
 
 ## Verify and contribute
 

@@ -1,0 +1,369 @@
+{
+  "schemaVersion": 1,
+  "sourcePin": "11e38b663bb7e953bae9596af12bf9788b1edc7e",
+  "algorithm": "sha256",
+  "aggregateSha256": "a2e2543191313f3864000bf6067f01d24d6ec7f87b868f274434b6c287f05215",
+  "fileCount": 90,
+  "files": [
+    {
+      "path": "apps/blazor/Admin/DataExchange/DataExchangeAdminModels.cs",
+      "sha256": "370899deb998f691fc755165e77dbc2527fb9c3c911cb2f6b30811070ac47756"
+    },
+    {
+      "path": "apps/blazor/Admin/DataExchange/DataExchangeAdminPage.razor",
+      "sha256": "5a84f7e1ed06c37cddb63f3b79782464f070d07968d2fc45bdf30088b0c57b5e"
+    },
+    {
+      "path": "apps/blazor/Admin/DataExchange/DataExchangeDefinitionDetailView.razor",
+      "sha256": "2da301f7d08a299572fd76fef57a60a7707429841d8895e33042352cb0230c63"
+    },
+    {
+      "path": "apps/blazor/Admin/DataExchange/FixtureDataExchangeAdminClient.cs",
+      "sha256": "df7795633b8548538a7df1c01d7d8ff3e632b941ca57a89d68b8b2593ac7df11"
+    },
+    {
+      "path": "apps/blazor/Admin/DataExchange/HttpDataExchangeAdminClient.cs",
+      "sha256": "723894ef780e7e193aee4feaa440a42eb45af8f7b8ce8f7f4d5146bf5395e13b"
+    },
+    {
+      "path": "apps/blazor/Admin/DataExchange/IDataExchangeAdminClient.cs",
+      "sha256": "3a8f1dd05f16d42c80eee2881d5bf0c403e4155b361a98b5995045e7849adf5d"
+    },
+    {
+      "path": "apps/blazor/Admin/Forms/FixtureFormsAdminClient.cs",
+      "sha256": "7adcea8c31bc3b107c2224f11946c9308895d7b8c7d6dc6ce930fd2370100639"
+    },
+    {
+      "path": "apps/blazor/Admin/Forms/FormDefinitionDetail.razor",
+      "sha256": "777c74f6585009878a1b05035642ba1e1d5238343cadba468621edcc72740c53"
+    },
+    {
+      "path": "apps/blazor/Admin/Forms/FormsAdminModels.cs",
+      "sha256": "d099894cf4450c6cbb8be4f558969adc1db272b74e2a9634ff52a77f24015878"
+    },
+    {
+      "path": "apps/blazor/Admin/Forms/FormsAdminPage.razor",
+      "sha256": "f695c2106a21802b35b5e9b19a25398906e601d00001199425681d864750dba1"
+    },
+    {
+      "path": "apps/blazor/Admin/Forms/HttpFormsAdminClient.cs",
+      "sha256": "d22b783f00c2ee9dd9ea2df654a7b41244413b8565d7c668118021b4338c5396"
+    },
+    {
+      "path": "apps/blazor/Admin/Forms/IFormsAdminClient.cs",
+      "sha256": "ba1bad21d0098b72037995d50d6d1013e94f3d8d2874bdacf189278296041c9d"
+    },
+    {
+      "path": "apps/blazor/Admin/Reports/FixtureReportsAdminClient.cs",
+      "sha256": "5229c6b43b97728466571f88b66ec6823f45dd3b8ca16baae1286842dca4c276"
+    },
+    {
+      "path": "apps/blazor/Admin/Reports/HttpReportsAdminClient.cs",
+      "sha256": "2867da8a2f7ea90cdd8ddbcc9757b67755d5f4c2f5a85ab66109a3ea81122bb4"
+    },
+    {
+      "path": "apps/blazor/Admin/Reports/IReportsAdminClient.cs",
+      "sha256": "5afcee6d6c8fba66f559d6117863dbeda483b67bf9fae1c3f4e269f531210145"
+    },
+    {
+      "path": "apps/blazor/Admin/Reports/ReportDefinitionDetailView.razor",
+      "sha256": "81cb77242cf4b0ef8dc90adabdcd78bd4e53245efe4c0de02dcb2beca70a4d4f"
+    },
+    {
+      "path": "apps/blazor/Admin/Reports/ReportsAdminModels.cs",
+      "sha256": "945d5807f3cc8d26d135e920ea1868454e0536ab0985e0d1a18533156f2a7ca0"
+    },
+    {
+      "path": "apps/blazor/Admin/Reports/ReportsAdminPage.razor",
+      "sha256": "bc9db6629f1a0aa985fc6ecda21ef21ce27add99f2c8332e8ed5087b7e397c9d"
+    },
+    {
+      "path": "apps/blazor/Admin/Scheduling/FixtureSchedulingAdminClient.cs",
+      "sha256": "d95b0cdd0c18b940ce5e977dab11391b28eaef2b1b703e8b046753a0ae74cf95"
+    },
+    {
+      "path": "apps/blazor/Admin/Scheduling/HttpSchedulingAdminClient.cs",
+      "sha256": "9a34e91b80bc0f956cbbb75c29db2b36e922b476f71aacba88427475cd0f89f6"
+    },
+    {
+      "path": "apps/blazor/Admin/Scheduling/ISchedulingAdminClient.cs",
+      "sha256": "a0c82d4c0528eab81a6cdda3197c31452741a63e7c6295d6c7a1c8eb8ccc9a89"
+    },
+    {
+      "path": "apps/blazor/Admin/Scheduling/SchedulingAdminModels.cs",
+      "sha256": "ab1df27b22b748085f5bef433fa601a45dc96ad14880a7784c0f66042413a11f"
+    },
+    {
+      "path": "apps/blazor/Admin/Scheduling/SchedulingAdminPage.razor",
+      "sha256": "c076f26aaa0775f1b8b7a04b284dd962b86ddb9a0073aff4bacab598ce9d4685"
+    },
+    {
+      "path": "apps/blazor/Admin/Scheduling/SchedulingDefinitionDetailView.razor",
+      "sha256": "8d90530643fa8d8638e7f6186d25ce6e4848f1afa675aea68fbd435c22dda8b7"
+    },
+    {
+      "path": "apps/blazor/Admin/Views/FixtureViewsAdminClient.cs",
+      "sha256": "71851fc50ad7e1d7e43787b6e6fc4d6d3bfbda296c41cc83ea6b8f6378b2d93a"
+    },
+    {
+      "path": "apps/blazor/Admin/Views/HttpViewsAdminClient.cs",
+      "sha256": "4145a7c85314ae35bf9902b8ea238190605fe602d954a6fec8ff3509bfa8b5e3"
+    },
+    {
+      "path": "apps/blazor/Admin/Views/IViewsAdminClient.cs",
+      "sha256": "8e31d740b98e8ef11280de0c4ccd9cd6c9a5c9ef41ec4c75d066e56136575ef9"
+    },
+    {
+      "path": "apps/blazor/Admin/Views/ViewDefinitionDetailView.razor",
+      "sha256": "d976565b88ff339cc124094295c0346a8e32919aa5b235fd541ceb849580ccd0"
+    },
+    {
+      "path": "apps/blazor/Admin/Views/ViewsAdminModels.cs",
+      "sha256": "afc43ab87298fee47012dee3d9c43df9b6e5f2f745a1ab4a062143db558b8eea"
+    },
+    {
+      "path": "apps/blazor/Admin/Views/ViewsAdminPage.razor",
+      "sha256": "7b6aeec408c35ef3e32e1d0ad3fc2d6dd86bd0901139a6d52e6e1244e7873b20"
+    },
+    {
+      "path": "apps/react/src/admin/data-exchange/__tests__/dataExchangeAdminPage.detail.test.tsx",
+      "sha256": "1d7bc4f7f1f3a8b283c35ce5eab1a551809354c9fdc7e8e4b6b3863a3051f491"
+    },
+    {
+      "path": "apps/react/src/admin/data-exchange/__tests__/dataExchangeAdminPage.list.test.tsx",
+      "sha256": "4b78e63caf3256c4ad7d80dd432b7532b84d67c56458982a76c6ddee1e26af6c"
+    },
+    {
+      "path": "apps/react/src/admin/data-exchange/__tests__/fixtureClient.test.ts",
+      "sha256": "2958b04122b168d42606cc8f5ab9e2edd12d9305676b5ffe2c59c8d7a9962e86"
+    },
+    {
+      "path": "apps/react/src/admin/data-exchange/__tests__/httpClient.test.ts",
+      "sha256": "0b80a55043a0fdf13d8ff073c7a7bc865de0327d455a4e49a46f635c39921d91"
+    },
+    {
+      "path": "apps/react/src/admin/data-exchange/client/fixtureClient.ts",
+      "sha256": "2e439f859fec0dc5e4d3150cc3532f083b2204f529869531cedc294d1573c947"
+    },
+    {
+      "path": "apps/react/src/admin/data-exchange/client/httpClient.ts",
+      "sha256": "d9a01147c2d5511417e3bae247a50138d6fd3dafa05d0d065fcf52e02e409fd9"
+    },
+    {
+      "path": "apps/react/src/admin/data-exchange/client/index.ts",
+      "sha256": "eac29a8dc4ad26939e6b6ba323063ff1c757e07a3925be4fd9560358b1399967"
+    },
+    {
+      "path": "apps/react/src/admin/data-exchange/client/types.ts",
+      "sha256": "9878780cd3003ab6a83b33631a64030db2fcfec93515c5d9edfa4c214f1c26bb"
+    },
+    {
+      "path": "apps/react/src/admin/data-exchange/DataExchangeAdminClientContext.tsx",
+      "sha256": "1d8c89bd9dcadf3f6d77fac84c676326391550a870e7eff09443f2c5ae931a1c"
+    },
+    {
+      "path": "apps/react/src/admin/data-exchange/DataExchangeAdminPage.tsx",
+      "sha256": "ebfc494007e2bf0e43206b5c9f1a2a21f718b61ced5126ce106787226e1b686b"
+    },
+    {
+      "path": "apps/react/src/admin/data-exchange/DataExchangeDefinitionDetail.tsx",
+      "sha256": "255a9bc5a1b8d9f5c6a8d3a0af42e5ddb6018e50c0491e0c74c3420482ceedf6"
+    },
+    {
+      "path": "apps/react/src/admin/forms/__tests__/clientFactory.test.ts",
+      "sha256": "3e1cdd81328a2cb38eb4d912105e52d649b916035ef02178f5cd9457b63fbca0"
+    },
+    {
+      "path": "apps/react/src/admin/forms/__tests__/fixtureClient.test.ts",
+      "sha256": "38eb9c054f5540f0014c19d19250a4e119262503b64e0f1b1ac1676d690f2c34"
+    },
+    {
+      "path": "apps/react/src/admin/forms/__tests__/formsAdminPage.detail.test.tsx",
+      "sha256": "95edff1c35fbfc3b3ae1cbcc0ddcd564270662056cb2618eefaae882ae12d5b9"
+    },
+    {
+      "path": "apps/react/src/admin/forms/__tests__/formsAdminPage.list.test.tsx",
+      "sha256": "652d1072f12f93ef30b9416b3cb1841101569f2044d8017fe16b53309cf7781a"
+    },
+    {
+      "path": "apps/react/src/admin/forms/__tests__/formsAdminPage.restore.test.tsx",
+      "sha256": "877f1e4c9f6756dd531b6e38e7ebf20dba11e70051f83e07cfec3adda1baaaff"
+    },
+    {
+      "path": "apps/react/src/admin/forms/__tests__/httpClient.test.ts",
+      "sha256": "ddbd0f57f7f6ad4252a9f3535f1b339cc90a84d9c63f2eb758643b5cdca882ca"
+    },
+    {
+      "path": "apps/react/src/admin/forms/client/fixtureClient.ts",
+      "sha256": "1269e9b4dd0d27e3fa333c53489261b673bf3e5c8b56cbe6a640c1afa53e29c8"
+    },
+    {
+      "path": "apps/react/src/admin/forms/client/httpClient.ts",
+      "sha256": "3aaa613ef67570ee60a5eca9c5dd3620c8534f2f94cafd0da713bd5cbd255c7b"
+    },
+    {
+      "path": "apps/react/src/admin/forms/client/index.ts",
+      "sha256": "b0a0b3f703eea6fa9e5fcbe052074c9e7025cfb49f82d48946cc686508b8fecf"
+    },
+    {
+      "path": "apps/react/src/admin/forms/client/types.ts",
+      "sha256": "1b324d5d62b751ba758c6a890aa83faaf4b7673a217c2a4bb4d06912ef88767d"
+    },
+    {
+      "path": "apps/react/src/admin/forms/FormDefinitionDetail.tsx",
+      "sha256": "fbaaf8994626ff08b6a955caf9bf6aac424ea66fde83879eb51e26f6b0249ce7"
+    },
+    {
+      "path": "apps/react/src/admin/forms/FormsAdminClientContext.tsx",
+      "sha256": "a696d321be4185894f0ee68922eb65248a550525dad104eac8373b15f961f213"
+    },
+    {
+      "path": "apps/react/src/admin/forms/FormsAdminPage.tsx",
+      "sha256": "ddf7e7d2fd21ecc8952bd3a4a0011ef95b415fa0fb788c882300e1f577408fef"
+    },
+    {
+      "path": "apps/react/src/admin/forms/it.ts",
+      "sha256": "ee40f7e5158b46b2630e0f3405548ff74f8f256eb01f3d1c4cd0448a7899c5a9"
+    },
+    {
+      "path": "apps/react/src/admin/reports/__tests__/fixtureClient.test.ts",
+      "sha256": "a6c331f17e8b9652c6d5b7e95686255a2d1b5b0d602d023979a3e7b3783a2c03"
+    },
+    {
+      "path": "apps/react/src/admin/reports/__tests__/httpClient.test.ts",
+      "sha256": "faa70acadc6dcd8510e66396cd9a15dfee5e7e004703173feecb24d5fe6ca948"
+    },
+    {
+      "path": "apps/react/src/admin/reports/__tests__/reportsAdminPage.detail.test.tsx",
+      "sha256": "c74aef1ac2c9838fbfe254154752c73257346fdc22394a82df14ba4da85a807a"
+    },
+    {
+      "path": "apps/react/src/admin/reports/__tests__/reportsAdminPage.list.test.tsx",
+      "sha256": "ec04935a04c753cd6a89c7832fb52c6073302bd642b9e9546a22483f8fd93168"
+    },
+    {
+      "path": "apps/react/src/admin/reports/client/fixtureClient.ts",
+      "sha256": "f2d57bbe93192efc63e651f0eb075f69a244a9d0caae1f3a250a9662d6f14642"
+    },
+    {
+      "path": "apps/react/src/admin/reports/client/httpClient.ts",
+      "sha256": "eb2ca5f50d867e3e690a15d4e817e22817056e97646bce5a89c974ac69aaa7b3"
+    },
+    {
+      "path": "apps/react/src/admin/reports/client/index.ts",
+      "sha256": "5814bd4d2571bf309bf314d97a904df9400c846fe0f7ea310329aec98655a650"
+    },
+    {
+      "path": "apps/react/src/admin/reports/client/types.ts",
+      "sha256": "75c9e82e6ac850ae31f0ebf66e91306913c76011b10cb15ab1379a6870c58b68"
+    },
+    {
+      "path": "apps/react/src/admin/reports/ReportDefinitionDetail.tsx",
+      "sha256": "cba36eae2f1e9735f09a97ebd69a0b3173ea523b0e34be7c359e0b146caff5b5"
+    },
+    {
+      "path": "apps/react/src/admin/reports/ReportsAdminClientContext.tsx",
+      "sha256": "5bd672514c45aa818cd34a7ab10fa09e4666a01865fa1daf013a52c54a243141"
+    },
+    {
+      "path": "apps/react/src/admin/reports/ReportsAdminPage.tsx",
+      "sha256": "2e38f9d74bd02aaf363e8f058b0d3c2b94902e5d971dddd2131788efd761138e"
+    },
+    {
+      "path": "apps/react/src/admin/scheduling/__tests__/fixtureClient.test.ts",
+      "sha256": "fe2e83130a4474ba19ed3615d76cda65375039902ddce06ee9899bb571075a2d"
+    },
+    {
+      "path": "apps/react/src/admin/scheduling/__tests__/httpClient.test.ts",
+      "sha256": "96a66152636f609087dd5ad94fb020e928a04ab07369254da6d096a10a6cf342"
+    },
+    {
+      "path": "apps/react/src/admin/scheduling/__tests__/schedulingAdminPage.detail.test.tsx",
+      "sha256": "e28f6c3c0ebd2e6fd2c5ad8ca97e1dd1a58e3c149200333bdd01324d1c8db972"
+    },
+    {
+      "path": "apps/react/src/admin/scheduling/__tests__/schedulingAdminPage.list.test.tsx",
+      "sha256": "b871cd6c904b1ea0ba64e90d03ee42fb4f02030060008a82710816b03b1ab4c0"
+    },
+    {
+      "path": "apps/react/src/admin/scheduling/__tests__/schedulingAdminPage.restore.test.tsx",
+      "sha256": "6a9f1a79bac525ebf89dbd506ebc4858b558b5db95445afc796a9edea12cc022"
+    },
+    {
+      "path": "apps/react/src/admin/scheduling/client/fixtureClient.ts",
+      "sha256": "8f2cc74f72e8b7623f8d9b842a81cd65bbb4b4ef522ba9001283355532bb80be"
+    },
+    {
+      "path": "apps/react/src/admin/scheduling/client/httpClient.ts",
+      "sha256": "3462074358f437f4f6785e1d1c780708482c0c91bc7746b6a6691e9d8d05480b"
+    },
+    {
+      "path": "apps/react/src/admin/scheduling/client/index.ts",
+      "sha256": "1a930a55e537357f3f478f397cb4ca15e02e4d775f1bc96eb19acd1990a99986"
+    },
+    {
+      "path": "apps/react/src/admin/scheduling/client/types.ts",
+      "sha256": "ed3bbb58d3549800c1964e3c62913fb4ba3ab545661f497fa90dc0816681cacd"
+    },
+    {
+      "path": "apps/react/src/admin/scheduling/format.ts",
+      "sha256": "eb8aabee12118eddc1268a2f03ab42cdd54562163b716665ff96e6d96370544a"
+    },
+    {
+      "path": "apps/react/src/admin/scheduling/SchedulingAdminClientContext.tsx",
+      "sha256": "9618a5b9d5afa7f678bf64a7261d488ebcd4788270cffe64d5b45bfedee343fd"
+    },
+    {
+      "path": "apps/react/src/admin/scheduling/SchedulingAdminPage.tsx",
+      "sha256": "2d17935da0f7adf5701d13de0029197e9b58afff6165a639bd7f0d6b4af27a46"
+    },
+    {
+      "path": "apps/react/src/admin/scheduling/SchedulingDefinitionDetail.tsx",
+      "sha256": "de97be5638add65fe73f9c9d39505c90cc4af2b931d5caa18451dad9fa3c6ade"
+    },
+    {
+      "path": "apps/react/src/admin/views/__tests__/fixtureClient.test.ts",
+      "sha256": "a591d156d090c5abd365096fe820d10132d3fb5240e14f96286c3472d3b44a8c"
+    },
+    {
+      "path": "apps/react/src/admin/views/__tests__/httpClient.test.ts",
+      "sha256": "a58acf72d9e92d7423a87cba9405fa6c9802dadf106e221d79a2c7f6b26cc5e4"
+    },
+    {
+      "path": "apps/react/src/admin/views/__tests__/viewsAdminPage.detail.test.tsx",
+      "sha256": "171aab7edd9c56d673d884922db396a5cd9c0b875457505c639a652235dccc47"
+    },
+    {
+      "path": "apps/react/src/admin/views/__tests__/viewsAdminPage.list.test.tsx",
+      "sha256": "8667325920eca5d7a2d41eb7797a9afee1106308931318aebc88a8388b1e8e6c"
+    },
+    {
+      "path": "apps/react/src/admin/views/client/fixtureClient.ts",
+      "sha256": "677cd68bec295693053299814b52a887bfc72cb0f9fb228469c712a9ec62ded8"
+    },
+    {
+      "path": "apps/react/src/admin/views/client/httpClient.ts",
+      "sha256": "3091a078c59390649f26610cc5829589bd6f36925c38b9bac4beff3938743bb5"
+    },
+    {
+      "path": "apps/react/src/admin/views/client/index.ts",
+      "sha256": "8c49c3ff2806e8ee41ec8e7f4884ec1bd3213bf2ad4bb9a82f0a235522a1fbf1"
+    },
+    {
+      "path": "apps/react/src/admin/views/client/types.ts",
+      "sha256": "e206bf7ceca58415166d1888b18e16b6662380dccae611f9759944181f981465"
+    },
+    {
+      "path": "apps/react/src/admin/views/ViewDefinitionDetail.tsx",
+      "sha256": "d02f6b741a1c48cb418d812e74342bb0dcf485854889ec4e76e00be43e3df020"
+    },
+    {
+      "path": "apps/react/src/admin/views/ViewsAdminClientContext.tsx",
+      "sha256": "b56b9c6b08f79a4b9af526e509283c18ead5d82306d78b6a90770e5749fd1e9c"
+    },
+    {
+      "path": "apps/react/src/admin/views/ViewsAdminPage.tsx",
+      "sha256": "c0e3827dc5453640e293355f505a8713187f9fc0b934b1495c476cf22807b7b4"
+    }
+  ]
+}

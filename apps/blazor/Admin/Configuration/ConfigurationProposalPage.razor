@@ -1,0 +1,86 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Admin.Configuration
+@using Harborline.UIAdapters.Blazor.Components.Forms
+@inject IConfigurationProposalClient Client
+@implements IDisposable
+
+@*
+    T-461. The domain expert's Proposed change surface, the Blazor twin of
+    apps/react/src/admin/configuration/ConfigurationProposalPage.tsx: start from the effective
+    generation, edit away from operational users, freeze a Saved version with a rationale, and
+    release the exact checked candidate as a Released package.
+
+    Every answer's Detail is the platform's released binding and is rendered verbatim through
+    HarborlineSchemaForm. This surface never inspects, recomputes or re-labels a step, and it never
+    derives a digest of its own: the Released package digest it shows is the one the api took over
+    the exported artifact's bytes.
+*@
+<section aria-labelledby="configuration-proposal-heading" style="overflow-wrap:anywhere">
+    <h1 id="configuration-proposal-heading">@ConfigurationProposalDefinitions.Label("proposed")</h1>
+    @if (error is not null)
+    {
+        <div role="alert"><p>@error</p></div>
+    }
+    else if (proposed is null)
+    {
+        <p role="status">Loading the proposed change…</p>
+    }
+    else
+    {
+        <HarborlineSchemaForm View="@ConfigurationProposalDefinitions.Detail" ReadOnly="true"
+            Values="@proposed.Detail.ToDictionary(pair => pair.Key, pair => (object?)pair.Value)"
+            OnSubmit="@(_ => ValueTask.FromResult<SchemaFormValidationResult?>(null))" />
+        @* The only act offered is the next one the recorded state allows: a Saved version cannot be
+           released while its check is stale, so the surface does not invite it. *@
+        <div>
+            <button id="save-version" type="button" disabled="@(busy || proposed.Edits.Count == 0)"
+                @onclick="@(() => RunAsync(token => Client.SaveVersionAsync(ProposalId, "Saved from the configuration surface.", token)))">
+                @ConfigurationProposalDefinitions.Label("saved")
+            </button>
+            <button id="release" type="button" disabled="@(busy || !CanRelease)"
+                @onclick="@(() => RunAsync(token => Client.ReleaseAsync(ProposalId, proposed.SavedVersionCount,
+                    $"{proposed.TenantKey}.{ProposalId}", $"1.0.{proposed.SavedVersionCount}", token)))">
+                @ConfigurationProposalDefinitions.Label("released")
+            </button>
+        </div>
+    }
+</section>
+
+@code {
+    /// <summary>The Proposed change this surface reports.</summary>
+    [Parameter, EditorRequired] public string ProposalId { get; set; } = string.Empty;
+
+    private ProposedChange? proposed;
+    private string? error;
+    private bool busy;
+    private readonly CancellationTokenSource cancellation = new();
+
+    private bool CanRelease => proposed is { SavedVersionCount: > 0, Check.IsCurrent: true };
+
+    protected override async Task OnInitializedAsync() =>
+        await RunAsync(token => Client.ReadAsync(ProposalId, token));
+
+    private async Task RunAsync(Func<CancellationToken, Task<ProposedChange>> act)
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            proposed = await act(cancellation.Token);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (Exception exception) when (exception is HttpRequestException or ConfigurationProposalException or InvalidOperationException)
+        {
+            error = exception.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        cancellation.Cancel();
+        cancellation.Dispose();
+    }
+}

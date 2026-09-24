@@ -1,0 +1,70 @@
+@namespace Harborline.App.Blazor.ReferenceHost.Admin.Configuration
+@using Harborline.UIAdapters.Blazor.Components.Forms
+@inject IConfigurationActivationClient Client
+@implements IDisposable
+
+@*
+    T-460. Read-only administrator view of one tenant's configuration activation, the Blazor twin
+    of apps/react/src/admin/configuration/ConfigurationActivationPage.tsx.
+
+    Outcome is the api's answer to prepare or activate; its Detail is the platform's released
+    binding and is rendered verbatim through HarborlineSchemaForm. This surface never inspects,
+    recomputes or re-labels the status, so a refused projection reports the refusal the api bound
+    and cannot present itself as effective.
+
+    The effective read carries generation identity only (no bound detail), so it is shown as the
+    current baseline beside the form rather than fed through it.
+*@
+<section aria-labelledby="configuration-activation-heading" style="overflow-wrap:anywhere">
+    <h1 id="configuration-activation-heading">Configuration activation</h1>
+    @if (error is not null)
+    {
+        <div role="alert"><p>@error</p></div>
+    }
+    else if (effective is null)
+    {
+        <p role="status">Loading configuration activation…</p>
+    }
+    else
+    {
+        <p>Effective generation: <span id="effective-generation">@effective.Digest</span></p>
+        @if (Outcome?.Detail is { } detail)
+        {
+            <HarborlineSchemaForm View="@ConfigurationActivationDefinitions.Detail" ReadOnly="true"
+                Values="@detail.ToDictionary(pair => pair.Key, pair => (object?)pair.Value)"
+                OnSubmit="@(_ => ValueTask.FromResult<SchemaFormValidationResult?>(null))" />
+        }
+        else
+        {
+            <p role="status">No configuration activation has been reported for this generation.</p>
+        }
+    }
+</section>
+
+@code {
+    /// <summary>The api's prepare or activate answer whose released detail this surface reports.</summary>
+    [Parameter] public ConfigurationActivationOutcome? Outcome { get; set; }
+
+    private EffectiveGeneration? effective;
+    private string? error;
+    private readonly CancellationTokenSource cancellation = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            effective = await Client.ReadEffectiveAsync(cancellation.Token);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (Exception exception) when (exception is HttpRequestException or ConfigurationActivationException or InvalidOperationException)
+        {
+            error = exception.Message;
+        }
+    }
+
+    public void Dispose()
+    {
+        cancellation.Cancel();
+        cancellation.Dispose();
+    }
+}

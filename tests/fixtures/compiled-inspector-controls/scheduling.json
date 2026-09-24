@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 2,
+  "sourcePin": "11e38b663bb7e953bae9596af12bf9788b1edc7e",
+  "pillar": "Scheduling",
+  "definitionRows": [
+    "inspection-protocol|3|Inspection protocol|2026-08-18T09:00:00.0000000Z|user:fixture-scheduler",
+    "move-in-checklist|1|Move-in checklist|2026-08-10T14:30:00.0000000Z|user:fixture-scheduler",
+    "turnover-schedule|2|Turnover schedule|2026-08-15T11:15:00.0000000Z|user:fixture-admin"
+  ],
+  "versionRows": [
+    "inspection-protocol|3|Inspection protocol|2026-08-18T09:00:00.0000000Z|user:fixture-scheduler",
+    "inspection-protocol|2|Inspection protocol|2026-08-12T10:00:00.0000000Z|user:fixture-scheduler",
+    "inspection-protocol|1|Inspection protocol|2026-08-05T08:00:00.0000000Z|user:fixture-scheduler",
+    "move-in-checklist|1|Move-in checklist|2026-08-10T14:30:00.0000000Z|user:fixture-scheduler",
+    "turnover-schedule|2|Turnover schedule|2026-08-15T11:15:00.0000000Z|user:fixture-admin",
+    "turnover-schedule|1|Turnover schedule|2026-08-09T16:45:00.0000000Z|user:fixture-scheduler"
+  ],
+  "entries": [
+    {
+      "id": "inspection-protocol",
+      "list": {
+        "revision": 3,
+        "title": "Inspection protocol",
+        "updatedAt": "2026-08-18T09:00:00.0000000Z",
+        "updatedBy": "user:fixture-scheduler"
+      },
+      "detail": {
+        "definition": {
+          "title": "Inspection protocol",
+          "cadence": "weekly"
+        },
+        "history": [
+          {
+            "revision": 3,
+            "title": "Inspection protocol",
+            "updatedAt": "2026-08-18T09:00:00.0000000Z",
+            "updatedBy": "user:fixture-scheduler"
+          },
+          {
+            "revision": 2,
+            "title": "Inspection protocol",
+            "updatedAt": "2026-08-12T10:00:00.0000000Z",
+            "updatedBy": "user:fixture-scheduler"
+          },
+          {
+            "revision": 1,
+            "title": "Inspection protocol",
+            "updatedAt": "2026-08-05T08:00:00.0000000Z",
+            "updatedBy": "user:fixture-scheduler"
+          }
+        ]
+      }
+    },
+    {
+      "id": "move-in-checklist",
+      "list": {
+        "revision": 1,
+        "title": "Move-in checklist",
+        "updatedAt": "2026-08-10T14:30:00.0000000Z",
+        "updatedBy": "user:fixture-scheduler"
+      },
+      "detail": {
+        "definition": {
+          "title": "Move-in checklist",
+          "cadence": "weekly"
+        },
+        "history": [
+          {
+            "revision": 1,
+            "title": "Move-in checklist",
+            "updatedAt": "2026-08-10T14:30:00.0000000Z",
+            "updatedBy": "user:fixture-scheduler"
+          }
+        ]
+      }
+    },
+    {
+      "id": "turnover-schedule",
+      "list": {
+        "revision": 2,
+        "title": "Turnover schedule",
+        "updatedAt": "2026-08-15T11:15:00.0000000Z",
+        "updatedBy": "user:fixture-admin"
+      },
+      "detail": {
+        "definition": {
+          "title": "Turnover schedule",
+          "cadence": "weekly"
+        },
+        "history": [
+          {
+            "revision": 2,
+            "title": "Turnover schedule",
+            "updatedAt": "2026-08-15T11:15:00.0000000Z",
+            "updatedBy": "user:fixture-admin"
+          },
+          {
+            "revision": 1,
+            "title": "Turnover schedule",
+            "updatedAt": "2026-08-09T16:45:00.0000000Z",
+            "updatedBy": "user:fixture-scheduler"
+          }
+        ]
+      }
+    }
+  ],
+  "behavior": {
+    "actions": [
+      "restoreRevision"
+    ],
+    "restore": {
+      "mint": "head revision plus one",
+      "updatedBy": "user:fixture-operator",
+      "clockStart": "2026-08-20T00:00:00Z",
+      "clockStepMinutes": 1,
+      "listHeadChanges": true,
+      "restoredFrom": "requested revision"
+    },
+    "notFound": {
+      "status": 404
+    }
+  }
+}

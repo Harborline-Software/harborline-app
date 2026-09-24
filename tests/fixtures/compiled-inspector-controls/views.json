@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 2,
+  "sourcePin": "11e38b663bb7e953bae9596af12bf9788b1edc7e",
+  "pillar": "Views",
+  "definitionRows": [
+    "work-orders-table|2.1.0|Work orders table|table|Tenant",
+    "tenant-directory|1.4.2|Tenant directory|table|Tenant",
+    "occupancy-board|0.3.0|Occupancy board|board|Tenant"
+  ],
+  "versionRows": [
+    "work-orders-table|2.1.0|Work orders table|table|Tenant|semver",
+    "work-orders-table|2.0.0|Work orders table|table|Tenant|semver",
+    "work-orders-table|1.9.0|Work orders table|table|Tenant|semver",
+    "tenant-directory|1.4.2|Tenant directory|table|Tenant|semver",
+    "tenant-directory|1.4.1|Tenant directory|table|Tenant|semver",
+    "occupancy-board|2024-legacy|Occupancy board|board|Tenant|ordinal",
+    "occupancy-board|0.3.0|Occupancy board|board|Tenant|ordinal"
+  ],
+  "entries": [
+    {
+      "id": "work-orders-table",
+      "list": {
+        "version": "2.1.0",
+        "title": "Work orders table",
+        "kind": "table",
+        "cascadeLayer": "Tenant"
+      },
+      "detail": {
+        "schemaVersion": 1,
+        "parameters": {
+          "entityType": "work-order"
+        },
+        "provenance": {
+          "originPackKey": "harborline.core-views",
+          "tier": "Vendor"
+        }
+      },
+      "history": {
+        "ordering": "semver",
+        "versions": [
+          "2.1.0",
+          "2.0.0",
+          "1.9.0"
+        ]
+      }
+    },
+    {
+      "id": "tenant-directory",
+      "list": {
+        "version": "1.4.2",
+        "title": "Tenant directory",
+        "kind": "table",
+        "cascadeLayer": "Tenant"
+      },
+      "detail": {
+        "schemaVersion": 1,
+        "parameters": {
+          "entityType": "work-order"
+        },
+        "provenance": {
+          "originPackKey": "harborline.core-views",
+          "tier": "Vendor"
+        }
+      },
+      "history": {
+        "ordering": "semver",
+        "versions": [
+          "1.4.2",
+          "1.4.1"
+        ]
+      }
+    },
+    {
+      "id": "occupancy-board",
+      "list": {
+        "version": "0.3.0",
+        "title": "Occupancy board",
+        "kind": "board",
+        "cascadeLayer": "Tenant"
+      },
+      "detail": {
+        "schemaVersion": 1,
+        "parameters": {
+          "scope": "portfolio"
+        },
+        "provenance": {
+          "originPackKey": "demo.views",
+          "tier": "Community"
+        }
+      },
+      "history": {
+        "ordering": "ordinal",
+        "versions": [
+          "2024-legacy",
+          "0.3.0"
+        ]
+      }
+    }
+  ],
+  "behavior": {
+    "actions": [],
+    "notFound": {
+      "status": 404
+    }
+  }
+}
