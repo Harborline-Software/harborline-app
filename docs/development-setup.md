@@ -70,7 +70,7 @@ The M4 exercise requires a connected local node because package transport, durab
 
 For React development, the maintained configuration names are `VITE_FORMS_API_ORIGIN`, `VITE_AUTHORIZATION_API_ORIGIN` and `LOCAL_NODE_SESSION_TOKEN`. The Vite development proxy attaches the token; a production bundle has no such proxy, so this setup proves only the development-host path.
 
-For Blazor development, the maintained configuration names include `FormsAdmin__BaseUrl`, `AuthorizationAdmin__BaseUrl` and `LocalNode__SessionToken`. The server-side Blazor host attaches the token without sending it to browser code; the accepted M4 source may add a Workshop-specific base URL, which the release notes and App settings must identify.
+For Blazor development, the maintained configuration names include `Workshop__BaseUrl`, `AuthorizationAdmin__BaseUrl` and `LocalNode__SessionToken`. The server-side Blazor host attaches the token without sending it to browser code.
 
 Start a lane only after the node has reported its actual loopback address and bootstrap result:
 
