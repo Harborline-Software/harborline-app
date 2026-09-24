@@ -11,9 +11,15 @@ importers:
       '@harborline-software/contracts':
         specifier: file:.feed/contracts
         version: file:.feed/contracts
+      '@harborline-software/rule-authoring':
+        specifier: file:.feed/rule-authoring
+        version: file:.feed/rule-authoring(@harborline-software/rule-engine@file:.feed/rule-engine)
+      '@harborline-software/rule-engine':
+        specifier: file:.feed/rule-engine
+        version: file:.feed/rule-engine
       '@harborline-software/ui-react':
         specifier: file:.feed/ui-react
-        version: file:.feed/ui-react(@harborline-software/contracts@file:.feed/contracts)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: file:.feed/ui-react(@harborline-software/contracts@file:.feed/contracts)(@harborline-software/rule-authoring@file:.feed/rule-authoring(@harborline-software/rule-engine@file:.feed/rule-engine))(@harborline-software/rule-engine@file:.feed/rule-engine)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -139,15 +145,29 @@ packages:
   '@harborline-software/contracts@file:.feed/contracts':
     resolution: {directory: .feed/contracts, type: directory}
 
+  '@harborline-software/rule-authoring@file:.feed/rule-authoring':
+    resolution: {directory: .feed/rule-authoring, type: directory}
+    peerDependencies:
+      '@harborline-software/rule-engine': 0.1.0-alpha.0
+    peerDependenciesMeta:
+      '@harborline-software/rule-engine':
+        optional: true
+
+  '@harborline-software/rule-engine@file:.feed/rule-engine':
+    resolution: {directory: .feed/rule-engine, type: directory}
+
   '@harborline-software/ui-react@file:.feed/ui-react':
     resolution: {directory: .feed/ui-react, type: directory}
     peerDependencies:
       '@harborline-software/contracts': 0.0.0-alpha.0
+      '@harborline-software/rule-authoring': 0.1.0-alpha.0
       '@harborline-software/rule-engine': 0.1.0-alpha.0
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
     peerDependenciesMeta:
       '@harborline-software/contracts':
+        optional: true
+      '@harborline-software/rule-authoring':
         optional: true
       '@harborline-software/rule-engine':
         optional: true
@@ -674,8 +694,8 @@ packages:
   symbol-tree@3.2.4:
     resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}
 
-  tailwind-merge@3.7.0:
-    resolution: {integrity: sha512-XPPUyAc+cvspz3lHTcR/QgPfW2A0lv/xQNIjX3HGhLR+Nq2lHaLq5MtTesHn8GUr3W3DguT2KT5x3NVgRtYwmA==}
+  tailwind-merge@3.6.0:
+    resolution: {integrity: sha512-uxL7qAVQriqRQPAyK3pj66VqskWqoZ37PW94jwOTwNfq/z9oyu1V+eqrZqtR2+fCiXdYOZe/Modt8GtvqNzu+w==}
 
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
@@ -897,15 +917,23 @@ snapshots:
 
   '@harborline-software/contracts@file:.feed/contracts': {}
 
-  '@harborline-software/ui-react@file:.feed/ui-react(@harborline-software/contracts@file:.feed/contracts)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@harborline-software/rule-authoring@file:.feed/rule-authoring(@harborline-software/rule-engine@file:.feed/rule-engine)':
+    optionalDependencies:
+      '@harborline-software/rule-engine': file:.feed/rule-engine
+
+  '@harborline-software/rule-engine@file:.feed/rule-engine': {}
+
+  '@harborline-software/ui-react@file:.feed/ui-react(@harborline-software/contracts@file:.feed/contracts)(@harborline-software/rule-authoring@file:.feed/rule-authoring(@harborline-software/rule-engine@file:.feed/rule-engine))(@harborline-software/rule-engine@file:.feed/rule-engine)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@radix-ui/react-slot': 1.3.3(@types/react@19.2.18)(react@19.2.8)
       clsx: 2.1.1
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
-      tailwind-merge: 3.7.0
+      tailwind-merge: 3.6.0
     optionalDependencies:
       '@harborline-software/contracts': file:.feed/contracts
+      '@harborline-software/rule-authoring': file:.feed/rule-authoring(@harborline-software/rule-engine@file:.feed/rule-engine)
+      '@harborline-software/rule-engine': file:.feed/rule-engine
     transitivePeerDependencies:
       - '@types/react'
 
@@ -1330,7 +1358,7 @@ snapshots:
 
   symbol-tree@3.2.4: {}
 
-  tailwind-merge@3.7.0: {}
+  tailwind-merge@3.6.0: {}
 
   tinybench@2.9.0: {}
 

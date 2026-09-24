@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@harborline-software/contracts": "file:.feed/contracts",
+    "@harborline-software/rule-authoring": "file:.feed/rule-authoring",
+    "@harborline-software/rule-engine": "file:.feed/rule-engine",
     "@harborline-software/ui-react": "file:.feed/ui-react",
     "react": "19.2.8",
     "react-dom": "19.2.8"
@@ -37,6 +39,8 @@
   "packageManager": "pnpm@11.1.3",
   "justifications": {
     "@harborline-software/contracts": "workspace",
+    "@harborline-software/rule-authoring": "workspace",
+    "@harborline-software/rule-engine": "workspace",
     "@harborline-software/ui-react": "workspace",
     "react": "R-0080",
     "react-dom": "R-0080",

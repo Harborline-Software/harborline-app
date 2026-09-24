@@ -21,6 +21,10 @@ const platform = process.env.HARBORLINE_PLATFORM_REPO
 const packages = [
   path.join(platform, 'projections/react/ui/hlp.ui.button'),
   path.join(platform, 'projections/typescript/contracts/hlp.contracts.forms'),
+  // T-243: from platform eda5e629 the UI bundle imports the rule engine and rule authoring packages
+  // (SchemaForm's reactive rule graph and the rules editor), so the feed carries both.
+  path.join(platform, 'projections/typescript/foundation/hlp.foundation.rule-runtime'),
+  path.join(platform, 'projections/typescript/foundation/hlp.foundation.rule-authoring'),
 ]
 const feed = path.join(app, '.feed')
 
