@@ -34,7 +34,7 @@ So: there is exactly one runnable application in this repository, and it runs th
 
 ## Prerequisites
 
-**The .NET SDK version is pinned exactly.** `global.json` sets `11.0.100-preview.7.26381.103` with `"rollForward": "disable"`, so a newer or older SDK will not be substituted — `dotnet` fails instead. Check what you have:
+**The .NET SDK version is pinned exactly.** `global.json` sets `11.0.100-rc.1.26425.128` with `"rollForward": "disable"`, so a newer or older SDK will not be substituted — `dotnet` fails instead. Check what you have:
 
 ```sh
 dotnet --list-sdks
@@ -44,9 +44,9 @@ If that exact version is absent, install it. Distribution package feeds rarely c
 
 | Platform          | Install                                                                                                                                                                                                         |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **macOS**   | `curl -sSL https://dot.net/v1/dotnet-install.sh \| bash -s -- --version 11.0.100-preview.7.26381.103` — match your architecture; Apple Silicon needs the arm64 build, which the script selects automatically. |
-| **Linux**   | `curl -sSL https://dot.net/v1/dotnet-install.sh \| bash -s -- --version 11.0.100-preview.7.26381.103`                                                                                                          |
-| **Windows** | `powershell -c "& ([scriptblock]::Create((irm https://dot.net/v1/dotnet-install.ps1))) -Version 11.0.100-preview.7.26381.103"`                                                                                |
+| **macOS**   | `curl -sSL https://dot.net/v1/dotnet-install.sh \| bash -s -- --version 11.0.100-rc.1.26425.128` — match your architecture; Apple Silicon needs the arm64 build, which the script selects automatically. |
+| **Linux**   | `curl -sSL https://dot.net/v1/dotnet-install.sh \| bash -s -- --version 11.0.100-rc.1.26425.128`                                                                                                          |
+| **Windows** | `powershell -c "& ([scriptblock]::Create((irm https://dot.net/v1/dotnet-install.ps1))) -Version 11.0.100-rc.1.26425.128"`                                                                                |
 
 The install scripts place the SDK under `~/.dotnet` (`%USERPROFILE%\.dotnet` on Windows) rather than system-wide; add that directory to `PATH` if `dotnet --list-sdks` does not show the new version.
 
