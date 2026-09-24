@@ -31,12 +31,16 @@ jobs:
       vars.ACTIONS_ENABLED == 'true' &&
       (github.event_name == 'merge_group' ||
        github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, macOS]
+    runs-on: [self-hosted, macOS, ARM64, macpro]
     timeout-minutes: 60
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DEVELOPER_DIR: /Library/Developer/CommandLineTools
     steps:
+      - name: Runner
+        shell: bash
+        run: echo "runner: ${{ runner.name }} (${{ runner.os }}/${{ runner.arch }})" >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
