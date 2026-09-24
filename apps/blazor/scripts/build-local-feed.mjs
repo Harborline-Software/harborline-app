@@ -35,6 +35,8 @@ const projects = [
   'projections/blazor/ui/hlp.ui.button/Harborline.UIAdapters.Blazor.csproj',
   'projections/dotnet/foundation/hlp.ui.button/Harborline.Foundation.csproj',
   'projections/dotnet/contracts/hlp.contracts.identities/Harborline.Contracts.csproj',
+  'projections/dotnet/foundation/hlp.foundation.rule-authoring/Harborline.Foundation.RuleAuthoring.csproj',
+  'projections/dotnet/foundation/hlp.foundation.rule-runtime/Harborline.Foundation.RuleEngine.csproj',
 ]
 
 // The version is the platform's to compute, never ours to type (platform ticket 143): every
