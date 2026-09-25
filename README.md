@@ -37,3 +37,4 @@ bash eng/verify.sh
 The [gate script](eng/verify.sh) defines its prerequisites and checks; [.github/workflows](.github/workflows/) defines automation for this checkout. Use a Bash environment to run shell scripts. Language and host dependencies are recorded in their SDK and package manifests.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing public behavior. Consult [repository metadata](repository.yaml) and the applicable publishing workflow for package authority and release conditions. A successful build or fixture run is evidence for that check, not a supported-install claim.
+
