@@ -24,6 +24,8 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/vitest-runner": "10.0.0",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.2",
     "@testing-library/user-event": "14.6.6",
@@ -54,6 +56,8 @@
     "jsdom": "R-0083",
     "typescript": "R-0086",
     "vite": "R-0086",
-    "vitest": "R-0083"
+    "vitest": "R-0083",
+    "@stryker-mutator/core": "R-0083",
+    "@stryker-mutator/vitest-runner": "R-0083"
   }
 }
