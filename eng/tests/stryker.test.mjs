@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import {execFileSync} from 'node:child_process'
 import path from 'node:path'
 import {test} from 'node:test'
-import {configProblems, reportCounts} from '../stryker.mjs'
+import {configProblems, invocation, mappedSpans, razorLocation, reportCounts} from '../stryker.mjs'
 
 const standard = {project: 'Lib.csproj', since: {enabled: true, target: 'origin/main'}, thresholds: {high: 80, low: 60, break: 60}, reporters: ['json']}
 const files = (config, extra = {}) => ({
@@ -48,6 +48,35 @@ test('report counts: 0 tested is visible, and the score is detected over detecte
   const mutants = ['Killed', 'Killed', 'Timeout', 'Survived', 'NoCoverage', 'CompileError', 'Ignored'].map(status => ({status}))
   assert.deepEqual(reportCounts({files: {'a.cs': {mutants}}}), {total: 7, tested: 4, detected: 3, undetected: 2, score: 60})
   assert.equal(reportCounts({files: {'a.cs': {mutants: [{status: 'CompileError'}, {status: 'Ignored'}]}}}).tested, 0)
+})
+
+// The shape the RC1 Razor generator emits: #line maps user code back to the .razor file, #line default/hidden is plumbing.
+const generated = ['namespace X {', '#line (3,8)-(5,1) "C:\\app\\Shell.razor"', 'var visible = count > 0;', 'count++;', '#line default', '__builder.OpenElement(0, "div");', '#line hidden', '#line 12 "C:\\app\\Shell.razor"', 'Save();', '#line default', '}'].join('\n')
+
+test('mapped spans cover the code #line maps to the .razor file and nothing of the plumbing', () => {
+  const spans = mappedSpans(generated)
+  assert.deepEqual(spans.map(([start, end]) => generated.slice(start, end + 1)), ['var visible = count > 0;\ncount++;\n', 'Save();\n'])
+})
+
+test('a generated line maps back to its .razor line, and plumbing maps to nothing', () => {
+  assert.equal(razorLocation(generated, 3), 'Shell.razor:3')
+  assert.equal(razorLocation(generated, 4), 'Shell.razor:4')
+  assert.equal(razorLocation(generated, 9), 'Shell.razor:12')
+  assert.equal(razorLocation(generated, 6), undefined)
+})
+
+test('Stryker on a Razor project always runs with the opt-in property; a plain project never does', () => {
+  const config = {project: 'Host.csproj', since: {enabled: true, target: 'origin/main'}}
+  for (const all of [false, true]) {
+    const razor = invocation({config, razor: true, all, handWritten: ['Program.cs'], copies: [{path: 'Shell_razor.cs', text: generated}]})
+    assert.equal(razor.env.HarborlineStrykerBuild, 'true')
+    assert.equal(razor.config.since.enabled, false)
+    const [start, end] = mappedSpans(generated)[0]
+    assert.deepEqual(razor.config.mutate.slice(0, 1), ['**/Program.cs'])
+    assert.ok(razor.config.mutate[1].startsWith(`**/obj/stryker-razor/Shell_razor.cs{${start}..${end}}`))
+    assert.equal(invocation({config, razor: false, all}).env.HarborlineStrykerBuild, undefined)
+  }
+  assert.deepEqual(invocation({config, razor: false, all: false}), {env: {}, config: undefined})
 })
 
 test('this repository passes the check', () => {

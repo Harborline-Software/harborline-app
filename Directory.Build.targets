@@ -1,0 +1,18 @@
+<Project>
+  <!--
+    Stryker.NET only (HarborlineStrykerBuild=true, set by eng/stryker.mjs and nowhere else).
+    Stryker 5.0.0 compiles with Roslyn 5.9 and the RC1 Razor generator needs 5.11, so under Stryker
+    the generator does not load and a Razor project never compiles (stryker-net#3813). eng/stryker.mjs
+    first builds normally with the generator's output emitted, copies that output to
+    obj/stryker-razor, and this target then compiles those copies as plain C# in place of the generator.
+    With the property unset this file adds nothing. Delete it when a Stryker release carries Roslyn 5.11+.
+  -->
+  <Target Name="HarborlineStrykerRazorAsCSharp" AfterTargets="_PrepareRazorSourceGenerators" Condition="'$(HarborlineStrykerBuild)' == 'true'">
+    <ItemGroup>
+      <Analyzer Remove="@(_RazorAnalyzer)" />
+      <_HarborlineStrykerRazor Include="$(BaseIntermediateOutputPath)stryker-razor/**/*.cs" />
+      <Compile Include="@(_HarborlineStrykerRazor)" />
+    </ItemGroup>
+    <Error Condition="'@(_HarborlineStrykerRazor)' == ''" Text="HarborlineStrykerBuild: no emitted Razor output under $(BaseIntermediateOutputPath)stryker-razor; run eng/stryker.mjs, not dotnet stryker directly." />
+  </Target>
+</Project>

@@ -1,11 +1,12 @@
 // Stryker.NET across every .NET test project (control PROC-0002, "Mutation evidence as an artefact").
-//   node eng/stryker.mjs check   every test project has a stryker-config.json or an entry in eng/stryker-exclusions.json,
-//                                every config names one of its test project's ProjectReferences and holds the standard
-//   node eng/stryker.mjs run     check, then mutate each configured project whose .cs source differs from origin/main
-//                                (the config's since mode), and fail unless the json report shows mutants tested
+//   node eng/stryker.mjs check        every test project has a stryker-config.json or an entry in eng/stryker-exclusions.json,
+//                                     every config names one of its test project's ProjectReferences and holds the standard
+//   node eng/stryker.mjs run [--all]  check, then mutate each configured project whose .cs or .razor source differs from
+//                                     origin/main (--all: every project, every file), and fail unless the json report shows
+//                                     mutants tested
 // Stryker's exit code is not evidence: 5.0.0 exits 0 having mutated nothing (control T-720 spike), so `run` reads the report.
 import {execFileSync, spawnSync} from 'node:child_process'
-import {existsSync, readFileSync, rmSync} from 'node:fs'
+import {existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync} from 'node:fs'
 import path from 'node:path'
 
 const root = path.resolve(import.meta.dirname, '..')
@@ -70,33 +71,111 @@ function msbuildArgs() {
   return ['--msbuild-path', path.join(directory, version, 'MSBuild.exe')]
 }
 
-function run(repo) {
+// Razor under Stryker 5.0.0 (stryker-net#3813): its Roslyn 5.9 cannot load the RC1 Razor generator (needs 5.11), so we
+// build once normally with the generator's output emitted, copy that output to obj/stryker-razor as plain C#, and
+// Directory.Build.targets compiles the copies instead of running the generator when HarborlineStrykerBuild=true.
+// Delete this path, and that target, when a Stryker release carries Roslyn 5.11+.
+const razorGenerator = 'Microsoft.CodeAnalysis.Razor.Compiler/Microsoft.NET.Sdk.Razor.SourceGenerators.RazorSourceGenerator'
+const walk = dir => existsSync(dir) ? readdirSync(dir, {withFileTypes: true}).flatMap(entry => entry.isDirectory() ? walk(path.join(dir, entry.name)) : [path.join(dir, entry.name)]) : []
+const lineDirective = /^\s*#line\s+(?:\((\d+),\d+\)-\(\d+,\d+\)(?:\s+\d+)?|(\d+))\s+"([^"]+)"/
+
+// Character spans of the code a #line directive maps back to a .razor file: @code blocks and markup expressions.
+// Everything else in the generated file is render-tree plumbing, and a mutant must sit wholly inside a span to be kept.
+export function mappedSpans(text) {
+  const spans = []
+  let offset = 0, start
+  for (const line of text.split('\n')) {
+    if (/^\s*#line\b/.test(line)) {
+      if (start !== undefined && offset > start) spans.push([start, offset - 1])
+      start = lineDirective.test(line) ? offset + line.length + 1 : undefined
+    }
+    offset += line.length + 1
+  }
+  return spans
+}
+
+// Maps a 1-based line of a generated copy back to "<file>.razor:<line>", or undefined when it is plumbing.
+export function razorLocation(text, line) {
+  const lines = text.split('\n')
+  for (let index = line - 2; index >= 0; index--) {
+    if (!/^\s*#line\b/.test(lines[index])) continue
+    const match = lineDirective.exec(lines[index])
+    return match ? `${path.basename(match[3].replaceAll('\\', '/'))}:${Number(match[1] ?? match[2]) + (line - 2 - index)}` : undefined
+  }
+}
+
+// What Stryker is started with. A Razor project gets the opt-in property and a config whose mutate list keeps
+// hand-written .cs whole and generated code only inside mapped spans. Since is off there because the copies are
+// untracked, so Stryker's own diff would ignore every one of them; run()'s changed-file list plays its part instead.
+export function invocation({config, razor, all, handWritten = [], copies = []}) {
+  if (!razor && !all) return {env: {}, config: undefined}
+  const mutate = razor ? [...handWritten.map(file => `**/${file}`),
+    ...copies.map(copy => ({copy, spans: mappedSpans(copy.text)})).filter(({spans}) => spans.length)
+      .map(({copy, spans}) => `**/obj/stryker-razor/${copy.path}${spans.map(([start, end]) => `{${start}..${end}}`).join('')}`)] : undefined
+  return {env: razor ? {HarborlineStrykerBuild: 'true'} : {}, config: {...config, since: {enabled: false}, ...(mutate && {mutate})}}
+}
+
+function prepareRazor(projectFile, keep) {
+  const projectDirectory = path.join(root, path.dirname(projectFile))
+  const emitted = path.join(projectDirectory, 'obj', 'stryker-razor-emit'), copies = path.join(projectDirectory, 'obj', 'stryker-razor')
+  rmSync(emitted, {recursive: true, force: true}); rmSync(copies, {recursive: true, force: true})
+  const {HarborlineStrykerBuild, ...env} = process.env
+  execFileSync('dotnet', ['build', path.join(root, projectFile), '-p:EmitCompilerGeneratedFiles=true', `-p:CompilerGeneratedFilesOutputPath=${emitted}`], {env, stdio: 'inherit'})
+  const source = path.join(emitted, razorGenerator)
+  return walk(source).map(file => {
+    const relative = path.relative(source, file).replaceAll('\\', '/').replace(/\.g\.cs$/, '.cs')
+    // Stryker never mutates a file marked <auto-generated/> or named *.g.cs; a BOM would shift every span by one.
+    const text = readFileSync(file, 'utf8').replace(/^﻿/, '').replace(/^\/\/ <auto-generated\/>\r?\n/m, '')
+    mkdirSync(path.dirname(path.join(copies, relative)), {recursive: true})
+    writeFileSync(path.join(copies, relative), text)
+    return {path: relative, text, razor: relative.replace(/_razor\.cs$/, '.razor')}
+  }).filter(copy => keep(copy.razor))
+}
+
+function run(repo, {all}) {
   let failed = false
   for (const test of repo.testProjects.filter(project => !(project in repo.exclusions))) {
     const testDirectory = path.posix.dirname(test)
     const config = JSON.parse(read(`${testDirectory}/stryker-config.json`))['stryker-config']
     const target = references(test, read(test)).find(ref => path.posix.basename(ref) === config.project)
-    // ponytail: a changed .cs file with nothing mutable in it (an interface, a comment) will fail the assertion below; judge it by the report.
-    const changed = git('diff', '--name-only', 'origin/main', '--', `${path.posix.dirname(target)}/*.cs`)
-    if (!changed.length) { console.log(`${test}: no source change in ${path.posix.dirname(target)} since origin/main, skipped`); continue }
+    const targetDirectory = path.posix.dirname(target), relative = file => path.posix.relative(targetDirectory, file)
+    const razor = git('ls-files', '--', `${targetDirectory}/*.razor`).length > 0
+    // ponytail: a changed file with nothing mutable in it (an interface, a comment) will fail the assertion below; judge it by the report.
+    const changed = all ? undefined : git('diff', '--name-only', 'origin/main', '--', `${targetDirectory}/*.cs`, `${targetDirectory}/*.razor`).map(relative)
+    if (changed && !changed.length) { console.log(`${test}: no source change in ${targetDirectory} since origin/main, skipped`); continue }
+    const keep = file => !changed || changed.includes(file)
+    const copies = razor ? prepareRazor(target, keep) : []
+    const handWritten = git('ls-files', '--', `${targetDirectory}/*.cs`).map(relative).filter(keep)
+    const start = invocation({config, razor, all, handWritten, copies})
     const output = path.join(root, 'StrykerOutput', path.posix.basename(testDirectory))
-    rmSync(output, {recursive: true, force: true})
-    const stryker = spawnSync('dotnet', ['stryker', '--output', output, ...msbuildArgs()], {cwd: path.join(root, testDirectory), stdio: 'inherit'})
+    rmSync(output, {recursive: true, force: true}); mkdirSync(output, {recursive: true})
+    const args = ['stryker', '--output', output, ...msbuildArgs()]
+    if (start.config) {
+      writeFileSync(path.join(output, 'stryker-config.json'), JSON.stringify({'stryker-config': start.config}, null, 2))
+      args.push('--config-file', path.join(output, 'stryker-config.json'))
+    }
+    const stryker = spawnSync('dotnet', args, {cwd: path.join(root, testDirectory), stdio: 'inherit', env: {...process.env, ...start.env}})
     const reportPath = path.join(output, 'reports', 'mutation-report.json')
-    const counts = existsSync(reportPath) ? reportCounts(JSON.parse(readFileSync(reportPath, 'utf8'))) : undefined
+    const report = existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, 'utf8')) : undefined
+    const counts = report && reportCounts(report)
     console.log(`${test}: exit ${stryker.status}, ${JSON.stringify(counts ?? 'no json report')}`)
-    if (!counts?.tested) { console.error(`${test}: ${changed.length} changed source file(s) but 0 mutants tested`); failed = true }
+    for (const [file, {mutants}] of Object.entries(report?.files ?? {})) {
+      const copy = copies.find(candidate => file.replaceAll('\\', '/').endsWith(`stryker-razor/${candidate.path}`))
+      for (const mutant of copy ? mutants.filter(m => m.status === 'Survived') : [])
+        console.log(`  survived ${razorLocation(copy.text, mutant.location.start.line) ?? copy.path}: ${mutant.mutatorName} -> ${mutant.replacement}`)
+    }
+    if (!counts?.tested) { console.error(`${test}: ${changed ? `${changed.length} changed source file(s)` : 'a full run'} but 0 mutants tested`); failed = true }
     if (stryker.status !== 0) failed = true
   }
   return failed
 }
 
 if (import.meta.main) {
-  const [command] = process.argv.slice(2)
-  if (command !== 'check' && command !== 'run') throw new Error('usage: node eng/stryker.mjs check|run')
+  const [command, flag] = process.argv.slice(2)
+  if (command !== 'check' && command !== 'run') throw new Error('usage: node eng/stryker.mjs check | run [--all]')
   const repo = repository(), problems = configProblems(repo)
   problems.forEach(problem => console.error(problem))
   if (problems.length) process.exit(1)
   console.log(`Stryker config: ${repo.testProjects.length} test project(s), each configured or excluded: PASS`)
-  if (command === 'run' && run(repo)) process.exit(1)
+  if (command === 'run' && run(repo, {all: flag === '--all'})) process.exit(1)
 }
