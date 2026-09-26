@@ -49,7 +49,7 @@
     private AuthorizationTraceRead? result;
     private string? error;
     private bool loading;
-    private bool Valid => result is { Version: 1, Steps.Count: 4 }
+    private bool Valid => result is { Version: 1 or 2, Steps.Count: 4 }
         && result.Steps.Select((step, index) => step.Ordinal == index + 1 && step.Stage == Stages[index]).All(value => value);
     private string Deciding => result?.Steps[1].Facts.FirstOrDefault(fact => fact.StartsWith("deciding:grant:", StringComparison.Ordinal))?[15..] ?? "None recorded";
     private async Task LoadAsync()

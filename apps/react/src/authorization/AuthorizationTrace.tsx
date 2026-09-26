@@ -31,9 +31,9 @@ export function AuthorizationTrace({ decision }: { decision?: RecordedDecision }
     }
     finally { setLoading(false) }
   }
-  const valid = result?.version === 1 && result.steps.length === 4
+  const valid = (result?.version === 1 || result?.version === 2) && result.steps.length === 4
     && result.steps.every((step, index) => step.ordinal === index + 1 && step.stage === stages[index])
-  const deciding = result?.steps[1]?.facts.find(fact => fact.startsWith('deciding:'))?.slice(9)
+  const deciding = result?.steps[1]?.facts.find(fact => fact.startsWith('deciding:grant:'))?.slice(15)
   // No linked decision, no disclosure: the affordance must never promise an answer it cannot give (163 review 1).
   if (!decision) return null
   return <details onToggle={event => { if (event.currentTarget.open && result === null && error === null) void load() }}>
@@ -48,7 +48,7 @@ export function AuthorizationTrace({ decision }: { decision?: RecordedDecision }
               {result.steps.map((step, index) => <li key={step.ordinal}>
                 <h4>{labels[index]}</h4>
                 {step.facts.map((fact, factIndex) => <p key={factIndex} style={{ overflowWrap: 'anywhere' }}>{fact}</p>)}
-                {index === 3 && <p>Deciding grant: {deciding?.startsWith('grant:') ? deciding.slice(6) : 'None recorded'}</p>}
+                {index === 3 && <p>Deciding grant: {deciding ?? 'None recorded'}</p>}
               </li>)}
             </ol>}
       {!loading && (error || result?.availability === 2) && <button type="button" onClick={() => void load()}>Retry trace read</button>}

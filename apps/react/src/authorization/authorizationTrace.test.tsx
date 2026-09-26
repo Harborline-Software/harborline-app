@@ -42,6 +42,26 @@ describe('Authorization trace at binding feedback', () => {
     view.unmount()
   })
 
+  it('renders the deciding grant when a non-grant deciding fact comes first', async () => {
+    const result = structuredClone(fixture.read)
+    result.steps[1].facts = ['roles:grant-163@1', 'deciding:standing:standing-163@1', 'deciding:grant:grant-163@1']
+    const view = mount(vi.fn().mockResolvedValue(result))
+
+    const list = await screen.findByRole('list', { name: 'Authorization trace' })
+    expect(within(list).getAllByRole('listitem')[3]).toHaveTextContent('Deciding grant: grant-163@1')
+    view.unmount()
+  })
+
+  it('renders a version 2 trace with the supported four-step shape', async () => {
+    const result = structuredClone(fixture.read)
+    result.version = 2
+    const view = mount(vi.fn().mockResolvedValue(result))
+
+    expect(await screen.findByRole('list', { name: 'Authorization trace' })).toBeInTheDocument()
+    expect(screen.queryByText('The recorded authorization trace is incomplete or unsupported.')).not.toBeInTheDocument()
+    view.unmount()
+  })
+
   it.each([2, 1, 99, -1])('shows availability %s without disclosing any trace facts and retries refusal/errors', async availability => {
     const read = vi.fn().mockImplementationOnce(() => availability === -1
       ? Promise.reject(new Error('private transport detail'))
