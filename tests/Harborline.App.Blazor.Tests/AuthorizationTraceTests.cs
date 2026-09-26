@@ -59,6 +59,29 @@ public sealed class AuthorizationTraceTests : BunitContext
         Assert.Empty(view.FindAll("details [class]"));
     }
 
+    [Fact]
+    public void Deciding_grant_is_rendered_when_a_non_grant_deciding_fact_comes_first()
+    {
+        var fixture = ReadFixture();
+        var result = fixture.Read with { Steps = fixture.Read.Steps.Select(step => step.Ordinal == 2
+            ? step with { Facts = ["roles:grant-163@1", "deciding:standing:standing-163@1", "deciding:grant:grant-163@1"] }
+            : step).ToArray() };
+        var view = Mount(fixture, _ => Task.FromResult(result));
+
+        view.WaitForAssertion(() => Assert.Contains("Deciding grant: grant-163@1", view.FindAll("details li")[3].TextContent, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Version_2_trace_with_the_supported_four_step_shape_renders_normally()
+    {
+        var fixture = ReadFixture();
+        var result = fixture.Read with { Version = 2 };
+        var view = Mount(fixture, _ => Task.FromResult(result));
+
+        view.WaitForAssertion(() => Assert.Single(view.FindAll("ol[aria-label='Authorization trace']")));
+        Assert.DoesNotContain("The recorded authorization trace is incomplete or unsupported.", view.Find("details").TextContent, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(2, "You do not have permission to read this authorization trace.")]
     [InlineData(1, "No authorization trace was recorded for this decision.")]
