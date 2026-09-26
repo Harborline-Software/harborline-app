@@ -46,6 +46,25 @@ jobs:
           fetch-depth: 0
           clean: true
 
+      # ReferenceHost restores the platform's UI packages from the gitignored local feed, built from
+      # the pinned platform checkout exactly as verify-shared builds it.
+      - name: Read the recorded platform pin
+        id: platform_pin
+        run: echo "commit=$(node -p "require('./eng/platform-pin.json').commit")" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the pinned platform
+        uses: actions/checkout@v7
+        with:
+          repository: Harborline-Software/harborline-platform
+          ref: ${{ steps.platform_pin.outputs.commit }}
+          path: .platform
+
+      - name: Build the Blazor local package feed
+        working-directory: apps/blazor
+        env:
+          HARBORLINE_PLATFORM_REPO: ${{ github.workspace }}/.platform
+        run: node scripts/build-local-feed.mjs
+
       - name: Restore the pinned dotnet-stryker
         run: dotnet tool restore
 
