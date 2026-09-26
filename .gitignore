@@ -8,5 +8,9 @@ node_modules/
 .claude/
 .codex/
 
+# StrykerJS (eng/strykerjs.mjs): sandbox, in-place backups, setup files left by an aborted run, reports.
+.stryker-tmp/
+stryker-setup-*.js
+**/reports/mutation/
 # Stryker.NET output; CI uploads the json report as an artifact
 StrykerOutput/
