@@ -16,6 +16,11 @@
 # winbox, not the Macs: macpro carries the merge queue's verify-shared lane and mac16 is the
 # perf-quiet runner (T-724 ruling 8). Fork and draft guards are verify-shared's, character for
 # character: a fork pull request never runs its author's code on our machine, and a draft waits.
+#
+# T-724 ruling 118 (Q50): the pull_request path moved to a standard GitHub-hosted ubuntu-latest
+# runner. eng/stryker.mjs's msbuild-path fallback is gated to process.platform === 'win32', and the
+# platform feed build below has no Windows-specific path, so nothing in the PR run is Windows-only.
+# The schedule/workflow_dispatch (main) path stays on winbox exactly as before.
 name: stryker
 
 on:
@@ -26,7 +31,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: stryker-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.event_name == 'pull_request' && format('stryker-pr-{0}', github.event.pull_request.number) || format('stryker-{0}', github.ref) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -40,8 +45,8 @@ jobs:
        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
        (github.event.pull_request.head.repo.full_name == github.repository &&
         github.event.pull_request.draft == false))
-    runs-on: [self-hosted, Windows, winbox]
-    timeout-minutes: 90
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","Windows","winbox"]') }}
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 60 || 90 }}
     defaults:
       run:
         shell: bash
@@ -54,6 +59,17 @@ jobs:
         with:
           fetch-depth: 0
           clean: true
+
+      # winbox already carries the pinned SDK and Node on PATH; the hosted PR runner needs both installed.
+      - uses: actions/setup-dotnet@v6
+        if: github.event_name == 'pull_request'
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v7
+        if: github.event_name == 'pull_request'
+        with:
+          node-version: 24
 
       # ReferenceHost restores the platform's UI packages from the gitignored local feed, built from
       # the pinned platform checkout exactly as verify-shared builds it.
@@ -86,5 +102,5 @@ jobs:
         with:
           name: stryker-report-${{ github.run_id }}
           if-no-files-found: ignore
-          retention-days: ${{ github.event_name == 'pull_request' && 14 || 30 }}
+          retention-days: ${{ github.event_name == 'pull_request' && 7 || 30 }}
           path: StrykerOutput/*/reports/mutation-report.json
