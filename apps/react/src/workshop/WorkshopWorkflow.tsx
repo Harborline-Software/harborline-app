@@ -54,6 +54,7 @@ interface FieldOverlay {
   readonly label?: LiteralText | string
   readonly helpText?: LiteralText | string
   readonly controlHint?: string
+  readonly permittedValues?: string[]
   readonly piiSensitivity?: string
   readonly config?: Readonly<Record<string, unknown>>
 }
@@ -176,6 +177,7 @@ export function formViewFromPlan(plan: FormRenderPlan): FormView {
       label: localized(presentation.label, name),
       ...(presentation.helpText ? { helpText: localized(presentation.helpText, name) } : {}),
       controlHint: presentation.controlHint ?? binding.type ?? 'text',
+      ...(presentation.permittedValues ? { permittedValues: presentation.permittedValues } : {}),
       isSensitive: presentation.piiSensitivity === 'Sensitive',
       isReadable: true,
       valueKind: valueKind(binding.type),
