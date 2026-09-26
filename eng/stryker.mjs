@@ -94,16 +94,6 @@ export function mappedSpans(text) {
   return spans
 }
 
-// Maps a 1-based line of a generated copy back to "<file>.razor:<line>", or undefined when it is plumbing.
-export function razorLocation(text, line) {
-  const lines = text.split('\n')
-  for (let index = line - 2; index >= 0; index--) {
-    if (!/^\s*#line\b/.test(lines[index])) continue
-    const match = lineDirective.exec(lines[index])
-    return match ? `${path.basename(match[3].replaceAll('\\', '/'))}:${Number(match[1] ?? match[2]) + (line - 2 - index)}` : undefined
-  }
-}
-
 // What Stryker is started with. A Razor project gets the opt-in property and a config whose mutate list keeps
 // hand-written .cs whole and generated code only inside mapped spans. Since is off there because the copies are
 // untracked, so Stryker's own diff would ignore every one of them; run()'s changed-file list plays its part instead.
@@ -161,8 +151,9 @@ function run(repo, {all}) {
     console.log(`${test}: exit ${stryker.status}, ${JSON.stringify(counts ?? 'no json report')}`)
     for (const [file, {mutants}] of Object.entries(report?.files ?? {})) {
       const copy = copies.find(candidate => file.replaceAll('\\', '/').endsWith(`stryker-razor/${candidate.path}`))
-      for (const mutant of copy ? mutants.filter(m => m.status === 'Survived') : [])
-        console.log(`  survived ${razorLocation(copy.text, mutant.location.start.line) ?? copy.path}: ${mutant.mutatorName} -> ${mutant.replacement}`)
+      // Stryker reports the #line-mapped position, so the line and column are already the .razor file's own.
+      for (const {location: {start}, mutatorName, replacement} of copy ? mutants.filter(m => m.status === 'Survived') : [])
+        console.log(`  survived ${targetDirectory}/${copy.razor}:${start.line}:${start.column} ${mutatorName} -> ${replacement}`)
     }
     if (!counts?.tested) { console.error(`${test}: ${changed ? `${changed.length} changed source file(s)` : 'a full run'} but 0 mutants tested`); failed = true }
     if (stryker.status !== 0) failed = true

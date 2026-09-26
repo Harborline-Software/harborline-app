@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import {execFileSync} from 'node:child_process'
 import path from 'node:path'
 import {test} from 'node:test'
-import {configProblems, invocation, mappedSpans, razorLocation, reportCounts} from '../stryker.mjs'
+import {configProblems, invocation, mappedSpans, reportCounts} from '../stryker.mjs'
 
 const standard = {project: 'Lib.csproj', since: {enabled: true, target: 'origin/main'}, thresholds: {high: 80, low: 60, break: 60}, reporters: ['json']}
 const files = (config, extra = {}) => ({
@@ -56,13 +56,6 @@ const generated = ['namespace X {', '#line (3,8)-(5,1) "C:\\app\\Shell.razor"', 
 test('mapped spans cover the code #line maps to the .razor file and nothing of the plumbing', () => {
   const spans = mappedSpans(generated)
   assert.deepEqual(spans.map(([start, end]) => generated.slice(start, end + 1)), ['var visible = count > 0;\ncount++;\n', 'Save();\n'])
-})
-
-test('a generated line maps back to its .razor line, and plumbing maps to nothing', () => {
-  assert.equal(razorLocation(generated, 3), 'Shell.razor:3')
-  assert.equal(razorLocation(generated, 4), 'Shell.razor:4')
-  assert.equal(razorLocation(generated, 9), 'Shell.razor:12')
-  assert.equal(razorLocation(generated, 6), undefined)
 })
 
 test('Stryker on a Razor project always runs with the opt-in property; a plain project never does', () => {
