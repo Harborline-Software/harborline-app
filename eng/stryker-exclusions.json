@@ -1,0 +1,3 @@
+{
+  "src/Harborline.App.Testing/Harborline.App.Testing.csproj": "Test doubles for consumers' suites; mutating them scores the doubles, not the product, so App.Tests mutates Abstractions only."
+}

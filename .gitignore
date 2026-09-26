@@ -12,3 +12,5 @@ node_modules/
 .stryker-tmp/
 stryker-setup-*.js
 **/reports/mutation/
+# Stryker.NET output; CI uploads the json report as an artifact
+StrykerOutput/
