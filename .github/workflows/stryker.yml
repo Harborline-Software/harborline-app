@@ -1,5 +1,9 @@
-# stryker: Stryker.NET mutation testing on the .NET code a pull request changes (control PROC-0002,
-# "Mutation evidence as an artefact": since origin/main, break 60, low 60, high 80, json report).
+# stryker: Stryker.NET mutation testing (control PROC-0002, "Mutation evidence as an artefact").
+#
+# Owner ruling Q43: a pull request run is review feedback. It mutates the changed .NET source, lists the
+# surviving and uncovered mutants on the changed lines in the job summary, uploads the json report, and
+# never compares against a project's break floor. The nightly full run on main (03:00 New York, 07:00 UTC)
+# mutates everything and enforces each project's break, which starts at eng/stryker-baselines.json.
 #
 # Advisory. It is not in the `verify` aggregator's needs and is not a required check, so a red run
 # here never blocks a merge; it is the evidence a reviewer reads.
@@ -17,10 +21,13 @@ name: stryker
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
 
 concurrency:
-  group: stryker-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: stryker-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -29,10 +36,12 @@ jobs:
   stryker:
     if: >-
       vars.ACTIONS_ENABLED == 'true' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.draft == false
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+       (github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.draft == false))
     runs-on: [self-hosted, Windows, winbox]
-    timeout-minutes: 45
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
@@ -68,8 +77,8 @@ jobs:
       - name: Restore the pinned dotnet-stryker
         run: dotnet tool restore
 
-      - name: Mutate changed .NET source
-        run: node eng/stryker.mjs run
+      - name: Mutate changed .NET source (pull request) or everything (main)
+        run: node eng/stryker.mjs run ${{ github.event_name != 'pull_request' && '--all' || '' }}
 
       - name: Mutation report
         if: always()
@@ -77,5 +86,5 @@ jobs:
         with:
           name: stryker-report-${{ github.run_id }}
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: ${{ github.event_name == 'pull_request' && 14 || 30 }}
           path: StrykerOutput/*/reports/mutation-report.json
