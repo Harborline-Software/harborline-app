@@ -33,6 +33,9 @@ public static class CompiledFormAdapter
                         Label = Text(presentation.GetProperty("label")),
                         ControlHint = presentation.TryGetProperty("controlHint", out var hint)
                             ? hint.GetString() : metadata.GetProperty("type").GetString(),
+                        // T-752: on a value-domain field the plan carries the runtime's editor and its members.
+                        PermittedValues = presentation.TryGetProperty("permittedValues", out var permitted)
+                            ? permitted.EnumerateArray().Select(value => value.GetString()!).ToArray() : null,
                         Required = metadata.TryGetProperty("required", out var required) && required.ValueKind == JsonValueKind.True,
                         ReadOnly = presentation.TryGetProperty("readOnly", out var readOnly) && readOnly.ValueKind == JsonValueKind.True,
                         Options = ReadOptions(metadata),
