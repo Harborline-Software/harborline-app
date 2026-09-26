@@ -7,3 +7,6 @@ node_modules/
 # session and lane artefacts; nothing under either is tracked
 .claude/
 .codex/
+
+# Stryker.NET output; CI uploads the json report as an artifact
+StrykerOutput/
