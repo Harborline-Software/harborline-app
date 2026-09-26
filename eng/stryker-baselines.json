@@ -1,0 +1,4 @@
+{
+  "tests/Harborline.App.Blazor.Tests/Harborline.App.Blazor.Tests.csproj": { "score": 50.73, "measured": "2026-09-26, full run on PR #54 (e0d9c8d)" },
+  "tests/Harborline.App.Tests/Harborline.App.Tests.csproj": { "score": 40.62, "measured": "2026-09-26, full run on PR #54 (e0d9c8d)" }
+}

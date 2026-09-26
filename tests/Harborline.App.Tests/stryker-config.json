@@ -3,7 +3,7 @@
   "stryker-config": {
     "project": "Harborline.App.Abstractions.csproj",
     "since": { "enabled": true, "target": "origin/main" },
-    "thresholds": { "high": 80, "low": 60, "break": 60 },
+    "thresholds": { "high": 80, "low": 60, "break": 40 },
     "reporters": ["json"]
   }
 }

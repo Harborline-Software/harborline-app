@@ -11,7 +11,8 @@ const files = (config, extra = {}) => ({
   ...(config && {'tests/Lib.Tests/stryker-config.json': JSON.stringify({'stryker-config': config})}),
   ...extra,
 })
-const problems = (fileMap, exclusions = {}) => configProblems({testProjects: ['tests/Lib.Tests/Lib.Tests.csproj'], exclusions, readFile: file => fileMap[file]})
+const baselines = {'tests/Lib.Tests/Lib.Tests.csproj': {score: 50.73}}
+const problems = (fileMap, exclusions = {}, baseline = baselines) => configProblems({testProjects: ['tests/Lib.Tests/Lib.Tests.csproj'], exclusions, baselines: baseline, readFile: file => fileMap[file]})
 
 test('a config that holds the standard and names its ProjectReference passes', () => {
   assert.deepEqual(problems(files(standard)), [])
@@ -37,10 +38,17 @@ test('a second ProjectReference must be excluded, and the standard is enforced',
   const twoRefs = files(standard, {'tests/Lib.Tests/Lib.Tests.csproj': '<Project><ProjectReference Include="../../src/Lib/Lib.csproj" /><ProjectReference Include="..\\..\\src\\Help\\Help.csproj" /></Project>', 'src/Help/Help.csproj': '<Project />'})
   assert.match(problems(twoRefs).join('\n'), /src\/Help\/Help.csproj is neither mutated nor excluded/)
   assert.deepEqual(problems(twoRefs, {'src/Help/Help.csproj': 'test doubles'}), [])
-  assert.deepEqual(problems(files({...standard, thresholds: {high: 80, low: 60, break: 0}, reporters: ['html'], since: {enabled: false}})), [
-    'tests/Lib.Tests/stryker-config.json: thresholds must be high 80, low 60, break 60',
+  assert.deepEqual(problems(files({...standard, thresholds: {high: 70, low: 60, break: 60}, reporters: ['html'], since: {enabled: false}})), [
+    'tests/Lib.Tests/stryker-config.json: thresholds must be high 80, low 60',
     'tests/Lib.Tests/stryker-config.json: reporters must include json',
     'tests/Lib.Tests/stryker-config.json: since must be enabled against origin/main'])
+})
+
+test('break sits between the floor of the recorded baseline and 60, and a configured project needs a baseline', () => {
+  const withBreak = breakAt => problems(files({...standard, thresholds: {high: 80, low: 60, break: breakAt}}))
+  for (const ok of [50, 55, 60]) assert.deepEqual(withBreak(ok), [])
+  for (const bad of [49, 61, 0, 50.5]) assert.deepEqual(withBreak(bad), ['tests/Lib.Tests/stryker-config.json: break must be between the baseline floor 50 and 60'])
+  assert.deepEqual(problems(files(standard), {}, {}), ['tests/Lib.Tests/Lib.Tests.csproj: no baseline score in eng/stryker-baselines.json'])
 })
 
 test('report counts: 0 tested is visible, and the score is detected over detected plus undetected', () => {
