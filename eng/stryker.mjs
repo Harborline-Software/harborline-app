@@ -2,8 +2,8 @@
 //   node eng/stryker.mjs check        every test project has a stryker-config.json or an entry in eng/stryker-exclusions.json,
 //                                     every config names one of its test project's ProjectReferences and holds the standard
 //   node eng/stryker.mjs run [--all]  check, then mutate each configured project whose .cs or .razor source differs from
-//                                     origin/main (--all: every project, every file), and fail unless the json report shows
-//                                     mutants tested
+//                                     origin/main and report survivors on the changed lines; fail only on 0 mutants tested.
+//                                     --all (the scheduled run on main): every project, every file, and enforce each break
 // Stryker's exit code is not evidence: 5.0.0 exits 0 having mutated nothing (control T-720 spike), so `run` reads the report.
 import {execFileSync, spawnSync} from 'node:child_process'
 import {existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync} from 'node:fs'
@@ -127,15 +127,32 @@ function prepareRazor(projectFile, keep) {
   }).filter(copy => keep(copy.razor))
 }
 
+// New-side line numbers a unified diff (-U0) adds or changes.
+export function changedLines(diff) {
+  const lines = new Set()
+  for (const [, first, count = '1'] of diff.matchAll(/^@@ -\S+ \+(\d+)(?:,(\d+))? @@/gm))
+    for (let line = Number(first); line < Number(first) + Number(count); line++) lines.add(line)
+  return lines
+}
+
+// Q43: a pull request run is review feedback only (survivors and uncovered mutants on the changed lines); the break
+// floor is judged on the scheduled full run on main. Either run fails when mutable code changed but 0 mutants were tested.
+export function verdict({counts, all, breakAt, exit}) {
+  if (!counts?.tested) return [`${all ? 'a full run' : 'changed source'} but 0 mutants tested`]
+  if (exit !== 0) return [`Stryker exited ${exit}`]
+  return all && counts.score < breakAt ? [`score ${counts.score} % is below break ${breakAt}`] : []
+}
+
 function run(repo, {all}) {
   let failed = false
+  const summary = [`## Stryker ${all ? 'full run' : 'on the changed lines'}`, '']
   for (const test of repo.testProjects.filter(project => !(project in repo.exclusions))) {
     const testDirectory = path.posix.dirname(test)
     const config = JSON.parse(read(`${testDirectory}/stryker-config.json`))['stryker-config']
     const target = references(test, read(test)).find(ref => path.posix.basename(ref) === config.project)
     const targetDirectory = path.posix.dirname(target), relative = file => path.posix.relative(targetDirectory, file)
     const razor = git('ls-files', '--', `${targetDirectory}/*.razor`).length > 0
-    // ponytail: a changed file with nothing mutable in it (an interface, a comment) will fail the assertion below; judge it by the report.
+    // ponytail: a changed file with nothing mutable in it (an interface, a comment) will fail the 0-tested guard; judge it by the report.
     const changed = all ? undefined : git('diff', '--name-only', 'origin/main', '--', `${targetDirectory}/*.cs`, `${targetDirectory}/*.razor`).map(relative)
     if (changed && !changed.length) { console.log(`${test}: no source change in ${targetDirectory} since origin/main, skipped`); continue }
     const keep = file => !changed || changed.includes(file)
@@ -144,7 +161,7 @@ function run(repo, {all}) {
     const start = invocation({config, razor, all, handWritten, copies})
     const output = path.join(root, 'StrykerOutput', path.posix.basename(testDirectory))
     rmSync(output, {recursive: true, force: true}); mkdirSync(output, {recursive: true})
-    const args = ['stryker', '--output', output, ...msbuildArgs()]
+    const args = ['stryker', '--output', output, ...msbuildArgs(), ...(all ? [] : ['--break-at', '0'])]
     if (start.config) {
       writeFileSync(path.join(output, 'stryker-config.json'), JSON.stringify({'stryker-config': start.config}, null, 2))
       args.push('--config-file', path.join(output, 'stryker-config.json'))
@@ -153,16 +170,26 @@ function run(repo, {all}) {
     const reportPath = path.join(output, 'reports', 'mutation-report.json')
     const report = existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, 'utf8')) : undefined
     const counts = report && reportCounts(report)
+    const failures = verdict({counts, all, breakAt: config.thresholds.break, exit: stryker.status})
     console.log(`${test}: exit ${stryker.status}, ${JSON.stringify(counts ?? 'no json report')}`)
+    failures.forEach(failure => console.error(`${test}: ${failure}`))
+    failed ||= failures.length > 0
+    summary.push(`### ${test}`, '', `${counts?.tested ?? 0} tested, score ${counts?.score ?? 'n/a'} %${all ? ` (break ${config.thresholds.break})` : ''}${failures.length ? `; **${failures.join('; ')}**` : ''}`, '')
+    if (all) continue
+    const rows = []
     for (const [file, {mutants}] of Object.entries(report?.files ?? {})) {
       const copy = copies.find(candidate => file.replaceAll('\\', '/').endsWith(`stryker-razor/${candidate.path}`))
-      // Stryker reports the #line-mapped position, so the line and column are already the .razor file's own.
-      for (const {location: {start}, mutatorName, replacement} of copy ? mutants.filter(m => m.status === 'Survived') : [])
-        console.log(`  survived ${targetDirectory}/${copy.razor}:${start.line}:${start.column} ${mutatorName} -> ${replacement}`)
+      // Stryker reports the #line-mapped position, so a Razor copy's line and column are already the .razor file's own.
+      const source = copy ? `${targetDirectory}/${copy.razor}` : path.relative(root, file).replaceAll('\\', '/')
+      const lines = changedLines(execFileSync('git', ['-C', root, 'diff', '-U0', 'origin/main', '--', source], {encoding: 'utf8'}))
+      for (const {status, location: {start: at}, mutatorName, replacement} of mutants)
+        if ((status === 'Survived' || status === 'NoCoverage') && lines.has(at.line))
+          rows.push(`| ${status} | ${source}:${at.line}:${at.column} | ${mutatorName} | ${replacement.replace(/\s+/g, ' ').replaceAll('|', '\\|').slice(0, 80)} |`)
     }
-    if (!counts?.tested) { console.error(`${test}: ${changed ? `${changed.length} changed source file(s)` : 'a full run'} but 0 mutants tested`); failed = true }
-    if (stryker.status !== 0) failed = true
+    rows.forEach(row => console.log(`  ${row}`))
+    summary.push(rows.length ? ['| Status | Where | Mutator | Replacement |', '|---|---|---|---|', ...rows].join('\n') : 'No surviving or uncovered mutant on a changed line.', '')
   }
+  if (process.env.GITHUB_STEP_SUMMARY) writeFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary.join('\n')}\n`, {flag: 'a'})
   return failed
 }
 
