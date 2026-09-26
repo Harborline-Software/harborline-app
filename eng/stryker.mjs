@@ -10,7 +10,7 @@ import {existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync}
 import path from 'node:path'
 
 const root = path.resolve(import.meta.dirname, '..')
-const exclusionsFile = 'eng/stryker-exclusions.json'
+const exclusionsFile = 'eng/stryker-exclusions.json', baselinesFile = 'eng/stryker-baselines.json'
 const git = (...args) => execFileSync('git', ['-C', root, ...args], {encoding: 'utf8'}).split(/\r?\n/).filter(Boolean)
 const read = file => existsSync(path.join(root, file)) ? readFileSync(path.join(root, file), 'utf8') : undefined
 
@@ -27,7 +27,9 @@ const references = (testProject, text) => [...text.matchAll(/<ProjectReference\s
   .map(match => path.posix.normalize(`${path.posix.dirname(testProject)}/${match[1].replaceAll('\\', '/')}`))
 
 // testProjects: repository-relative csproj paths; readFile(path) returns the text or undefined when absent.
-export function configProblems({testProjects, exclusions, readFile}) {
+// baselines: test csproj -> {score} from its last full run. break starts at the floor of that score and rises toward
+// PROC-0002's 60 as test-improvement tickets land; it may never sit below the baseline, so a regression goes red.
+export function configProblems({testProjects, exclusions, baselines = {}, readFile}) {
   const problems = []
   for (const [project, reason] of Object.entries(exclusions)) {
     if (readFile(project) === undefined) problems.push(`${exclusionsFile}: ${project} does not exist`)
@@ -47,7 +49,10 @@ export function configProblems({testProjects, exclusions, readFile}) {
     else if (readFile(target) === undefined) problems.push(`${configPath}: project ${target} does not exist`)
     for (const ref of refs) if (ref !== target && !(ref in exclusions)) problems.push(`${test}: ProjectReference ${ref} is neither mutated nor excluded`)
     const {high, low, break: breakAt} = config.thresholds ?? {}
-    if (high !== 80 || low !== 60 || breakAt !== 60) problems.push(`${configPath}: thresholds must be high 80, low 60, break 60`)
+    if (high !== 80 || low !== 60) problems.push(`${configPath}: thresholds must be high 80, low 60`)
+    const baseline = baselines[test]?.score
+    if (typeof baseline !== 'number') problems.push(`${test}: no baseline score in ${baselinesFile}`)
+    else if (!Number.isInteger(breakAt) || breakAt > 60 || breakAt < Math.floor(baseline)) problems.push(`${configPath}: break must be between the baseline floor ${Math.floor(baseline)} and 60`)
     if (!config.reporters?.includes('json')) problems.push(`${configPath}: reporters must include json`)
     if (config.since?.enabled !== true || config.since?.target !== 'origin/main') problems.push(`${configPath}: since must be enabled against origin/main`)
   }
@@ -56,7 +61,7 @@ export function configProblems({testProjects, exclusions, readFile}) {
 
 function repository() {
   const testProjects = git('ls-files', '*.csproj').filter(file => read(file).includes('Microsoft.NET.Test.Sdk'))
-  return {testProjects, exclusions: JSON.parse(read(exclusionsFile)), readFile: read}
+  return {testProjects, exclusions: JSON.parse(read(exclusionsFile)), baselines: JSON.parse(read(baselinesFile)), readFile: read}
 }
 
 // Buildalyzer reads TargetFramework literally from the csproj; ours comes from Directory.Build.props, so it guesses
