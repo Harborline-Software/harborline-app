@@ -1,0 +1,4 @@
+{
+  "tests/Harborline.App.Blazor.Tests/Harborline.App.Blazor.Tests.csproj": "Stryker.NET 5.0.0 carries Roslyn 5.9 and the RC1 Razor generator needs 5.11, so ReferenceHost never compiles under Stryker (stryker-net#3813); lift when a release carries Roslyn >= 5.11.",
+  "src/Harborline.App.Testing/Harborline.App.Testing.csproj": "Test doubles for consumers' suites; mutating them scores the doubles, not the product, so App.Tests mutates Abstractions only."
+}
