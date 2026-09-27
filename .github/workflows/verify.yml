@@ -1,23 +1,5 @@
-# verify: eng/verify.sh on a self-hosted macOS runner, as a pull-request check and as the merge-queue
-# check. eng/verify.sh is this repository's gate, and before this workflow it had never run in any
-# automation: packages.yml runs four of the React lane's steps on ubuntu and nothing else. Shape copied from harborline-api's verify.yml
-# (control: docs/velocity/landing.md).
-#
-# Fork safety: harborline-app is public and the shared lane runs on our own machines. It runs only
-# for pull requests whose head lives in this repository, and for merge-queue groups (which are built
-# from already-reviewed heads). A fork PR gets the hosted checks only.
-#
-# T-660 (the shape T-633 landed in harborline-api): `verify` is the required context, and it is an
-# aggregator with no condition. GitHub counts a job skipped by its own `if` as a SUCCESSFUL required
-# check, so a required job that carries `vars.ACTIONS_ENABLED == 'true'` turns green the moment the
-# variable is deleted. The lane keeps the switch (it costs self-hosted machine time); the context
-# cannot be skipped and is green only when the lane it stands for ran and passed.
-#
-# Owner decision 2026-09-25: a draft PR no longer starts the self-hosted verify-shared lane. Drafts
-# were queuing behind the merge-queue's own runs on macpro, delaying every ready-for-review PR behind
-# work nobody had asked to be checked yet. Marking a PR ready for review (or opening it non-draft)
-# now triggers the full run; the `verify` aggregator stays unconditional and required (T-633/T-660) so
-# a draft's skipped lane reports a failure with an explicit message, not a false-green required check.
+# verify: the app gate runs on a standard GitHub-hosted macOS runner.
+# The required aggregator remains unconditional and fails when its lane is skipped or red.
 name: verify
 
 on:
@@ -39,7 +21,7 @@ jobs:
       (github.event_name == 'merge_group' ||
        (github.event.pull_request.head.repo.full_name == github.repository &&
         github.event.pull_request.draft == false))
-    runs-on: [self-hosted, macOS, ARM64, macpro]
+    runs-on: macos-15
     timeout-minutes: 60
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
@@ -54,9 +36,14 @@ jobs:
           fetch-depth: 0
           clean: true
 
-      # No setup-node / setup-dotnet here, deliberately: the runner's PATH carries the host toolchain
-      # the Mac gates were measured with, and global.json pins the SDK. Printing the versions makes a
-      # host-versus-host disagreement attributable instead of a mystery.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
       - name: Host toolchain
         run: |
           for tool in node npm dotnet git jq; do
