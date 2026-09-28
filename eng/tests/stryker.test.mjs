@@ -39,15 +39,17 @@ test('a second ProjectReference must be excluded, and the standard is enforced',
   assert.match(problems(twoRefs).join('\n'), /src\/Help\/Help.csproj is neither mutated nor excluded/)
   assert.deepEqual(problems(twoRefs, {'src/Help/Help.csproj': 'test doubles'}), [])
   assert.deepEqual(problems(files({...standard, thresholds: {high: 70, low: 60, break: 60}, reporters: ['html'], since: {enabled: false}})), [
-    'tests/Lib.Tests/stryker-config.json: thresholds must be high 80, low 60',
+    'tests/Lib.Tests/stryker-config.json: thresholds must be low = max(60, break) = 60 and high = max(80, break) = 80 (ruling 96)',
     'tests/Lib.Tests/stryker-config.json: reporters must include json',
     'tests/Lib.Tests/stryker-config.json: since must be enabled against origin/main'])
 })
 
-test('break sits between the floor of the recorded baseline and 60, and a configured project needs a baseline', () => {
-  const withBreak = breakAt => problems(files({...standard, thresholds: {high: 80, low: 60, break: breakAt}}))
-  for (const ok of [50, 55, 60]) assert.deepEqual(withBreak(ok), [])
-  for (const bad of [49, 61, 0, 50.5]) assert.deepEqual(withBreak(bad), ['tests/Lib.Tests/stryker-config.json: break must be between the baseline floor 50 and 60'])
+test('break is at least the floor of the recorded baseline, and a configured project needs a baseline', () => {
+  const withBreak = (breakAt, low = Math.max(60, breakAt)) => problems(files({...standard, thresholds: {high: 80, low, break: breakAt}}))
+  for (const ok of [50, 55, 60, 65]) assert.deepEqual(withBreak(ok), [])
+  for (const bad of [49, 0, 50.5]) assert.deepEqual(withBreak(bad), ['tests/Lib.Tests/stryker-config.json: break must be an integer at least the baseline floor 50'])
+  // Above 60, low rises with break (ruling 96): Stryker refuses a break above low.
+  assert.deepEqual(withBreak(65, 60), ['tests/Lib.Tests/stryker-config.json: thresholds must be low = max(60, break) = 65 and high = max(80, break) = 80 (ruling 96)'])
   assert.deepEqual(problems(files(standard), {}, {}), ['tests/Lib.Tests/Lib.Tests.csproj: no baseline score in eng/stryker-baselines.json'])
 })
 

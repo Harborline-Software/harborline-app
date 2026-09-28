@@ -49,10 +49,11 @@ export function configProblems({testProjects, exclusions, baselines = {}, readFi
     else if (readFile(target) === undefined) problems.push(`${configPath}: project ${target} does not exist`)
     for (const ref of refs) if (ref !== target && !(ref in exclusions)) problems.push(`${test}: ProjectReference ${ref} is neither mutated nor excluded`)
     const {high, low, break: breakAt} = config.thresholds ?? {}
-    if (high !== 80 || low !== 60) problems.push(`${configPath}: thresholds must be high 80, low 60`)
+    // low is max(60, break) and high is max(80, break) (ruling 96, as in the platform): Stryker refuses break > low.
+    if (low !== Math.max(60, breakAt) || high !== Math.max(80, breakAt)) problems.push(`${configPath}: thresholds must be low = max(60, break) = ${Math.max(60, breakAt)} and high = max(80, break) = ${Math.max(80, breakAt)} (ruling 96)`)
     const baseline = baselines[test]?.score
     if (typeof baseline !== 'number') problems.push(`${test}: no baseline score in ${baselinesFile}`)
-    else if (!Number.isInteger(breakAt) || breakAt > 60 || breakAt < Math.floor(baseline)) problems.push(`${configPath}: break must be between the baseline floor ${Math.floor(baseline)} and 60`)
+    else if (!Number.isInteger(breakAt) || breakAt < Math.floor(baseline)) problems.push(`${configPath}: break must be an integer at least the baseline floor ${Math.floor(baseline)}`)
     if (!config.reporters?.includes('json')) problems.push(`${configPath}: reporters must include json`)
     if (config.since?.enabled !== true || config.since?.target !== 'origin/main') problems.push(`${configPath}: since must be enabled against origin/main`)
   }
