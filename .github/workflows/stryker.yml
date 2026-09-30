@@ -53,6 +53,14 @@ jobs:
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
     steps:
+      - name: Git Bash on PATH for the service account
+        # winbox's machine PATH has Git\cmd; Bash and its utilities live in these directories.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Add-Content -Path $env:GITHUB_PATH -Value 'C:\Program Files\Git\bin'
+          Add-Content -Path $env:GITHUB_PATH -Value 'C:\Program Files\Git\usr\bin'
+
       # fetch-depth 0 so refs/remotes/origin/main exists: the configs' since target and the script's
       # changed-source test both diff against it.
       - uses: actions/checkout@v7
