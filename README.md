@@ -37,3 +37,5 @@ bash eng/verify.sh
 The [gate script](eng/verify.sh) defines its prerequisites and checks; [.github/workflows](.github/workflows/) defines automation for this checkout. Use a Bash environment to run shell scripts. Language and host dependencies are recorded in their SDK and package manifests.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing public behavior. Consult [repository metadata](repository.yaml) and the applicable publishing workflow for package authority and release conditions. A successful build or fixture run is evidence for that check, not a supported-install claim.
+
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Harborline-Software/harborline-app?utm_source=oss&utm_medium=github&utm_campaign=Harborline-Software%2Fharborline-app&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
