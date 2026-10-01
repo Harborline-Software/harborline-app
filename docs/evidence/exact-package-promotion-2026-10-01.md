@@ -2,11 +2,11 @@
 
 Scope: the four NuGet packages in `eng/verify-packages.sh` and `.github/workflows/packages.yml`.
 
-Packing remains once per project. The unchanged package consumer now runs in fresh scratch space with isolated global-packages and HTTP caches, using source mapping for the four shipped IDs. Every archive restored into that cache must match the staged SHA-256. Only consumer success writes a source/version/workflow/run/attempt-bound receipt. The uploaded distribution manifest includes that receipt's hash, and the existing publication job verifies both before authority checks and pushing the same files.
+Packing remains once per project. The unchanged package consumer now runs in fresh scratch space with isolated global-packages and HTTP caches, using source mapping for the four shipped IDs. Every archive restored into that cache must match the staged SHA-256. Only consumer success writes a source/version/workflow/run/attempt-bound receipt. The uploaded distribution manifest includes that receipt's hash. Pack, consume, seal, verify and push run in one job. Before authority checks, verify re-checks the bytes and evidence that the same job just wrote; it then pushes those same files when publication is eligible.
 
 ## Evidence
 
-- Eight guard tests pass for missing/wrong-version packages, staged and restored substitutions, restore/run failure, manifest/source/workflow/run/attempt mismatch and copied bundle verification.
+- Thirteen guard tests pass for missing/wrong-version packages, staged and restored substitutions, restore/run failure, manifest/source/workflow/run/attempt mismatch and copied bundle verification.
 - Four workflow-policy tests pass. The artifact expectation now includes the existing nupkg glob plus both evidence files; the original event, concurrency, proof-owner and authority assertions remain.
 - A real NuGet same-ID/version poisoned ambient cache probe passes with synthetic packages and a minimal consumer. This measures cache selection, separately from the shipped consumer behavior.
 - Actual four-package `bash eng/verify-packages.sh` passed for `0.1.0-preview.exactproof.20261001` on base `7a4b935`, with the unchanged secure-store assertion. The log contains pre-existing CA1014 analyzer warnings; the command exited 0.
@@ -22,3 +22,11 @@ Packing remains once per project. The unchanged package consumer now runs in fre
 The receipt is same-run integrity evidence, not signing or release provenance. No package publication, release, tag, permission, credential or repository-setting action was performed. T-705/T-670 release and seed policies are not implemented by this change. Hosted CI execution is reported separately from local checks.
 
 Existing `--skip-duplicate` behavior is preserved. This check binds the bytes supplied to the push command; it does not verify bytes already stored in a registry when a duplicate version is skipped.
+
+## Versioned formats and binding review
+
+The consumer receipt declares `schema: harborline-app/consumer-proof/1`; the distribution manifest declares `schema: harborline-app/package-manifest/1`. Missing and unknown schemas are refused by the exact-object validators. The binding regressions use otherwise-valid proof/manifest pairs with a recorded SHA or repository different from the environment and require the consumer-proof binding refusal. Separate manifest cases require the promotion-manifest binding refusal. Existing environment/checkout identity guards remain separate.
+
+T-1043 (consolidation, Control #937) tracks this copy alongside API. Shared-behavior tests match; App has no npm tarball counterpart.
+
+The schema/binding correction passed focused lightweight tests and syntax checks. The earlier local/hosted package-consumer results predate these schemas. No heavy local build or package regeneration was repeated while the shared Windows mutation lane occupies the host; current-head CI is reported separately.

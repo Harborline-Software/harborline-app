@@ -1,5 +1,8 @@
 """Bind clean NuGet consumption and promotion to the staged package bytes.
 
+T-1043 (consolidation, Control #937) tracks this copy and api's shared behavior.
+Intentional differences: IDS, REPOSITORY, and no npm tarball branch.
+Mirror shared-behavior test changes in the other repository.
 This is a same-run integrity receipt, not a signature or release provenance.
 """
 import argparse
@@ -16,6 +19,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parent.parent
 IDS = ('Harborline.App.Abstractions', 'Harborline.App.Blazor', 'Harborline.App.Blazor.Hybrid', 'Harborline.App.Testing')
 REPOSITORY = 'Harborline-Software/harborline-app'
+PROOF_SCHEMA = f"{REPOSITORY.split('/')[-1]}/consumer-proof/1"
+MANIFEST_SCHEMA = f"{REPOSITORY.split('/')[-1]}/package-manifest/1"
 
 
 def digest(path):
@@ -103,16 +108,16 @@ def consume(directory, version):
                        cwd=ROOT, env=environment, check=True)
     if inventory(directory, version) != packages:
         raise ValueError('packages changed during consumption')
-    receipt.write_text(json.dumps(dict(identity=source, packages=packages), indent=2) + '\n')
+    receipt.write_text(json.dumps(dict(schema=PROOF_SCHEMA, identity=source, packages=packages), indent=2) + '\n')
 
 
 def verify(directory, version, seal=False):
     proof = json.loads((directory / 'consumer-proof.json').read_text())
     packages = inventory(directory, version)
     expected = identity(version)
-    if proof != dict(identity=expected, packages=packages):
+    if proof != dict(schema=PROOF_SCHEMA, identity=expected, packages=packages):
         raise ValueError('consumer proof does not match source or package bytes')
-    manifest = dict(identity=expected, packages=inventory(directory, version),
+    manifest = dict(schema=MANIFEST_SCHEMA, identity=expected, packages=inventory(directory, version),
                     consumerProofSha256=digest(directory / 'consumer-proof.json'))
     manifest_path = directory / 'package-manifest.json'
     if seal:
