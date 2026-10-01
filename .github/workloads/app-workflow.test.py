@@ -5,6 +5,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 BASH = r'C:\Program Files\Git\bin\bash.exe' if os.name == 'nt' else 'bash'
 class AppWorkflowTests(unittest.TestCase):
+    def test_windows_workflow_bypasses_python_and_preserves_failure(self):
+        import textwrap
+        workflow = (ROOT/'.github/workflows/stryker.yml').read_text()
+        step = workflow.split('      - name: Reserved full mutation and isolated feed',1)[1].split('      - name: Mutation report',1)[0]
+        body = textwrap.dedent(step.split('        run: |\n',1)[1]).strip()
+        command = 'node() { return 23; }; python() { echo PYTHON_SHOULD_NOT_RUN; return 99; }; dotnet() { echo DOTNET_SHOULD_NOT_RUN; }; export -f node python dotnet; export RUNNER_OS=Windows;\n' + body
+        result = subprocess.run([BASH,'-c',command],cwd=ROOT,text=True,capture_output=True)
+        self.assertEqual(result.returncode,23,result.stderr)
+        self.assertNotIn('SHOULD_NOT_RUN',result.stdout)
     def test_python_is_pinned_before_full_lock_with_matching_guard(self):
         workflow = (ROOT/'.github/workflows/stryker.yml').read_text()
         setup = workflow.index('      - uses: actions/setup-python@v6')

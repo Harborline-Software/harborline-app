@@ -54,7 +54,7 @@ jobs:
           BACKGROUND_MUTATION_ROUTE: ${{ vars.BACKGROUND_MUTATION_ROUTE }}
           LOCAL_BACKGROUND_RESERVATION: ${{ vars.LOCAL_BACKGROUND_RESERVATION }}
         run: |
-          node --test .github/workloads/workload-route.test.mjs .github/workloads/select-platform-pin.test.mjs
+          node --test .github/workloads/workload-route.test.mjs .github/workloads/windows-default.test.mjs .github/workloads/select-platform-pin.test.mjs
           python3 .github/workloads/host-workload-lock.test.py
           python3 .github/workloads/app-workflow.test.py
           node .github/workloads/workload-route.mjs
@@ -121,7 +121,7 @@ jobs:
           dotnet tool restore
           node eng/stryker.mjs run
       - uses: actions/setup-python@v6
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && runner.os != 'Windows'
         with:
           python-version: '3.14'
       - name: Reserved full mutation and isolated feed
@@ -129,7 +129,12 @@ jobs:
         env:
           HARBORLINE_PLATFORM_REPO: ${{ github.workspace }}/.platform
           NUGET_PACKAGES: ${{ runner.temp }}/mutation-nuget-${{ github.run_id }}-${{ github.run_attempt }}
-        run: python .github/workloads/host-workload-lock.py -- bash .github/workloads/full-mutation.sh
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            source .github/workloads/full-mutation.sh
+          else
+            python .github/workloads/host-workload-lock.py -- bash .github/workloads/full-mutation.sh
+          fi
 
       - name: Mutation report
         if: always()
