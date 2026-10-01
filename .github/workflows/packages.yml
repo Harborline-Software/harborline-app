@@ -142,6 +142,8 @@ jobs:
           if [[ "$value" != *-* ]]; then echo "Stable package publication is not authorized: $value" >&2; exit 1; fi
           echo "value=$value" >> "$GITHUB_OUTPUT"
       - run: dotnet test Harborline.App.slnx -c Release
+      - name: Test package promotion guards
+        run: python3 -m unittest discover -s eng/tests -p "test_package_proof.py"
       - name: Pack and verify clean consumer
         env:
           HARBORLINE_PACKAGE_VERSION: "${{ steps.version.outputs.value }}"
@@ -152,8 +154,16 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: harborline-app-${{ steps.version.outputs.value }}
-          path: artifacts/packages/*.nupkg
+          path: |
+            artifacts/packages/*.nupkg
+            artifacts/packages/consumer-proof.json
+            artifacts/packages/package-manifest.json
           if-no-files-found: error
+      - name: Verify the exact consumed bytes before publication
+        if: startsWith(github.ref, 'refs/tags/') || inputs.publish == true
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: python3 eng/package-proof.py verify artifacts/packages "$VERSION"
       - name: Require explicit distribution authority
         if: startsWith(github.ref, 'refs/tags/') || inputs.publish == true
         shell: bash
