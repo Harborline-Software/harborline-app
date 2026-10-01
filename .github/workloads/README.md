@@ -12,6 +12,7 @@ Focused checks (no mutation or gate execution):
 ```sh
 node --test .github/workloads/workload-route.test.mjs
 python .github/workloads/host-workload-lock.test.py
+python .github/workloads/app-workflow.test.py
 ```
 
 Vendored helpers are identical in API, App and Platform. Keep them synchronized.

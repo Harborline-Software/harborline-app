@@ -56,6 +56,7 @@ jobs:
         run: |
           node --test .github/workloads/workload-route.test.mjs
           python3 .github/workloads/host-workload-lock.test.py
+          python3 .github/workloads/app-workflow.test.py
           node .github/workloads/workload-route.mjs
   stryker:
     needs: workload-route
@@ -118,6 +119,10 @@ jobs:
           (cd apps/blazor && node scripts/build-local-feed.mjs)
           dotnet tool restore
           node eng/stryker.mjs run
+      - uses: actions/setup-python@v6
+        if: github.event_name != 'pull_request'
+        with:
+          python-version: '3.14'
       - name: Reserved full mutation and isolated feed
         if: github.event_name != 'pull_request'
         env:
