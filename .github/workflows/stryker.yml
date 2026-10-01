@@ -34,6 +34,9 @@ concurrency:
   group: ${{ github.event_name == 'pull_request' && format('stryker-pr-{0}', github.event.pull_request.number) || format('stryker-{0}', github.ref) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# No Actions cache capability is needed by mutation; applies to every job.
+cache-mode: none
+
 permissions:
   contents: read
 
@@ -48,13 +51,15 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - name: Verify cache capability isolation
+        run: node .github/workloads/cache-isolation.mjs
       - name: Explain background routing
         id: route
         env:
           BACKGROUND_MUTATION_ROUTE: ${{ vars.BACKGROUND_MUTATION_ROUTE }}
           LOCAL_BACKGROUND_RESERVATION: ${{ vars.LOCAL_BACKGROUND_RESERVATION }}
         run: |
-          node --test .github/workloads/workload-route.test.mjs
+          node --test .github/workloads/workload-route.test.mjs .github/workloads/cache-isolation.test.mjs
           python3 .github/workloads/host-workload-lock.test.py
           python3 .github/workloads/app-workflow.test.py
           node .github/workloads/workload-route.mjs
@@ -88,6 +93,7 @@ jobs:
         with:
           fetch-depth: 0
           clean: true
+          persist-credentials: false
 
       # Provision the pinned toolchain on every route; qualification does not rely on machine PATH.
       - uses: actions/setup-dotnet@v6
@@ -100,6 +106,8 @@ jobs:
 
       # ReferenceHost restores the platform's UI packages from the gitignored local feed, built from
       # the pinned platform checkout exactly as verify-shared builds it.
+      - name: Verify cache capability isolation
+        run: node .github/workloads/cache-isolation.mjs
       - name: Read the recorded platform pin
         id: platform_pin
         run: echo "commit=$(node -p "require('./eng/platform-pin.json').commit")" >> "$GITHUB_OUTPUT"
@@ -110,6 +118,7 @@ jobs:
           repository: Harborline-Software/harborline-platform
           ref: ${{ steps.platform_pin.outputs.commit }}
           path: .platform
+          persist-credentials: false
 
       - name: Hosted PR mutation
         if: github.event_name == 'pull_request'
