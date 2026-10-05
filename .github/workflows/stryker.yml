@@ -120,7 +120,7 @@ jobs:
           (cd apps/blazor && node scripts/build-local-feed.mjs)
           dotnet tool restore
           node eng/stryker.mjs run
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         if: github.event_name != 'pull_request' && runner.os != 'Windows'
         with:
           python-version: '3.14'
