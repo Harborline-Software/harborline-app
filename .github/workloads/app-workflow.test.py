@@ -16,7 +16,7 @@ class AppWorkflowTests(unittest.TestCase):
         self.assertNotIn('SHOULD_NOT_RUN',result.stdout)
     def test_python_is_pinned_before_full_lock_with_matching_guard(self):
         workflow = (ROOT/'.github/workflows/stryker.yml').read_text()
-        setup = workflow.index('      - uses: actions/setup-python@v6')
+        setup = workflow.index('      - uses: actions/setup-python@v7')
         full = workflow.index('      - name: Reserved full mutation and isolated feed')
         block = workflow[setup:full]
         self.assertIn("python-version: '3.14'", block)
