@@ -46,15 +46,17 @@ public sealed class WorkshopRequestException(int statusCode, string responseBody
 public sealed class HttpWorkshopCatalogueClient(HttpClient httpClient) : IWorkshopCatalogueClient
 {
     public async Task<WorkshopCatalogueEntry> ReadViewAsync(string viewId, CancellationToken cancellationToken = default) =>
-        await ReadEntryAsync($"api/local-node/catalogue/definitions/ViewDefinition/{Uri.EscapeDataString(viewId)}", cancellationToken);
+        ReadEntry(await ReadCatalogueJsonAsync($"api/local-node/catalogue/definitions/ViewDefinition/{Uri.EscapeDataString(viewId)}", cancellationToken));
 
     public Task<WorkshopCatalogueEntry> ReadFormAsync(string id, string? version = null, CancellationToken cancellationToken = default) =>
         ReadEntryAsync($"api/local-node/catalogue/definitions/FormDefinition/{Uri.EscapeDataString(id)}"
             + (version is null ? string.Empty : $"?version={Uri.EscapeDataString(version)}"), cancellationToken);
 
     private async Task<WorkshopCatalogueEntry> ReadEntryAsync(string path, CancellationToken cancellationToken)
+        => ReadEntry(await ReadJsonAsync(path, cancellationToken));
+
+    private static WorkshopCatalogueEntry ReadEntry(JsonElement json)
     {
-        var json = await ReadJsonAsync(path, cancellationToken);
         var entry = json.Deserialize<WorkshopCatalogueEntry>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
             ?? throw new JsonException("The catalogue returned no definition.");
         return entry with { CompiledBindings = json.TryGetProperty("renderPlan", out var plan)
@@ -102,7 +104,46 @@ public sealed class HttpWorkshopCatalogueClient(HttpClient httpClient) : IWorksh
     }
 
     public async Task<WorkshopCatalogueList> ListAsync(string kind, CancellationToken cancellationToken = default) =>
-        (await httpClient.GetFromJsonAsync<WorkshopCatalogueList>(
-            $"api/local-node/catalogue/definitions?kind={Uri.EscapeDataString(kind)}", cancellationToken))
+        (await ReadCatalogueJsonAsync($"api/local-node/catalogue/definitions?kind={Uri.EscapeDataString(kind)}", cancellationToken))
+        .Deserialize<WorkshopCatalogueList>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
         ?? throw new InvalidOperationException("The Workshop catalogue returned no list.");
+
+    private async Task<JsonElement> ReadCatalogueJsonAsync(string path, CancellationToken cancellationToken)
+    {
+        using var response = await httpClient.GetAsync(path, cancellationToken);
+        if (response.IsSuccessStatusCode)
+            return await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var message = $"Workshop catalogue request failed ({(int)response.StatusCode}).";
+        try
+        {
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+            message = CatalogueReadMessage((int)response.StatusCode, document.RootElement, message);
+        }
+        catch (JsonException) { }
+        throw new HttpRequestException(message, null, response.StatusCode);
+    }
+
+    private static string CatalogueReadMessage(int status, JsonElement body, string fallback)
+    {
+        if (body.ValueKind != JsonValueKind.Object || Text(body, "code") is not { } code) return fallback;
+        if ((status == 400 && code == "catalogue.kind_unknown") || (status == 404 && code == "catalogue.definition_not_found"))
+            return $"{fallback} {code}";
+        // The public authorization refusal is rendered by the server; classified Diagnostic and unknown members stay out.
+        if (status != 403 || code.Trim() != code || !System.Text.RegularExpressions.Regex.IsMatch(code, "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$")
+            || Text(body, "permission") != "catalogue:read" || Text(body, "title") is not { } title
+            || Text(body, "detail") is not { } detail || Text(body, "remediation") is not { } remediation)
+            return fallback;
+        var auditId = Text(body, "auditId");
+        var correlationId = Text(body, "correlationId");
+        if ((body.TryGetProperty("auditId", out _) && (auditId is null || auditId.Length != 36 || !Guid.TryParseExact(auditId, "D", out _)))
+            || (body.TryGetProperty("correlationId", out _) && (correlationId is null || correlationId.Length != 36 || !Guid.TryParseExact(correlationId, "D", out _))))
+            return fallback;
+        var parts = new List<string> { fallback, code, "catalogue:read", title, detail, remediation };
+        if (auditId is not null) parts.Add($"Audit ID: {auditId}");
+        if (correlationId is not null) parts.Add($"Correlation ID: {correlationId}");
+        return string.Join(" ", parts);
+    }
+
+    private static string? Text(JsonElement body, string name) => body.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString()) ? value.GetString() : null;
 }

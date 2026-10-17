@@ -76,6 +76,19 @@ const candidate = {
   dependencies: [], capabilityRequirements: [],
 }
 
+// Public wire literals: API Catalogue.Map and RequestAuthorization.Write at API 2496ab5d.
+// The renderer owns the public copy; Diagnostic and tenant/owner members are not public fields.
+const catalogueReadRefusal = {
+  code: 'authorization.permission_required', permission: 'catalogue:read',
+  title: 'You do not have permission for this action.',
+  detail: 'The action was refused because a required permission is missing.',
+  remediation: 'Ask an administrator to grant the permission this action requires.',
+  auditId: '11111111-1111-1111-1111-111111111111',
+  correlationId: '22222222-2222-2222-2222-222222222222',
+  Diagnostic: 'classified-diagnostic', tenant: 'private-tenant', owner: 'private-owner',
+  pointers: ['/private-field'], trace: ['private-stage'],
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -154,6 +167,102 @@ describe('seeded Workshop list', () => {
     cut.rerender(<SeededListPage itemId="forms" viewId="platform.browse.forms" selectedRowId="inspection@1.0.0" onSelectionRestored={restored} />)
     await waitFor(() => expect(cut.container.innerHTML).toBe(''))
     expect(restored).not.toHaveBeenCalled()
+  })
+
+  it.each(['view', 'list'])('preserves only public refusal fields from a failed catalogue %s read', async target => {
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      expect(init?.credentials).toBe('include')
+      expect(init?.signal).toBeInstanceOf(AbortSignal)
+      if (input.includes('/ViewDefinition/') === (target === 'view')) return Response.json(catalogueReadRefusal, { status: 403 })
+      return Response.json(input.includes('/ViewDefinition/') ? { renderPlan: actionPlan }
+        : { entries: [{ id: 'inspection', version: '1.0.0', status: 'Published' }], kindsUnavailable: [] })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const restored = vi.fn()
+    const cut = render(<SeededListPage itemId="forms" selectedRowId="inspection@1.0.0" onSelectionRestored={restored} />)
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('authorization.permission_required')
+    expect(alert).toHaveTextContent('catalogue:read')
+    expect(alert).toHaveTextContent('You do not have permission for this action.')
+    expect(alert).toHaveTextContent('The action was refused because a required permission is missing.')
+    expect(alert).toHaveTextContent('Ask an administrator to grant the permission this action requires.')
+    expect(alert).toHaveTextContent('Audit ID: 11111111-1111-1111-1111-111111111111')
+    expect(alert).toHaveTextContent('Correlation ID: 22222222-2222-2222-2222-222222222222')
+    expect(alert.textContent).not.toMatch(/classified-diagnostic|private-tenant|private-owner|private-field|private-stage/)
+    expect(cut.container.querySelector('button,form,[role=grid],a')).toBeNull()
+    expect(restored).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    { status: 400, code: 'catalogue.kind_unknown' },
+    { status: 404, code: 'catalogue.definition_not_found' },
+  ])('preserves the existing catalogue $status code without unrelated payload members', async ({ status, code }) => {
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => input.includes('/ViewDefinition/')
+      ? Response.json({ code, detail: 'private-detail', Diagnostic: 'private-diagnostic' }, { status })
+      : Response.json({ entries: [], kindsUnavailable: [] })))
+    const cut = render(<SeededListPage itemId="forms" />)
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(code)
+    expect(alert.textContent).not.toMatch(/private-detail|private-diagnostic/)
+    expect(cut.container.querySelector('button,form,[role=grid]')).toBeNull()
+  })
+
+  it('retains a server-owned authorization reason and does not invent absent receipt identifiers', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => input.includes('/ViewDefinition/')
+      ? Response.json({ code: 'authorization.grant.attenuation_failed', permission: 'catalogue:read',
+        title: 'You do not have permission for this action.',
+        detail: 'Further details of this refusal are withheld because they are not yours to read.',
+        remediation: 'Ask an administrator to grant the permission this action requires.' }, { status: 403 })
+      : Response.json({ entries: [], kindsUnavailable: [] })))
+    render(<SeededListPage itemId="forms" />)
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('authorization.grant.attenuation_failed')
+    expect(alert).toHaveTextContent('Further details of this refusal are withheld because they are not yours to read.')
+    expect(alert.textContent).not.toMatch(/Audit ID:|Correlation ID:|11111111|22222222/)
+  })
+
+  it.each([
+    'private raw response', '{"code":', 'null', '[]',
+    '{"code":"future.unknown","detail":"private-detail"}',
+    JSON.stringify({ ...catalogueReadRefusal, permission: 'records:read' }),
+    JSON.stringify({ ...catalogueReadRefusal, detail: { owner: 'private-owner' } }),
+    JSON.stringify({ ...catalogueReadRefusal, auditId: 'private-identifier' }),
+    JSON.stringify({ ...catalogueReadRefusal, correlationId: null }),
+  ])('uses status fallback for an unrecognized or malformed refusal body: %s', async body => {
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => input.includes('/ViewDefinition/')
+      ? new Response(body, { status: 403 }) : Response.json({ entries: [], kindsUnavailable: [] })))
+    const cut = render(<SeededListPage itemId="forms" />)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^Workshop catalogue request failed \(403\)\.$/)
+    expect(cut.container.querySelector('button,form,[role=grid]')).toBeNull()
+  })
+
+  it('renders public refusal text as text, without interpreting markup', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => input.includes('/ViewDefinition/')
+      ? Response.json({ ...catalogueReadRefusal, detail: '<img src="private" onerror="alert(1)">' }, { status: 403 })
+      : Response.json({ entries: [], kindsUnavailable: [] })))
+    const cut = render(<SeededListPage itemId="forms" />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('<img src="private" onerror="alert(1)">')
+    expect(cut.container.querySelector('img')).toBeNull()
+  })
+
+  it('discards a previous surface refusal and cancels its requests when the surface changes', async () => {
+    let finish!: (response: Response) => void
+    const pending = new Promise<Response>(resolve => { finish = resolve })
+    const signals: AbortSignal[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
+      if (init?.signal) signals.push(init.signal)
+      if (input.endsWith('/platform.health.forms')) return pending
+      return Response.json(input.includes('/ViewDefinition/')
+        ? { renderPlan: { ...actionPlan, definitionId: 'platform.browse.forms' } } : { entries: [], kindsUnavailable: [] })
+    }))
+    const cut = render(<SeededListPage itemId="forms" viewId="platform.health.forms" />)
+    cut.rerender(<SeededListPage itemId="forms" viewId="platform.browse.forms" />)
+    await screen.findByRole('grid')
+    expect(signals.slice(0, 2).every(signal => signal.aborted)).toBe(true)
+    await act(async () => finish(Response.json(catalogueReadRefusal, { status: 403 })))
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(cut.container.textContent).not.toContain('11111111-1111-1111-1111-111111111111')
   })
 
   it('ignores a late response for the previously selected surface', async () => {
@@ -246,7 +355,7 @@ describe('seeded Workshop list', () => {
     await waitFor(() => expect(activated).toHaveBeenCalledWith(expect.objectContaining({ id: 'work-order@1.0.0', title: 'Work order', cascadeLayer: 'Tenant' })))
   })
 
-  it('executes only seed-declared commands through the full pack and record workflow', async () => {
+  it.each([false, true])('executes seed-declared commands and keeps a refresh refusal closed=%s', async refuseRefresh => {
     const packBytes = new Uint8Array([1, 2, 3, 4])
     const requests: Array<{ url: string; init?: RequestInit }> = []
     let createAttempts = 0
@@ -257,6 +366,7 @@ describe('seeded Workshop list', () => {
       if (input.includes('/ViewDefinition/')) return Response.json({ renderPlan: actionPlan })
       if (input === '/api/local-node/catalogue/definitions?kind=FormDefinition') {
         listReads += 1
+        if (refuseRefresh && listReads > 1) return Response.json(catalogueReadRefusal, { status: 403 })
         return Response.json({
           entries: listReads === 1 ? [] : [{ id: 'acme.capture', version: '2.0.0', status: 'Published', title: { defaultLocale: 'en', values: { en: 'Capture asset' } } }],
           kindsUnavailable: [],
@@ -309,6 +419,15 @@ describe('seeded Workshop list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stage bundle' }))
     await screen.findByText(/"installed": true/)
     fireEvent.click(screen.getByRole('button', { name: 'Go live' }))
+    if (refuseRefresh) {
+      expect(await screen.findByRole('alert')).toHaveTextContent('authorization.permission_required')
+      expect(screen.getByRole('alert')).toHaveTextContent('Audit ID: 11111111-1111-1111-1111-111111111111')
+      expect(screen.queryByRole('grid')).toBeNull()
+      expect(screen.queryByRole('button')).toBeNull()
+      expect(screen.queryByRole('link')).toBeNull()
+      expect(requests.some(request => request.url.includes('/authorization/traces/'))).toBe(false)
+      return
+    }
     await screen.findByText(/"activated": true/)
     await waitFor(() => expect(document.querySelector('[data-row-id="acme.capture@2.0.0"]')).toBeInTheDocument())
 

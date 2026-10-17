@@ -18,6 +18,12 @@ public sealed class CatalogueAvailabilityTests : BunitContext
         {"id":"inspection","version":"2.0.0","kind":0,"status":"Published","sealed":true,"provenance":{"packKey":"acme.assets","packVersion":"1.0.0","kind":"pack"},"updatedAt":"2026-09-15T00:00:00Z","definitionHash":"sha256:definition","body":{"id":"body-id","version":"body-version","provenance":{"kind":"body"}}}
         """;
 
+    // Public wire literals from API Catalogue.Map/RequestAuthorization.Write at API 2496ab5d.
+    // Diagnostic, owner/tenant data, pointers and inline traces are not public catalogue refusal fields.
+    private const string PublicRefusal = """
+        {"code":"authorization.permission_required","permission":"catalogue:read","title":"You do not have permission for this action.","detail":"The action was refused because a required permission is missing.","remediation":"Ask an administrator to grant the permission this action requires.","auditId":"11111111-1111-1111-1111-111111111111","correlationId":"22222222-2222-2222-2222-222222222222","Diagnostic":"classified-diagnostic","tenant":"private-tenant","owner":"private-owner","pointers":["/private-field"],"trace":["private-stage"]}
+        """;
+
     [Theory]
     [InlineData("platform.health.forms")]
     [InlineData("platform.browse.forms")]
@@ -55,6 +61,101 @@ public sealed class CatalogueAvailabilityTests : BunitContext
         Assert.Equal("/api/local-node/catalogue/definitions/ViewDefinition/platform.health.forms", Assert.Single(handler.Paths, path => path.Contains("/ViewDefinition/", StringComparison.Ordinal)));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Catalogue_list_and_view_refusals_preserve_only_public_fields(bool failList)
+    {
+        var handler = new CatalogueHandler(failList ? PublicRefusal : $$"""{"entries":[{{Entry}}],"kindsUnavailable":[]}""")
+        {
+            ViewStatus = failList ? HttpStatusCode.OK : HttpStatusCode.Forbidden,
+            ViewJson = failList ? View : PublicRefusal,
+            ListStatus = failList ? HttpStatusCode.Forbidden : HttpStatusCode.OK,
+        };
+        Configure(string.Empty, handler);
+        ViewRuntimeRow? restored = null;
+        var cut = Render<SeededListPage>(parameters => parameters.Add(page => page.ItemId, "forms")
+            .Add(page => page.SelectedRowId, "inspection@2.0.0").Add(page => page.SelectionRestored, row => restored = row));
+        cut.WaitForAssertion(() => Assert.Contains("authorization.permission_required", cut.Find("[role=alert]").TextContent, StringComparison.Ordinal));
+        var text = cut.Find("[role=alert]").TextContent;
+        Assert.Contains("catalogue:read", text, StringComparison.Ordinal);
+        Assert.Contains("You do not have permission for this action.", text, StringComparison.Ordinal);
+        Assert.Contains("The action was refused because a required permission is missing.", text, StringComparison.Ordinal);
+        Assert.Contains("Ask an administrator to grant the permission this action requires.", text, StringComparison.Ordinal);
+        Assert.Contains("Audit ID: 11111111-1111-1111-1111-111111111111", text, StringComparison.Ordinal);
+        Assert.Contains("Correlation ID: 22222222-2222-2222-2222-222222222222", text, StringComparison.Ordinal);
+        foreach (var hidden in new[] { "classified-diagnostic", "private-tenant", "private-owner", "private-field", "private-stage" })
+            Assert.DoesNotContain(hidden, text, StringComparison.Ordinal);
+        Assert.Empty(cut.FindAll("button,form,[role=grid],a"));
+        Assert.Null(restored);
+        Assert.Equal(2, handler.Paths.Count);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest, """{"code":"catalogue.kind_unknown","detail":"private-detail"}""", "catalogue.kind_unknown")]
+    [InlineData(HttpStatusCode.NotFound, """{"code":"catalogue.definition_not_found","Diagnostic":"private-diagnostic"}""", "catalogue.definition_not_found")]
+    public void Catalogue_codes_survive_without_unrelated_payload_members(HttpStatusCode status, string body, string code)
+    {
+        Configure(string.Empty, new CatalogueHandler("""{"entries":[],"kindsUnavailable":[]}""") { ViewStatus = status, ViewJson = body });
+        var cut = Render<SeededListPage>(parameters => parameters.Add(page => page.ItemId, "forms"));
+        cut.WaitForAssertion(() => Assert.Contains(code, cut.Find("[role=alert]").TextContent, StringComparison.Ordinal));
+        Assert.DoesNotContain("private-", cut.Find("[role=alert]").TextContent, StringComparison.Ordinal);
+        Assert.Empty(cut.FindAll("button,form,[role=grid]"));
+    }
+
+    [Fact]
+    public void A_server_owned_reason_and_withheld_detail_survive_without_synthetic_receipts()
+    {
+        const string body = """
+            {"code":"authorization.grant.attenuation_failed","permission":"catalogue:read","title":"You do not have permission for this action.","detail":"Further details of this refusal are withheld because they are not yours to read.","remediation":"Ask an administrator to grant the permission this action requires."}
+            """;
+        Configure(string.Empty, new CatalogueHandler("""{"entries":[],"kindsUnavailable":[]}""") { ViewStatus = HttpStatusCode.Forbidden, ViewJson = body });
+        var cut = Render<SeededListPage>(parameters => parameters.Add(page => page.ItemId, "forms"));
+        cut.WaitForAssertion(() => Assert.Contains("authorization.grant.attenuation_failed", cut.Find("[role=alert]").TextContent, StringComparison.Ordinal));
+        var text = cut.Find("[role=alert]").TextContent;
+        Assert.Contains("Further details of this refusal are withheld because they are not yours to read.", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Audit ID:", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Correlation ID:", text, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("private raw response")]
+    [InlineData("{\"code\":")]
+    [InlineData("null")]
+    [InlineData("[]")]
+    [InlineData("""{"code":"future.unknown","detail":"private-detail"}""")]
+    [InlineData("""{"code":"authorization.permission_required","permission":"records:read","title":"private-title","detail":"private-detail","remediation":"private-remediation"}""")]
+    [InlineData("""{"code":"authorization.permission_required","permission":"catalogue:read","title":"private-title","detail":{"owner":"private-owner"},"remediation":"private-remediation"}""")]
+    [InlineData("""{"code":"authorization.permission_required","permission":"catalogue:read","title":"private-title","detail":"private-detail","remediation":"private-remediation","auditId":"private-identifier"}""")]
+    [InlineData("""{"code":"authorization.permission_required","permission":"catalogue:read","title":"private-title","detail":"private-detail","remediation":"private-remediation","correlationId":null}""")]
+    public void Unknown_or_malformed_refusals_use_only_the_status_fallback(string body)
+    {
+        Configure(string.Empty, new CatalogueHandler("""{"entries":[],"kindsUnavailable":[]}""") { ViewStatus = HttpStatusCode.Forbidden, ViewJson = body });
+        var cut = Render<SeededListPage>(parameters => parameters.Add(page => page.ItemId, "forms"));
+        cut.WaitForAssertion(() => Assert.Equal("Workshop catalogue request failed (403).", cut.Find("[role=alert]").TextContent));
+        Assert.Empty(cut.FindAll("button,form,[role=grid]"));
+    }
+
+    [Fact]
+    public void Public_refusal_text_is_encoded_without_interpreting_markup()
+    {
+        var body = PublicRefusal.Replace("The action was refused because a required permission is missing.", "<img src='private' onerror='alert(1)'>", StringComparison.Ordinal);
+        Configure(string.Empty, new CatalogueHandler("""{"entries":[],"kindsUnavailable":[]}""") { ViewStatus = HttpStatusCode.Forbidden, ViewJson = body });
+        var cut = Render<SeededListPage>(parameters => parameters.Add(page => page.ItemId, "forms"));
+        cut.WaitForAssertion(() => Assert.Contains("<img src='private' onerror='alert(1)'>", cut.Find("[role=alert]").TextContent, StringComparison.Ordinal));
+        Assert.Empty(cut.FindAll("img"));
+    }
+
+    [Fact]
+    public async Task Catalogue_read_sanitizing_does_not_change_command_or_form_error_bodies()
+    {
+        var client = Configure(PublicRefusal, new CatalogueHandler(PublicRefusal) { ListStatus = HttpStatusCode.Forbidden });
+        var command = await Assert.ThrowsAsync<WorkshopRequestException>(() => client.PostJsonAsync("api/local-node/packs/check", new { }));
+        Assert.Equal(PublicRefusal, command.ResponseBody);
+        var form = await Assert.ThrowsAsync<WorkshopRequestException>(() => client.ReadFormAsync("declared.author"));
+        Assert.Equal(PublicRefusal, form.ResponseBody);
+    }
+
     [Fact]
     public void Inert_view_does_not_restore_selection_or_expose_actions()
     {
@@ -86,6 +187,21 @@ public sealed class CatalogueAvailabilityTests : BunitContext
     {
         public Task Load { get; private set; } = Task.CompletedTask;
         protected override Task OnParametersSetAsync() => Load = base.OnParametersSetAsync();
+    }
+
+    [Fact]
+    public async Task A_previous_surface_refusal_cannot_replace_current_results()
+    {
+        var pending = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Configure(string.Empty, new CatalogueHandler("""{"entries":[],"kindsUnavailable":[]}""") { PendingHealth = pending });
+        var cut = Render<TrackedSeededList>(parameters => parameters.Add(page => page.ItemId, "forms").Add(page => page.ViewId, "platform.health.forms"));
+        var firstLoad = cut.Instance.Load;
+        cut.Render(parameters => parameters.Add(page => page.ViewId, "platform.browse.forms"));
+        cut.WaitForAssertion(() => Assert.Contains("platform.browse.forms", cut.Find("[data-definition-source]").GetAttribute("data-definition-source"), StringComparison.Ordinal));
+        pending.SetResult(new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = new StringContent(PublicRefusal, Encoding.UTF8, "application/json") });
+        await firstLoad;
+        Assert.Empty(cut.FindAll("[role=alert]"));
+        Assert.DoesNotContain("11111111-1111-1111-1111-111111111111", cut.Markup, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -142,6 +258,7 @@ public sealed class CatalogueAvailabilityTests : BunitContext
     {
         public List<string> Paths { get; } = [];
         public HttpStatusCode ViewStatus { get; init; } = HttpStatusCode.OK;
+        public HttpStatusCode ListStatus { get; init; } = HttpStatusCode.OK;
         public string ViewJson { get; init; } = View;
         public TaskCompletionSource<HttpResponseMessage>? PendingHealth { get; init; }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -149,7 +266,7 @@ public sealed class CatalogueAvailabilityTests : BunitContext
             Paths.Add(request.RequestUri!.PathAndQuery);
             if (PendingHealth is not null && request.RequestUri.AbsolutePath.EndsWith("platform.health.forms", StringComparison.Ordinal)) return PendingHealth.Task;
             var isView = request.RequestUri.AbsolutePath.Contains("/ViewDefinition/", StringComparison.Ordinal);
-            return Task.FromResult(new HttpResponseMessage(isView ? ViewStatus : HttpStatusCode.OK)
+            return Task.FromResult(new HttpResponseMessage(isView ? ViewStatus : ListStatus)
             {
                 Content = new StringContent(isView ? ViewJson.Replace("platform.list.forms", request.RequestUri.Segments[^1], StringComparison.Ordinal) : list, Encoding.UTF8, "application/json"),
             });
