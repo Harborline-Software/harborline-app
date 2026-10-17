@@ -90,7 +90,7 @@ else if (supported)
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or JsonException)
         {
-            if (request == requestVersion) error = exception.Message;
+            if (request == requestVersion && !cancellation.IsCancellationRequested) error = exception.Message;
         }
     }
 
@@ -148,7 +148,7 @@ else if (supported)
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or JsonException)
         {
-            if (request == requestVersion) error = exception.Message;
+            if (request == requestVersion && !cancellation.IsCancellationRequested) error = exception.Message;
         }
     }
     private async ValueTask<SchemaFormValidationResult?> SubmitAsync(IReadOnlyDictionary<string, object?> values)
