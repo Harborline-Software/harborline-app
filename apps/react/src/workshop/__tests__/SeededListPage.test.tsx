@@ -368,7 +368,7 @@ describe('seeded Workshop list', () => {
         listReads += 1
         if (refuseRefresh && listReads > 1) return Response.json(catalogueReadRefusal, { status: 403 })
         return Response.json({
-          entries: listReads === 1 ? [] : [{ id: 'acme.capture', version: '2.0.0', status: 'Published', title: { defaultLocale: 'en', values: { en: 'Capture asset' } } }],
+          entries: listReads === 1 && !refuseRefresh ? [] : [{ id: 'acme.capture', version: '2.0.0', status: 'Published', title: { defaultLocale: 'en', values: { en: 'Capture asset' } } }],
           kindsUnavailable: [],
         })
       }
@@ -401,7 +401,8 @@ describe('seeded Workshop list', () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:pack'), revokeObjectURL: vi.fn() })
 
-    render(<SeededListPage itemId="forms" />)
+    const restored = vi.fn()
+    const cut = render(<SeededListPage itemId="forms" onSelectionRestored={restored} />)
     await screen.findByRole('grid')
     expect(screen.queryByRole('button', { name: 'Export signed pack' })).not.toBeInTheDocument()
 
@@ -426,6 +427,8 @@ describe('seeded Workshop list', () => {
       expect(screen.queryByRole('button')).toBeNull()
       expect(screen.queryByRole('link')).toBeNull()
       expect(requests.some(request => request.url.includes('/authorization/traces/'))).toBe(false)
+      cut.rerender(<SeededListPage itemId="forms" selectedRowId="acme.capture@2.0.0" onSelectionRestored={restored} />)
+      expect(restored).not.toHaveBeenCalled()
       return
     }
     await screen.findByText(/"activated": true/)

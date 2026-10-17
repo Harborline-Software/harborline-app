@@ -148,8 +148,10 @@ export function SeededListPage({ itemId, viewId = `platform.list.${itemId}`, sel
         ? { ...current, rows: list.entries.map(row), list }
         : current)
     } catch (reason: unknown) {
-      if (activeRequest.current === request && !request.signal.aborted) setError({ itemId, viewId,
-        message: reason instanceof Error ? reason.message : 'Unable to load Workshop list.' })
+      if (activeRequest.current === request && !request.signal.aborted) {
+        setState(null)
+        setError({ itemId, viewId, message: reason instanceof Error ? reason.message : 'Unable to load Workshop list.' })
+      }
     }
   }
   return <WorkshopWorkflow key={`${state.plan.definitionKind}:${state.plan.definitionId}@${state.plan.definitionVersion}:${state.plan.definitionHash}`} plan={state.plan} rows={state.rows} onRowActivate={id => {
