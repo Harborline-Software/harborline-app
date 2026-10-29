@@ -74,14 +74,6 @@ jobs:
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
     steps:
-      - name: Git Bash on PATH for the service account
-        # winbox's machine PATH has Git\cmd; Bash and its utilities live in these directories.
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Add-Content -Path $env:GITHUB_PATH -Value 'C:\Program Files\Git\bin'
-          Add-Content -Path $env:GITHUB_PATH -Value 'C:\Program Files\Git\usr\bin'
-
       # fetch-depth 0 so refs/remotes/origin/main exists: the configs' since target and the script's
       # changed-source test both diff against it.
       - uses: actions/checkout@v7
@@ -92,8 +84,20 @@ jobs:
 
       # Provision the pinned toolchain on every route; qualification does not rely on machine PATH.
       - uses: actions/setup-dotnet@v6
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
         with:
           global-json-file: global.json
+
+      - name: Git Bash on PATH for the service account
+        # winbox's machine PATH has Git\cmd; Bash and its utilities live in these directories.
+        # After setup-dotnet: dotnet-install runs tar from PATH, and Git's usr\bin tar reads the
+        # C: in the SDK archive path as a remote host.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Add-Content -Path $env:GITHUB_PATH -Value 'C:\Program Files\Git\bin'
+          Add-Content -Path $env:GITHUB_PATH -Value 'C:\Program Files\Git\usr\bin'
 
       - uses: actions/setup-node@v7
         with:
