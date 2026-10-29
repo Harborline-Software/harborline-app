@@ -11,6 +11,8 @@ minimumReleaseAgeExclude:
 overrides:
   'source-map-js@>=1.0.0 <1.2.2': 1.2.2
   'qs@>=6.11.1 <6.15.2': 6.15.2 # GHSA-q8mj-m7cp-5q26
+  'undici@>=7.0.0 <7.30.1': 7.30.1 # GHSA-2m5v-pch6-74hx, GHSA-qrxm-fqhp-jwvm and two more, via jsdom
+  'zod@<4.6.6': 4.6.6 # Zod oversized constrained collections, via @stryker-mutator/core
 # StrykerJS 10.0.0 false survivors, patched until upstream releases the fixes. core: a static mutant (a module-level
 # constant) was activated after import whenever testFiles is set, so tests never saw it (stryker-js#6144, fix PR #6145).
 # vitest-runner: a mutant that makes a test file fail to load was reported Survived with zero tests (#6150, fix PR #6217).
