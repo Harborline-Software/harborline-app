@@ -89,6 +89,44 @@ const catalogueReadRefusal = {
   pointers: ['/private-field'], trace: ['private-stage'],
 }
 
+async function openRecord(create: () => Response | Promise<Response>, read?: (path: string) => Response | Promise<Response>) {
+  const requests: string[] = []
+  vi.stubGlobal('fetch', vi.fn(async (path: string, init?: RequestInit) => {
+    requests.push(path)
+    if (path.includes('/ViewDefinition/')) return Response.json({ renderPlan: actionPlan })
+    if (path === '/api/local-node/catalogue/definitions?kind=FormDefinition') return Response.json({ entries: [], kindsUnavailable: [] })
+    if (path.endsWith('/FormDefinition/platform.pack.author')) return Response.json(authorForm)
+    if (path.endsWith('/packs/export?validateOnly=true')) return Response.json({ valid: true })
+    if (path.endsWith('/packs/export')) return new Response(new Uint8Array([1]), { headers: { 'content-type': 'application/octet-stream' } })
+    if (path.endsWith('/packs/verify')) return Response.json({ verdict: 'Verified' })
+    if (path.endsWith('/packs/install')) return Response.json({ installed: true })
+    if (path.endsWith('/packs/activate')) return Response.json({ activated: true })
+    if (path.endsWith('/asset-registry/types/acme.asset')) return Response.json({ id: 'acme.asset', displayName: 'Asset', propertyForm: { definition: 'acme.capture', version: '2.0.0' } })
+    if (path.endsWith('/FormDefinition/acme.capture?version=2.0.0')) return Response.json(propertyForm)
+    if (path.endsWith('/asset-registry/entities') && init?.method === 'POST') return create()
+    if (read && (path.includes('/asset-registry/entities/') || path.includes('/authorization/traces/'))) return read(path)
+    return new Response('unexpected request', { status: 500 })
+  }))
+  vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:pack'), revokeObjectURL: vi.fn() })
+  const cut = render(<SeededListPage itemId="forms" />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Draft check' }))
+  fireEvent.change(await screen.findByRole('textbox', { name: 'Pack document' }), { target: { value: JSON.stringify(candidate) } })
+  fireEvent.click(screen.getAllByRole('button', { name: 'Draft check' }).at(-1)!)
+  await screen.findByText(/"valid": true/)
+  fireEvent.click(screen.getByRole('button', { name: 'Make bundle' }))
+  await screen.findByRole('link')
+  fireEvent.click(screen.getByRole('button', { name: 'Check signature' }))
+  await screen.findByText(/"verdict": "Verified"/)
+  fireEvent.click(screen.getByRole('button', { name: 'Stage bundle' }))
+  await screen.findByText(/"installed": true/)
+  fireEvent.click(screen.getByRole('button', { name: 'Go live' }))
+  await screen.findByText(/"activated": true/)
+  fireEvent.click(screen.getByRole('button', { name: 'Add item' }))
+  const title = await screen.findByRole('textbox', { name: 'Asset title' })
+  fireEvent.change(title, { target: { value: 'Dock asset' } })
+  return { cut, requests, title, submit: () => fireEvent.click(screen.getAllByRole('button', { name: 'Add item' }).at(-1)!) }
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -389,7 +427,7 @@ describe('seeded Workshop list', () => {
       if (input.endsWith('/FormDefinition/acme.capture?version=2.0.0')) return Response.json(propertyForm)
       if (input.endsWith('/asset-registry/entities') && init?.method === 'POST') {
         createAttempts += 1
-        if (createAttempts === 1) return new Response('{"code":"entity.validation.body_invalid","pointers":["/values/title"]}', { status: 422 })
+        if (createAttempts === 1) return Response.json({ stage: 'validate', refusals: [{ code: 'entity.validation.body_invalid', pointer: '/title' }] }, { status: 409 })
         if (createAttempts === 2) return Response.json({ id: ' ', auditId: 'audit-9' }, { status: 201 })
         if (createAttempts === 3) return Response.json({ id: 'entity-7', auditId: 'audit-9' }, { status: 201 })
         return new Response('{"code":"unexpected_duplicate_write","pointers":[]}', { status: 422 })
@@ -442,7 +480,10 @@ describe('seeded Workshop list', () => {
     expect((await screen.findAllByText(/entity.validation.body_invalid/)).length).toBeGreaterThan(0)
     expect(title).toHaveAttribute('aria-invalid', 'true')
     fireEvent.click(screen.getAllByRole('button', { name: 'Add item' }).at(-1)!)
-    expect((await screen.findAllByText(/"id": " "/)).length).toBeGreaterThan(0)
+    await waitFor(() => expect(createAttempts).toBe(2))
+    await waitFor(() => expect(screen.queryByText('Working…')).not.toBeInTheDocument())
+    expect((await screen.findByText('The node accepted the request but returned no complete record and audit receipt. The record may exist; do not submit again without checking.')).closest('[role="alert"]')).toBeVisible()
+    expect(screen.queryByText(/"id": " "/)).not.toBeInTheDocument()
     const readsBeforeReceipt = requests.filter(entry => entry.url.includes('/asset-registry/entities/')).length
     fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
     expect(requests.filter(entry => entry.url.includes('/asset-registry/entities/'))).toHaveLength(readsBeforeReceipt)
@@ -481,6 +522,259 @@ describe('seeded Workshop list', () => {
     fireEvent.change(nextPackInput, { target: { value: '{' } })
     fireEvent.click(screen.getAllByRole('button', { name: 'Draft check' }).at(-1)!)
     expect(screen.queryByRole('link', { name: 'acme.assets-1.0.0.pack' })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    'entity.validation.body_invalid', 'entity.validation.schema_unknown',
+    'entity.validation.rule_refused', 'entity.validation.rules_unavailable',
+  ])('projects only canonical Records diagnostics for %s', async code => {
+    const { cut, requests, title, submit } = await openRecord(() => Response.json({
+      stage: 'validate', auditId: 'refusal-audit-7',
+      refusals: [{ code, pointer: '/title', message: 'private-rule-message', target: 'hidden-definition', detail: { observed: 'private-sensitive-value' } }],
+      message: 'private-exception-stack', trace: 'hidden-audit', submitted: 'rejected-token',
+    }, { status: 409 }))
+    submit()
+    expect((await screen.findByText('Request refused.')).closest('[role="alert"]')).toBeVisible()
+    await screen.findByText(/"stage": "validate"/)
+    expect(title).toHaveAttribute('aria-invalid', 'true')
+    const result = screen.getAllByRole('article').at(-1)!
+    expect(JSON.parse(within(result).getByText(/"stage": "validate"/).textContent!)).toEqual({
+      stage: 'validate', refusals: [{ code, pointer: '/title' }], auditId: 'refusal-audit-7',
+    })
+    expect(cut.container.textContent).not.toMatch(/private-|hidden-|rejected-token/)
+    expect(cut.container.querySelector('a[href*="definition"]')).toBeNull()
+    const count = requests.length
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    expect(requests).toHaveLength(count)
+    expect(requests.filter(path => path.includes('/FormDefinition/'))).toEqual([
+      '/api/local-node/catalogue/definitions/FormDefinition/platform.pack.author',
+      '/api/local-node/catalogue/definitions/FormDefinition/acme.capture?version=2.0.0',
+    ])
+  })
+
+  it.each(['', '/', '/nested/title', '/items/0/title', '/a~1b~0c', '/values/title'])
+    ('preserves actual document-relative RFC6901 pointer %j without a definition fetch', async pointer => {
+    const { requests, submit } = await openRecord(() => Response.json({
+      stage: 'validate', refusals: [{ code: 'entity.validation.body_invalid', pointer }],
+    }, { status: 409 }))
+    submit()
+    const result = await screen.findByText(/"stage": "validate"/)
+    expect(JSON.parse(result.textContent!)).toEqual({
+      stage: 'validate', refusals: [{ code: 'entity.validation.body_invalid', pointer }],
+    })
+    expect(requests.filter(path => path.includes('/FormDefinition/'))).toHaveLength(2)
+  })
+
+  it('keeps individual refusal locations and an omitted refusal audit receipt', async () => {
+    const { submit } = await openRecord(() => Response.json({ stage: 'validate', refusals: [
+      { code: 'entity.validation.body_invalid', pointer: '/title' },
+      { code: 'entity.validation.body_invalid', pointer: '/count' },
+    ] }, { status: 409 }))
+    submit()
+    const result = await screen.findByText(/"stage": "validate"/)
+    expect(JSON.parse(result.textContent!)).toEqual({ stage: 'validate', refusals: [
+      { code: 'entity.validation.body_invalid', pointer: '/title' },
+      { code: 'entity.validation.body_invalid', pointer: '/count' },
+    ] })
+    expect(screen.getByRole('textbox', { name: 'Asset title' })).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('spinbutton', { name: 'Count' })).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  const canonical = { stage: 'validate', refusals: [{ code: 'entity.validation.body_invalid', pointer: '/title' }] }
+  const malformed: readonly { name: string; body: unknown; status?: number }[] = [
+    { name: 'legacy', body: { code: 'entity.validation.body_invalid', pointers: ['/title'], detail: 'private-body' } },
+    { name: 'mixed legacy code', body: { ...canonical, code: 'entity.validation.body_invalid' } },
+    { name: 'mixed legacy pointers', body: { ...canonical, pointers: ['/title'] } },
+    ...[undefined, null, 1, '', 'author', 'bind', 'render', 'Validate'].map(stage => ({ name: `stage ${stage}`, body: { ...canonical, stage } })),
+    ...[undefined, null, {}, [], [null], ['private-body']].map(refusals => ({ name: `refusals ${JSON.stringify(refusals)}`, body: { stage: 'validate', refusals } })),
+    ...[undefined, null, 1, '', 'Entity.validation.body_invalid', 'entity.validation.', 'entity.validation.body_invalid.extra', 'entity.validation.body_invalid private-body'].map(code => ({
+      name: `code ${code}`, body: { stage: 'validate', refusals: [{ code, pointer: '/title' }] },
+    })),
+    ...[undefined, null, 1, 'title', '#/title', '/bad~2', '/bad~'].map(pointer => ({
+      name: `pointer ${pointer}`, body: { stage: 'validate', refusals: [{ code: 'entity.validation.body_invalid', pointer }] },
+    })),
+    { name: 'invalid later refusal', body: { stage: 'validate', refusals: [{ code: 'entity.validation.body_invalid', pointer: '/title' }, {}] } },
+    ...[null, 1, '', ' '].map(auditId => ({ name: `audit ${JSON.stringify(auditId)}`, body: { ...canonical, auditId } })),
+    ...[400, 403, 422, 500].map(status => ({ name: `status ${status}`, status, body: canonical })),
+    { name: 'nonobject', body: ['private-body'] },
+    { name: 'null', body: null },
+  ]
+  it.each(malformed)('rejects $name as canonical Records validation without raw fallback', async ({ body, status = 409 }) => {
+    const { cut, requests, title, submit } = await openRecord(() => Response.json(body, { status }))
+    submit()
+    expect((await screen.findByText(`Request failed (${status}).`)).closest('[role="alert"]')).toBeVisible()
+    expect(title).not.toHaveAttribute('aria-invalid', 'true')
+    expect(screen.queryByText(/"stage": "validate"/)).not.toBeInTheDocument()
+    expect(cut.container.textContent).not.toMatch(/entity\.validation|private-body|"refusals"/)
+    const count = requests.length
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    expect(requests).toHaveLength(count)
+  })
+
+  it.each(['response', 'exception'])('withholds unstructured Records %s text', async kind => {
+    const { cut, submit } = await openRecord(() => {
+      if (kind === 'exception') throw new Error('private-exception-stack')
+      return new Response('private-response-token', { status: 500 })
+    })
+    submit()
+    expect((await screen.findByText(kind === 'exception'
+      ? 'The command could not be completed.' : 'Request failed (500).')).closest('[role="alert"]')).toBeVisible()
+    expect(cut.container.textContent).not.toMatch(/private-/)
+  })
+
+  it.each([
+    {}, { id: 'entity-7' }, { auditId: 'audit-9' }, { id: ' ', auditId: 'audit-9' },
+    { id: 7, auditId: 'audit-9' }, { id: 'entity-7', auditId: '' },
+    { id: 'entity-7', auditId: ' ' }, { id: 'entity-7', auditId: null }, { id: 'entity-7', auditId: 9 },
+  ])('warns that an incomplete accepted receipt may already have persisted: %j', async receipt => {
+    const { cut, requests, submit } = await openRecord(() => Response.json({ ...receipt, detail: 'private-receipt-body' }, { status: 201 }))
+    submit()
+    expect((await screen.findByText('The node accepted the request but returned no complete record and audit receipt. The record may exist; do not submit again without checking.')).closest('[role="alert"]')).toBeVisible()
+    expect(screen.queryByText('Request refused.')).not.toBeInTheDocument()
+    expect(cut.container.textContent).not.toMatch(/entity-7|audit-9|private-receipt-body/)
+    const count = requests.length
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    expect(requests).toHaveLength(count)
+  })
+
+  it.each(['edit', 'reopen', 'refused retry', 'export', 'verify', 'install', 'activate', 'pack reopen', 'pack edit'])
+    ('clears accepted record and trace evidence after %s', async invalidation => {
+    let attempts = 0
+    const { cut, requests, title, submit } = await openRecord(() => ++attempts === 1
+      ? Response.json({ id: 'entity-7', auditId: 'audit-9', detail: 'private-accepted-extra' }, { status: 201 })
+      : Response.json({ stage: 'validate', refusals: [{ code: 'entity.validation.body_invalid', pointer: '/title' }] }, { status: 409 }),
+    path => Response.json(path.includes('/authorization/traces/')
+      ? { AuditId: 'audit-9', Outcome: 'Allowed', stages: [{ stage: 'grant', result: 'allow' }] }
+      : { id: 'entity-7', values: { title: 'Stored authorized record' } }))
+    submit()
+    await screen.findByText(/"id": "entity-7"/)
+    expect(cut.container.textContent).not.toContain('private-accepted-extra')
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    await screen.findByText(/"Outcome": "Allowed"/)
+    expect(screen.getByText(/Stored authorized record/)).toBeInTheDocument()
+    const readCount = requests.filter(path => path.includes('/asset-registry/entities/') || path.includes('/authorization/traces/')).length
+    switch (invalidation) {
+      case 'edit': fireEvent.change(title, { target: { value: 'Changed title' } }); break
+      case 'reopen': fireEvent.click(screen.getAllByRole('button', { name: 'Add item' })[0]); break
+      case 'refused retry': submit(); await screen.findByText(/"stage": "validate"/); break
+      case 'export': fireEvent.click(screen.getByRole('button', { name: 'Make bundle' })); break
+      case 'verify': fireEvent.click(screen.getByRole('button', { name: 'Check signature' })); break
+      case 'install': fireEvent.click(screen.getByRole('button', { name: 'Stage bundle' })); break
+      case 'activate': fireEvent.click(screen.getByRole('button', { name: 'Go live' })); break
+      case 'pack reopen':
+        fireEvent.click(screen.getByRole('button', { name: 'Draft check' }))
+        await screen.findByRole('textbox', { name: 'Pack document' })
+        break
+      case 'pack edit':
+        fireEvent.click(screen.getByRole('button', { name: 'Draft check' }))
+        fireEvent.change(await screen.findByRole('textbox', { name: 'Pack document' }), { target: { value: '{' } })
+        break
+    }
+    await waitFor(() => expect(screen.queryByText('Working…')).not.toBeInTheDocument())
+    expect(cut.container.textContent).not.toMatch(/entity-7|audit-9|Stored authorized record|"Outcome"/)
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    expect(requests.filter(path => path.includes('/asset-registry/entities/') || path.includes('/authorization/traces/'))).toHaveLength(readCount)
+  })
+
+  it.each(['entity', 'trace'])('withholds partial data and stale evidence when a record %s read fails', async failed => {
+    let refuse = false
+    const { cut, requests, submit } = await openRecord(() => Response.json({ id: 'entity-7', auditId: 'audit-9' }, { status: 201 }), path => {
+      const trace = path.includes('/authorization/traces/')
+      if (refuse && trace === (failed === 'trace')) return Response.json({ detail: 'private-read-error', trace: 'hidden-audit' }, { status: 403 })
+      return Response.json(trace ? { outcome: 'Allowed' } : { displayName: refuse ? 'private-partial-read' : 'Authorized record' })
+    })
+    submit()
+    await screen.findByText(/"id": "entity-7"/)
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    await screen.findByText(/"outcome": "Allowed"/)
+    refuse = true
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Request failed (403).')
+    expect(cut.container.textContent).not.toMatch(/private-|hidden-audit|entity-7|audit-9|Authorized record|"outcome"/)
+    const count = requests.length
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    expect(requests).toHaveLength(count)
+  })
+
+  it.each(['success', 'refusal'])('keeps a pending record create %s current while editing is disabled, then invalidates on an admitted edit', async outcome => {
+    let release: (response: Response) => void = () => { throw new Error('Request not started.') }
+    const pending = new Promise<Response>(resolve => { release = resolve })
+    let attempts = 0
+    const { cut, requests, title, submit } = await openRecord(() => { attempts += 1; return pending })
+    submit()
+    await screen.findByText('Working…')
+    expect(title).toBeDisabled()
+    expect(screen.getAllByRole('button', { name: 'Add item' }).at(-1)!).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Inspect evidence' })).toBeDisabled()
+    fireEvent.change(title, { target: { value: 'Changed while pending' } })
+    const count = requests.length
+    submit()
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    expect(attempts).toBe(1)
+    expect(requests).toHaveLength(count)
+    await act(async () => release(outcome === 'refusal'
+      ? Response.json({ stage: 'validate', refusals: [{ code: 'entity.validation.body_invalid', pointer: '/title' }], detail: 'private-pending-refusal' }, { status: 409 })
+      : Response.json({ id: 'entity-7', auditId: 'audit-9', detail: 'private-pending-receipt' }, { status: 201 })))
+    await waitFor(() => expect(title).toBeEnabled())
+    expect(screen.queryByText('Working…')).not.toBeInTheDocument()
+    expect(title).toHaveValue('Dock asset')
+    if (outcome === 'refusal') {
+      expect((await screen.findByText('Request refused.')).closest('[role="alert"]')).toBeVisible()
+      expect(JSON.parse(screen.getByText(/"stage": "validate"/).textContent!)).toEqual({
+        stage: 'validate', refusals: [{ code: 'entity.validation.body_invalid', pointer: '/title' }],
+      })
+      expect(title).toHaveAttribute('aria-invalid', 'true')
+      expect(cut.container.textContent).not.toMatch(/entity-7|audit-9/)
+    } else {
+      expect(JSON.parse((await screen.findByText(/"id": "entity-7"/)).textContent!)).toEqual({ id: 'entity-7', auditId: 'audit-9' })
+      expect(title).not.toHaveAttribute('aria-invalid', 'true')
+      expect(cut.container.textContent).not.toMatch(/"stage": "validate"|Request failed|Request refused/)
+    }
+    expect(cut.container.textContent).not.toMatch(/private-pending-/)
+    fireEvent.change(title, { target: { value: 'Changed after completion' } })
+    expect(title).toHaveValue('Changed after completion')
+    expect(cut.container.textContent).not.toMatch(/entity-7|audit-9|"stage": "validate"|Request failed|Request refused/)
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    expect(requests).toHaveLength(count)
+    expect(attempts).toBe(1)
+  })
+
+  it.each(['success', 'refusal'])('ignores a late record read %s after values invalidate its evidence', async outcome => {
+    let release: (response: Response) => void = () => { throw new Error('Request not started.') }
+    const pending = new Promise<Response>(resolve => { release = resolve })
+    const { cut, requests, title, submit } = await openRecord(() => Response.json({ id: 'entity-7', auditId: 'audit-9' }, { status: 201 }),
+    path => path.includes('/authorization/traces/') ? pending : Response.json({ displayName: 'Late authorized record' }))
+    submit()
+    await screen.findByText(/"id": "entity-7"/)
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    await screen.findByText('Working…')
+    expect(title).toBeEnabled()
+    fireEvent.change(title, { target: { value: 'Changed while pending' } })
+    expect(title).toHaveValue('Changed while pending')
+    await act(async () => release(outcome === 'refusal'
+      ? Response.json({ stage: 'validate', refusals: [{ code: 'entity.validation.body_invalid', pointer: '/title' }] }, { status: 409 })
+      : Response.json({ outcome: 'Allowed', detail: 'Late trace' }, { status: 201 })))
+    await waitFor(() => expect(screen.queryByText('Working…')).not.toBeInTheDocument())
+    expect(cut.container.textContent).not.toMatch(/entity-7|audit-9|Late authorized record|Late trace|"outcome"|"stage": "validate"|Request failed|Request refused/)
+    const count = requests.length
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    expect(requests).toHaveLength(count)
+  })
+
+  it('preserves the separate pack validation error contract', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (path: string) => {
+      if (path.includes('/ViewDefinition/')) return Response.json({ renderPlan: actionPlan })
+      if (path.endsWith('/FormDefinition/platform.pack.author')) return Response.json(authorForm)
+      if (path.endsWith('/packs/export?validateOnly=true')) return Response.json({ errors: [{ jsonPointer: '/packJson', message: 'Authored pack check', code: 'pack.fixture.invalid' }] }, { status: 422 })
+      return Response.json({ entries: [], kindsUnavailable: [] })
+    }))
+    render(<SeededListPage itemId="forms" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Draft check' }))
+    const input = await screen.findByRole('textbox', { name: 'Pack document' })
+    fireEvent.change(input, { target: { value: JSON.stringify(candidate) } })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Draft check' }).at(-1)!)
+    expect((await screen.findAllByText(/Authored pack check/)).length).toBeGreaterThan(0)
+    expect(input).toHaveAttribute('aria-invalid', 'true')
   })
 
   it('guards command prerequisites without making an undeclared request', async () => {
