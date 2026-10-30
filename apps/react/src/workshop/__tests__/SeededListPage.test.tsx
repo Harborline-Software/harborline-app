@@ -637,6 +637,65 @@ describe('seeded Workshop list', () => {
     expect(requests).toHaveLength(count)
   })
 
+  // ASSIGNMENT453 acceptance requires the existing may-exist warning after known 2xx headers.
+  it.each([201, 202])('warns without receipt evidence or retry when an accepted %s body read fails', async status => {
+    const failure = Object.assign(new Error('private-body-read-sentinel'), {
+      cause: new Error('private-body-read-cause'), submitted: 'private-submitted-body',
+      id: 'private-hidden-entity', auditId: 'private-hidden-audit',
+    })
+    const response = new Response(null, { status, headers: { 'x-private-metadata': 'private-header-receipt' } })
+    vi.spyOn(response, 'text').mockRejectedValue(failure)
+    const { cut, requests, title, submit } = await openRecord(() => response)
+    fireEvent.change(title, { target: { value: 'private-submitted-body' } })
+    submit()
+    await waitFor(() => expect(title).toBeEnabled())
+    expect((await screen.findByText('The node accepted the request but returned no complete record and audit receipt. The record may exist; do not submit again without checking.')).closest('[role="alert"]')).toBeVisible()
+    expect(screen.queryByText('The command could not be completed.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Request refused.')).not.toBeInTheDocument()
+    expect(cut.container.textContent).not.toMatch(/private-|"id"|"auditId"/)
+    expect(requests.filter(path => path.endsWith('/asset-registry/entities'))).toHaveLength(1)
+    const count = requests.length
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    expect(requests).toHaveLength(count)
+  })
+
+  it('does not infer acceptance from an exception before response headers', async () => {
+    const { cut, requests, submit } = await openRecord(() => {
+      throw Object.assign(new Error('private-before-headers'), {
+        status: 201, cause: new Error('private-cause'), auditId: 'private-audit',
+      })
+    })
+    submit()
+    expect((await screen.findByText('The command could not be completed.')).closest('[role="alert"]')).toBeVisible()
+    expect(cut.container.textContent).not.toMatch(/private-|The node accepted|The record may exist|"auditId"/)
+    expect(requests.filter(path => path.endsWith('/asset-registry/entities'))).toHaveLength(1)
+    const count = requests.length
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    expect(requests).toHaveLength(count)
+  })
+
+  it.each(['surface change', 'unmount'])('discards a late accepted body read failure after %s', async disposal => {
+    let rejectBody: (reason: unknown) => void = () => { throw new Error('Body read not started.') }
+    const pendingBody = new Promise<string>((_, reject) => { rejectBody = reject })
+    const response = new Response(null, { status: 201 })
+    const readBody = vi.spyOn(response, 'text').mockReturnValue(pendingBody)
+    const { cut, requests, title, submit } = await openRecord(() => response)
+    submit()
+    await waitFor(() => expect(readBody).toHaveBeenCalledOnce())
+    expect(title).toBeDisabled()
+    submit()
+    expect(requests.filter(path => path.endsWith('/asset-registry/entities'))).toHaveLength(1)
+    const signal = vi.mocked(fetch).mock.calls.find(([path, init]) => path === '/api/local-node/asset-registry/entities' && init?.method === 'POST')?.[1]?.signal
+    expect(signal?.aborted).toBe(false)
+    if (disposal === 'unmount') cut.unmount()
+    else cut.rerender(<SeededListPage itemId="undeclared-list" />)
+    expect(signal?.aborted).toBe(true)
+    await act(async () => rejectBody(Object.assign(new Error('private-late-body-read'), { cause: 'private-late-cause' })))
+    expect(cut.container.textContent).not.toMatch(/private-|The node accepted|The record may exist|Request failed|Request refused|"id"|"auditId"/)
+    expect(requests.filter(path => path.endsWith('/asset-registry/entities'))).toHaveLength(1)
+    expect(requests.some(path => path.includes('/asset-registry/entities/') || path.includes('/authorization/traces/'))).toBe(false)
+  })
+
   it.each(['edit', 'reopen', 'refused retry', 'export', 'verify', 'install', 'activate', 'pack reopen', 'pack edit'])
     ('clears accepted record and trace evidence after %s', async invalidation => {
     let attempts = 0
