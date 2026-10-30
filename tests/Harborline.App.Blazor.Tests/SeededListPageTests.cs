@@ -140,6 +140,61 @@ public sealed class SeededListPageTests : BunitContext
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Record_refusal_rendering_keeps_safe_stage_and_field_facts_without_raw_text_or_definition_navigation(bool legacy)
+    {
+        var handler = new WorkshopWorkflowTests.WorkflowHandler
+        {
+            RefuseCreate = true,
+            RefusalBody = legacy
+                ? """{"code":"entity.validation.body_invalid","pointers":["/subject"],"detail":"exception-secret"}"""
+                : """{"stage":"validate","refusals":[{"code":"entity.validation.body_invalid","pointer":"/subject","target":"hidden-definition","detail":{"message":"sensitive-secret","limit":"unbound-secret"}}],"auditId":"actual-refusal-receipt","message":"exception-secret","Diagnostic":"audit-secret"}""",
+        };
+        Services.AddSingleton<IWorkshopCatalogueClient>(WorkshopWorkflowTests.Client(handler));
+        Services.AddHarborlineUiAdapters();
+        Services.AddSingleton<IMediaQueryObserver>(new StubMediaQueryObserver());
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var cut = Render<SeededListPage>(parameters => parameters.Add(page => page.ItemId, "forms"));
+        void Action(string label) => cut.FindAll("button[type=button]").Single(button => button.TextContent.Trim() == label).Click();
+        cut.WaitForAssertion(() => Assert.Equal(7, cut.FindAll("button[type=button]").Count));
+        Action("Check this draft");
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("textarea")));
+        cut.Find("textarea").Input(WorkshopWorkflowTests.PackJson);
+        cut.Find("form").Submit();
+        cut.WaitForAssertion(() => Assert.Contains("\"valid\": true", cut.Find("pre").TextContent, StringComparison.Ordinal));
+        foreach (var label in new[] { "Download this artifact", "Check signature", "Add artifact", "Use artifact", "Capture entry" }) Action(label);
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("input[type=text]")));
+        cut.Find("input[type=text]").Input("submitted-secret");
+        cut.Find("form").Submit();
+        cut.WaitForAssertion(() =>
+        {
+            if (legacy)
+            {
+                Assert.Contains("Request failed (409).", cut.Find("section[role=alert]").TextContent, StringComparison.Ordinal);
+                Assert.Empty(cut.FindAll("pre"));
+            }
+            else
+            {
+                using var result = JsonDocument.Parse(cut.Find("pre").TextContent);
+                Assert.Equal("validate", result.RootElement.GetProperty("stage").GetString());
+                Assert.Equal("/subject", result.RootElement.GetProperty("refusals")[0].GetProperty("pointer").GetString());
+                Assert.Equal("actual-refusal-receipt", result.RootElement.GetProperty("auditId").GetString());
+                Assert.Equal("true", cut.Find("input[type=text]").GetAttribute("aria-invalid"));
+                Assert.Contains("entity.validation.body_invalid", cut.Find(".hl-schema-form__summary").TextContent, StringComparison.Ordinal);
+            }
+        });
+        foreach (var secret in new[] { "exception-secret", "sensitive-secret", "audit-secret", "unbound-secret", "hidden-definition" })
+            Assert.DoesNotContain(secret, cut.Markup, StringComparison.Ordinal);
+        Assert.All(cut.FindAll("pre,[role=alert]"), element => Assert.DoesNotContain("submitted-secret", element.TextContent, StringComparison.Ordinal));
+        Assert.Empty(cut.FindAll("a:not([download])"));
+        var count = handler.Requests.Count;
+        Action("Inspect entry");
+        Assert.Equal(count, handler.Requests.Count);
+        Assert.DoesNotContain(handler.Requests, request => request.Path.Contains("hidden-definition", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Selection_restoration_does_not_activate_but_explicit_inspection_of_the_same_row_does()
     {

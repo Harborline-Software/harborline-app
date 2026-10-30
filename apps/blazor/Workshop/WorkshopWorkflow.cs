@@ -51,6 +51,7 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
         if (Busy) return;
         Values = values;
         Error = null; ResultText = null;
+        if (formAction?.Operation == "record.create") created = null;
         if (formAction?.Operation != "pack.validate") return;
         authorValues = values;
         candidate = null;
@@ -68,9 +69,10 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
     {
         if (Busy) return false;
         Busy = true; Error = null;
+        WorkshopAction? action = null;
         try
         {
-            var action = actions.SingleOrDefault(item => item.Id == actionId)
+            action = actions.SingleOrDefault(item => item.Id == actionId)
                 ?? throw new InvalidOperationException("The selected action is not declared by this view.");
             ResultLabel = action.Label;
             switch (action.Operation)
@@ -90,6 +92,7 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
                 case "pack.verify":
                     Require(artifact is not null, "Export the current pack before verifying it.");
                     verified = installed = active = false;
+                    created = null; ResultText = null;
                     var verification = await client.PostArtifactAsync("api/local-node/packs/verify", artifact!, cancellationToken);
                     Show(verification);
                     verified = verification.TryGetProperty("verdict", out var verdict) && verdict.GetString() == "Verified";
@@ -98,6 +101,7 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
                 case "pack.install":
                     Require(verified && artifact is not null, "Verify the current pack before installing it.");
                     installed = active = false;
+                    created = null; ResultText = null;
                     var installation = await client.PostArtifactAsync("api/local-node/packs/install", artifact!, cancellationToken);
                     Show(installation);
                     installed = IsTrue(installation, "installed");
@@ -106,6 +110,7 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
                 case "pack.activate":
                     Require(installed && candidate.HasValue, "Install the current pack before activating it.");
                     active = false;
+                    created = null; ResultText = null;
                     var pack = candidate!.Value;
                     var activation = await client.PostJsonAsync("api/local-node/packs/activate", new
                     {
@@ -125,17 +130,17 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
                     Show(new { activation, binding = type });
                     return true;
                 case "record.create":
+                    created = null; ResultText = null;
                     Require(active && type.HasValue && action.Input == "active-pack.property-form", "Activate a pack with a bound property form before creating a record.");
                     var propertyForm = type!.Value.GetProperty("propertyForm");
                     Form = CompiledFormAdapter.From(await client.ReadFormAsync(propertyForm.GetProperty("definition").GetString()!,
                         propertyForm.GetProperty("version").GetString(), cancellationToken));
                     formAction = action; Values = new Dictionary<string, object?>();
-                    ResultText = null;
                     return false;
                 case "record.read":
+                    ResultText = null;
                     Require(created.HasValue, "Create a record before reading it.");
                     var record = await client.ReadJsonAsync($"api/local-node/asset-registry/entities/{Uri.EscapeDataString(created!.Value.GetProperty("id").GetString()!)}", cancellationToken);
-                    Show(record);
                     Require(created.Value.TryGetProperty("auditId", out var auditId) && auditId.ValueKind == JsonValueKind.String,
                         "The accepted record write returned no audit id.");
                     var trace = await client.ReadJsonAsync($"api/local-node/authorization/traces/{Uri.EscapeDataString(auditId.GetString()!)}", cancellationToken);
@@ -147,6 +152,11 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
         }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or JsonException or KeyNotFoundException)
         {
+            if (action?.Operation is "record.create" or "record.read")
+            {
+                RecordRefused(exception, validation: false);
+                return false;
+            }
             Refused(exception); return false;
         }
         finally { Busy = false; }
@@ -172,14 +182,18 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
                     validated = IsTrue(validation, "valid");
                     return validated ? SchemaFormValidationResult.Valid : Validation(validation, "/packJson");
                 case "record.create":
+                    created = null; ResultText = null;
                     Require(active && typeId is not null && type.HasValue, "Activate a bound record type before submitting a record.");
-                    created = null;
                     var displayName = values.Values.OfType<string>().FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
                         ?? type!.Value.GetProperty("displayName").GetString();
                     var receipt = await client.PostJsonAsync("api/local-node/asset-registry/entities", new { type = typeId, displayName, values }, cancellationToken);
-                    Show(receipt);
-                    Require(HasText(receipt, "id") && HasText(receipt, "auditId"),
-                        "The node accepted the request but returned no complete record and audit receipt. The record may exist; do not submit again without checking.");
+                    if (!HasText(receipt, "id") || !HasText(receipt, "auditId"))
+                    {
+                        Error = "The node accepted the request but returned no complete record and audit receipt. The record may exist; do not submit again without checking.";
+                        if (HasText(receipt, "id")) Show(new { id = receipt.GetProperty("id").GetString() });
+                        return new(false, [new("", Error)]);
+                    }
+                    Show(new { id = receipt.GetProperty("id").GetString(), auditId = receipt.GetProperty("auditId").GetString() });
                     created = receipt;
                     return SchemaFormValidationResult.Valid;
                 default:
@@ -188,6 +202,7 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
         }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or JsonException or KeyNotFoundException)
         {
+            if (formAction?.Operation == "record.create") return RecordRefused(exception, validation: true);
             Refused(exception);
             if (exception is WorkshopRequestException request)
             {
@@ -197,6 +212,54 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
             return new(false, [new(formAction?.Operation == "pack.validate" ? "/packJson" : "", exception.Message)]);
         }
         finally { Busy = false; }
+    }
+
+    private sealed record RecordRefusal(string Code, string Pointer);
+
+    private SchemaFormValidationResult RecordRefused(Exception exception, bool validation)
+    {
+        created = null; ResultText = null;
+        Error = exception is HttpRequestException { StatusCode: { } status }
+            ? $"Request failed ({(int)status})." : "Request refused.";
+        if (validation && exception is WorkshopRequestException { StatusCode: System.Net.HttpStatusCode.Conflict } request)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(request.ResponseBody);
+                var body = document.RootElement;
+                if (body.ValueKind != JsonValueKind.Object || body.TryGetProperty("code", out _) || body.TryGetProperty("pointers", out _)
+                    || !body.TryGetProperty("stage", out var stage) || stage.ValueKind != JsonValueKind.String || stage.GetString() != "validate"
+                    || !body.TryGetProperty("refusals", out var items) || items.ValueKind != JsonValueKind.Array || items.GetArrayLength() == 0
+                    || body.TryGetProperty("auditId", out _) && !HasText(body, "auditId"))
+                    return new(false, []);
+                var refusals = new List<RecordRefusal>();
+                foreach (var item in items.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.Object || !HasText(item, "code")
+                        || item.GetProperty("code").GetString() is not ("entity.validation.body_invalid" or "entity.validation.schema_unknown"
+                            or "entity.validation.rule_refused" or "entity.validation.rules_unavailable")
+                        || !item.TryGetProperty("pointer", out var pointer) || pointer.ValueKind != JsonValueKind.String
+                        || !IsPointer(pointer.GetString()!))
+                        return new(false, []);
+                    refusals.Add(new(item.GetProperty("code").GetString()!, pointer.GetString()!));
+                }
+                var result = new Dictionary<string, object?> { ["stage"] = stage.GetString(), ["refusals"] = refusals };
+                if (body.TryGetProperty("auditId", out var auditId)) result["auditId"] = auditId.GetString();
+                Show(result);
+                Error = null;
+                return new(false, refusals.Select(item => new SchemaFormValidationError(item.Pointer, item.Code)).ToArray());
+            }
+            catch (JsonException) { }
+        }
+        return new(false, []);
+    }
+
+    private static bool IsPointer(string pointer)
+    {
+        if (pointer.Length > 0 && pointer[0] != '/') return false;
+        for (var index = 0; index < pointer.Length; index++)
+            if (pointer[index] == '~' && (++index == pointer.Length || pointer[index] is not ('0' or '1'))) return false;
+        return true;
     }
 
     private static SchemaFormValidationResult Validation(JsonElement body, string fallback)

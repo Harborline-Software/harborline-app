@@ -38,7 +38,7 @@ public sealed record WorkshopCatalogueEntry(
 }
 
 public sealed class WorkshopRequestException(int statusCode, string responseBody)
-    : HttpRequestException($"Request failed ({statusCode}): {responseBody}")
+    : HttpRequestException($"Request failed ({statusCode}): {responseBody}", null, (System.Net.HttpStatusCode)statusCode)
 {
     public string ResponseBody { get; } = responseBody;
 }
