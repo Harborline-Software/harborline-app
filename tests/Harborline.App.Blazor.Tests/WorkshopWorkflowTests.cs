@@ -306,6 +306,107 @@ public sealed class WorkshopWorkflowTests
     }
 
     [Theory]
+    [InlineData("a", false)]
+    [InlineData("a", true)]
+    [InlineData("b", false)]
+    [InlineData("b", true)]
+    public async Task Pack_reopen_and_export_invalidate_record_evidence_before_await_even_when_the_request_fails(string action, bool refuse)
+    {
+        var handler = new WorkflowHandler();
+        var workflow = await BoundWorkflow(handler);
+        Assert.True((await workflow.SubmitAsync(new Dictionary<string, object?> { ["subject"] = "accepted value" }))!.IsValid);
+        await workflow.ActivateActionAsync("g");
+        Assert.Contains("verdict:allowed", workflow.ResultText, StringComparison.Ordinal);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (action == "a") { handler.FormRelease = release; handler.RefuseForm = refuse; }
+        else { handler.ExportRelease = release; handler.RefuseExport = refuse; }
+        var pending = workflow.ActivateActionAsync(action);
+        Assert.True(workflow.Busy);
+        Assert.Null(workflow.ResultText);
+        var count = handler.Requests.Count;
+        await workflow.ActivateActionAsync("g");
+        Assert.Equal(count, handler.Requests.Count);
+        release.SetResult();
+        await pending;
+        Assert.False(workflow.Busy);
+        Assert.Equal(refuse, workflow.Error is not null);
+        foreach (var stale in new[] { "record-1", "11111111-1111-1111-1111-111111111111", "verdict:allowed" })
+            Assert.DoesNotContain(stale, workflow.ResultText ?? "", StringComparison.Ordinal);
+        count = handler.Requests.Count;
+        await workflow.ActivateActionAsync("g");
+        Assert.Equal(count, handler.Requests.Count);
+        Assert.Equal("Request refused.", workflow.Error);
+        Assert.Null(workflow.ResultText);
+        Assert.Single(handler.Requests, request => request.Path == "/api/local-node/asset-registry/entities/record-1");
+        Assert.Single(handler.Requests, request => request.Path == "/api/local-node/authorization/traces/11111111-1111-1111-1111-111111111111");
+    }
+
+    public static TheoryData<int, string> UndecodableAcceptedResponses => new()
+    {
+        { 201, "" },
+        { 201, "response-secret" },
+        { 201, "{\"id\":\"response-secret\"," },
+        { 200, "" },
+        { 202, "<html>response-secret</html>" },
+        { 204, "" },
+    };
+
+    [Theory]
+    [MemberData(nameof(UndecodableAcceptedResponses))]
+    public async Task Undecodable_accepted_record_response_retains_actual_transport_status_without_response_text(int status, string body)
+    {
+        var handler = new WorkflowHandler { CreateStatus = (HttpStatusCode)status, CreateReceipt = body };
+        var exception = await Assert.ThrowsAsync<WorkshopRequestException>(() => Client(handler)
+            .PostJsonAsync("api/local-node/asset-registry/entities", new { subject = "submitted-secret" }));
+        Assert.Equal((HttpStatusCode)status, exception.StatusCode);
+        Assert.Equal(string.Empty, exception.ResponseBody);
+        Assert.DoesNotContain("response-secret", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("submitted-secret", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [MemberData(nameof(UndecodableAcceptedResponses))]
+    public async Task Undecodable_accepted_record_response_warns_that_record_may_exist_and_never_enables_reads(int status, string body)
+    {
+        var handler = new WorkflowHandler { CreateStatus = (HttpStatusCode)status, CreateReceipt = body };
+        var workflow = await BoundWorkflow(handler);
+        var result = await workflow.SubmitAsync(new Dictionary<string, object?> { ["subject"] = "submitted-secret" });
+        Assert.False(result!.IsValid);
+        Assert.Equal("The node accepted the request but returned no complete record and audit receipt. The record may exist; do not submit again without checking.", workflow.Error);
+        Assert.Null(workflow.ResultText);
+        Assert.Empty(result.Errors);
+        var count = handler.Requests.Count;
+        await workflow.ActivateActionAsync("g");
+        Assert.Equal(count, handler.Requests.Count);
+        Assert.DoesNotContain(handler.Requests, request => request.Path.StartsWith("/api/local-node/asset-registry/entities/", StringComparison.Ordinal)
+            || request.Path.StartsWith("/api/local-node/authorization/traces/", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("not JSON")]
+    [InlineData("{\"valid\":")]
+    public async Task Undecodable_successful_pack_validation_retains_its_existing_json_failure(string body)
+    {
+        var handler = new WorkflowHandler { ValidationBody = body };
+        await Assert.ThrowsAsync<JsonException>(() => Client(handler)
+            .PostJsonAsync("api/local-node/packs/export?validateOnly=true", new { }));
+    }
+
+    [Fact]
+    public async Task Record_transport_failure_does_not_claim_acceptance()
+    {
+        var handler = new WorkflowHandler();
+        var workflow = await BoundWorkflow(handler);
+        handler.FailCreateTransport = true;
+        var result = await workflow.SubmitAsync(new Dictionary<string, object?> { ["subject"] = "value" });
+        Assert.False(result!.IsValid);
+        Assert.Equal("Request refused.", workflow.Error);
+        Assert.Null(workflow.ResultText);
+        Assert.Empty(result.Errors);
+    }
+
+    [Theory]
     [InlineData("""{"id":"","auditId":"audit","detail":"response-secret"}""")]
     [InlineData("""{"id":"record-1","auditId":" ","detail":"response-secret"}""")]
     [InlineData("""{"id":42,"auditId":"audit","detail":"response-secret"}""")]
@@ -378,9 +479,13 @@ public sealed class WorkshopWorkflowTests
         public bool RefuseCreate;
         public string RefusalBody = Refusal;
         public HttpStatusCode RefusalStatus = HttpStatusCode.Conflict;
+        public HttpStatusCode CreateStatus = HttpStatusCode.Created;
         public string? CreateReceipt;
+        public string? ValidationBody;
+        public bool FailCreateTransport;
         public bool RefuseTrace;
         public bool RefuseValidation;
+        public bool RefuseExport;
         public bool OmitAuditId;
         public TaskCompletionSource? ExportRelease;
         public TaskCompletionSource? FormRelease;
@@ -399,20 +504,23 @@ public sealed class WorkshopWorkflowTests
             if (path == "/api/local-node/packs/export")
             {
                 if (ExportRelease is not null) await ExportRelease.Task.WaitAsync(cancellationToken);
+                if (RefuseExport) return Json("Export temporarily unavailable", HttpStatusCode.ServiceUnavailable);
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([1, 2, 3, 4]) };
             }
             if (path == "/api/local-node/asset-registry/entities" && CreateRelease is not null)
                 await CreateRelease.Task.WaitAsync(cancellationToken);
             if (path.StartsWith("/api/local-node/authorization/traces/", StringComparison.Ordinal) && TraceRelease is not null)
                 await TraceRelease.Task.WaitAsync(cancellationToken);
+            if (path == "/api/local-node/asset-registry/entities" && FailCreateTransport)
+                throw new HttpRequestException("transport-secret");
             if (path == "/api/local-node/asset-registry/entities" && RefuseCreate)
                 return Json(RefusalBody, RefusalStatus);
             if (path == "/api/local-node/asset-registry/entities" && CreateReceipt is not null)
-                return Json(CreateReceipt);
+                return Json(CreateReceipt, CreateStatus);
             if (path.StartsWith("/api/local-node/authorization/traces/", StringComparison.Ordinal) && RefuseTrace)
                 return Json("response-secret", HttpStatusCode.InternalServerError);
             if (path == "/api/local-node/asset-registry/entities" && OmitAuditId)
-                return Json("""{"id":"record-1"}""");
+                return Json("""{"id":"record-1"}""", CreateStatus);
             if (path == "/api/local-node/packs/export?validateOnly=true" && RefuseValidation)
                 return Json("""{"valid":false,"codes":["pack.render-plan.unsupported-kind"]}""", HttpStatusCode.UnprocessableEntity);
             var response = path switch
@@ -421,7 +529,7 @@ public sealed class WorkshopWorkflowTests
                 "/api/local-node/catalogue/definitions?kind=FormDefinition" => """{"entries":[],"kindsUnavailable":[]}""",
                 "/api/local-node/catalogue/definitions/FormDefinition/declared.author" => FormEntry("declared.author", "1.0.0", "packJson", "textarea"),
                 "/api/local-node/catalogue/definitions/FormDefinition/example.capture?version=2.1.0" => FormEntry("example.capture", "2.1.0", "subject", "text"),
-                "/api/local-node/packs/export?validateOnly=true" => """{"valid":true,"codes":[]}""",
+                "/api/local-node/packs/export?validateOnly=true" => ValidationBody ?? """{"valid":true,"codes":[]}""",
                 "/api/local-node/packs/verify" => """{"verdict":"Verified"}""",
                 "/api/local-node/packs/install" => """{"installed":true}""",
                 "/api/local-node/packs/activate" => """{"activated":true,"projectionRefusals":[],"platformRefusals":[]}""",
@@ -431,7 +539,7 @@ public sealed class WorkshopWorkflowTests
                 "/api/local-node/authorization/traces/11111111-1111-1111-1111-111111111111" => """{"availability":"Available","steps":[{"stage":"verdict","facts":["verdict:allowed"]}]}""",
                 _ => throw new InvalidOperationException($"Unexpected request: {path}"),
             };
-            return Json(response);
+            return Json(response, path == "/api/local-node/asset-registry/entities" ? CreateStatus : HttpStatusCode.OK);
         }
 
         private static HttpResponseMessage Json(string body, HttpStatusCode status = HttpStatusCode.OK) =>

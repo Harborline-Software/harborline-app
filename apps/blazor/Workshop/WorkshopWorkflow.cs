@@ -7,6 +7,7 @@ public sealed record WorkshopAction(string Id, string Label, string Operation, s
 
 public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
 {
+    private const string IncompleteRecordReceipt = "The node accepted the request but returned no complete record and audit receipt. The record may exist; do not submit again without checking.";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
     private IReadOnlyList<WorkshopAction> actions = [];
     private WorkshopAction? formAction;
@@ -78,15 +79,16 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
             switch (action.Operation)
             {
                 case "pack.validate":
+                    created = null; ResultText = null;
                     Require(!string.IsNullOrWhiteSpace(action.InputForm), "The action has no declared input form.");
                     Form = CompiledFormAdapter.From(await client.ReadFormAsync(action.InputForm!, cancellationToken: cancellationToken));
                     formAction = action; Values = authorValues;
-                    ResultText = null;
                     return false;
                 case "pack.export":
                     Require(validated && candidate.HasValue, "Validate the current pack before exporting it.");
-                    artifact = await client.ExportAsync(candidate!.Value, cancellationToken);
                     verified = installed = active = false; type = null; created = null;
+                    ResultText = null;
+                    artifact = await client.ExportAsync(candidate!.Value, cancellationToken);
                     Show(new { bytes = artifact.Length, file = DownloadName });
                     return false;
                 case "pack.verify":
@@ -189,7 +191,7 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
                     var receipt = await client.PostJsonAsync("api/local-node/asset-registry/entities", new { type = typeId, displayName, values }, cancellationToken);
                     if (!HasText(receipt, "id") || !HasText(receipt, "auditId"))
                     {
-                        Error = "The node accepted the request but returned no complete record and audit receipt. The record may exist; do not submit again without checking.";
+                        Error = IncompleteRecordReceipt;
                         if (HasText(receipt, "id")) Show(new { id = receipt.GetProperty("id").GetString() });
                         return new(false, [new("", Error)]);
                     }
@@ -219,8 +221,9 @@ public sealed class WorkshopWorkflow(IWorkshopCatalogueClient client)
     private SchemaFormValidationResult RecordRefused(Exception exception, bool validation)
     {
         created = null; ResultText = null;
-        Error = exception is HttpRequestException { StatusCode: { } status }
-            ? $"Request failed ({(int)status})." : "Request refused.";
+        Error = validation && exception is WorkshopRequestException { StatusCode: { } acceptedStatus } && (int)acceptedStatus is >= 200 and < 300
+            ? IncompleteRecordReceipt
+            : exception is HttpRequestException { StatusCode: { } status } ? $"Request failed ({(int)status})." : "Request refused.";
         if (validation && exception is WorkshopRequestException { StatusCode: System.Net.HttpStatusCode.Conflict } request)
         {
             try

@@ -73,7 +73,11 @@ public sealed class HttpWorkshopCatalogueClient(HttpClient httpClient) : IWorksh
     public async Task<JsonElement> PostJsonAsync(string path, object body, CancellationToken cancellationToken = default)
     {
         using var response = await httpClient.PostAsJsonAsync(path, body, cancellationToken);
-        return await ReadResponseAsync(response, cancellationToken);
+        try { return await ReadResponseAsync(response, cancellationToken); }
+        catch (JsonException) when (response.IsSuccessStatusCode && path == "api/local-node/asset-registry/entities")
+        {
+            throw new WorkshopRequestException((int)response.StatusCode, string.Empty);
+        }
     }
 
     public async Task<JsonElement> PostArtifactAsync(string path, byte[] artifact, CancellationToken cancellationToken = default)
