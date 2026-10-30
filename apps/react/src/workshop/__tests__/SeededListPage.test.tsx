@@ -482,7 +482,7 @@ describe('seeded Workshop list', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Add item' }).at(-1)!)
     await waitFor(() => expect(createAttempts).toBe(2))
     await waitFor(() => expect(screen.queryByText('Working…')).not.toBeInTheDocument())
-    expect(await screen.findByRole('alert')).toHaveTextContent('The node accepted the request but returned no complete record and audit receipt. The record may exist; do not submit again without checking.')
+    expect((await screen.findByText('The node accepted the request but returned no complete record and audit receipt. The record may exist; do not submit again without checking.')).closest('[role="alert"]')).toBeVisible()
     expect(screen.queryByText(/"id": " "/)).not.toBeInTheDocument()
     const readsBeforeReceipt = requests.filter(entry => entry.url.includes('/asset-registry/entities/')).length
     fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
@@ -534,7 +534,7 @@ describe('seeded Workshop list', () => {
       message: 'private-exception-stack', trace: 'hidden-audit', submitted: 'rejected-token',
     }, { status: 409 }))
     submit()
-    expect(await screen.findByRole('alert')).toHaveTextContent('Request refused.')
+    expect((await screen.findByText('Request refused.')).closest('[role="alert"]')).toBeVisible()
     await screen.findByText(/"stage": "validate"/)
     expect(title).toHaveAttribute('aria-invalid', 'true')
     const result = screen.getAllByRole('article').at(-1)!
@@ -602,7 +602,7 @@ describe('seeded Workshop list', () => {
   it.each(malformed)('rejects $name as canonical Records validation without raw fallback', async ({ body, status = 409 }) => {
     const { cut, requests, title, submit } = await openRecord(() => Response.json(body, { status }))
     submit()
-    expect(await screen.findByRole('alert')).toHaveTextContent(`Request failed (${status}).`)
+    expect((await screen.findByText(`Request failed (${status}).`)).closest('[role="alert"]')).toBeVisible()
     expect(title).not.toHaveAttribute('aria-invalid', 'true')
     expect(screen.queryByText(/"stage": "validate"/)).not.toBeInTheDocument()
     expect(cut.container.textContent).not.toMatch(/entity\.validation|private-body|"refusals"/)
@@ -617,8 +617,8 @@ describe('seeded Workshop list', () => {
       return new Response('private-response-token', { status: 500 })
     })
     submit()
-    expect(await screen.findByRole('alert')).toHaveTextContent(kind === 'exception'
-      ? 'The command could not be completed.' : 'Request failed (500).')
+    expect((await screen.findByText(kind === 'exception'
+      ? 'The command could not be completed.' : 'Request failed (500).')).closest('[role="alert"]')).toBeVisible()
     expect(cut.container.textContent).not.toMatch(/private-/)
   })
 
@@ -629,7 +629,7 @@ describe('seeded Workshop list', () => {
   ])('warns that an incomplete accepted receipt may already have persisted: %j', async receipt => {
     const { cut, requests, submit } = await openRecord(() => Response.json({ ...receipt, detail: 'private-receipt-body' }, { status: 201 }))
     submit()
-    expect(await screen.findByRole('alert')).toHaveTextContent('The node accepted the request but returned no complete record and audit receipt. The record may exist; do not submit again without checking.')
+    expect((await screen.findByText('The node accepted the request but returned no complete record and audit receipt. The record may exist; do not submit again without checking.')).closest('[role="alert"]')).toBeVisible()
     expect(screen.queryByText('Request refused.')).not.toBeInTheDocument()
     expect(cut.container.textContent).not.toMatch(/entity-7|audit-9|private-receipt-body/)
     const count = requests.length
@@ -696,23 +696,64 @@ describe('seeded Workshop list', () => {
     expect(requests).toHaveLength(count)
   })
 
-  it.each(['create', 'read'].flatMap(operation => ['success', 'refusal'].map(outcome => ({ operation, outcome }))))
-    ('ignores a late record $operation $outcome after values invalidate its evidence', async ({ operation, outcome }) => {
+  it.each(['success', 'refusal'])('keeps a pending record create %s current while editing is disabled, then invalidates on an admitted edit', async outcome => {
     let release: (response: Response) => void = () => { throw new Error('Request not started.') }
     const pending = new Promise<Response>(resolve => { release = resolve })
-    const { cut, requests, title, submit } = await openRecord(() => operation === 'create'
-      ? pending : Response.json({ id: 'entity-7', auditId: 'audit-9' }, { status: 201 }),
+    let attempts = 0
+    const { cut, requests, title, submit } = await openRecord(() => { attempts += 1; return pending })
+    submit()
+    await screen.findByText('Working…')
+    expect(title).toBeDisabled()
+    expect(screen.getAllByRole('button', { name: 'Add item' }).at(-1)!).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Inspect evidence' })).toBeDisabled()
+    fireEvent.change(title, { target: { value: 'Changed while pending' } })
+    const count = requests.length
+    submit()
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    expect(attempts).toBe(1)
+    expect(requests).toHaveLength(count)
+    await act(async () => release(outcome === 'refusal'
+      ? Response.json({ stage: 'validate', refusals: [{ code: 'entity.validation.body_invalid', pointer: '/title' }], detail: 'private-pending-refusal' }, { status: 409 })
+      : Response.json({ id: 'entity-7', auditId: 'audit-9', detail: 'private-pending-receipt' }, { status: 201 })))
+    await waitFor(() => expect(title).toBeEnabled())
+    expect(screen.queryByText('Working…')).not.toBeInTheDocument()
+    expect(title).toHaveValue('Dock asset')
+    if (outcome === 'refusal') {
+      expect((await screen.findByText('Request refused.')).closest('[role="alert"]')).toBeVisible()
+      expect(JSON.parse(screen.getByText(/"stage": "validate"/).textContent!)).toEqual({
+        stage: 'validate', refusals: [{ code: 'entity.validation.body_invalid', pointer: '/title' }],
+      })
+      expect(title).toHaveAttribute('aria-invalid', 'true')
+      expect(cut.container.textContent).not.toMatch(/entity-7|audit-9/)
+    } else {
+      expect(JSON.parse((await screen.findByText(/"id": "entity-7"/)).textContent!)).toEqual({ id: 'entity-7', auditId: 'audit-9' })
+      expect(title).not.toHaveAttribute('aria-invalid', 'true')
+      expect(cut.container.textContent).not.toMatch(/"stage": "validate"|Request failed|Request refused/)
+    }
+    expect(cut.container.textContent).not.toMatch(/private-pending-/)
+    fireEvent.change(title, { target: { value: 'Changed after completion' } })
+    expect(title).toHaveValue('Changed after completion')
+    expect(cut.container.textContent).not.toMatch(/entity-7|audit-9|"stage": "validate"|Request failed|Request refused/)
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    expect(requests).toHaveLength(count)
+    expect(attempts).toBe(1)
+  })
+
+  it.each(['success', 'refusal'])('ignores a late record read %s after values invalidate its evidence', async outcome => {
+    let release: (response: Response) => void = () => { throw new Error('Request not started.') }
+    const pending = new Promise<Response>(resolve => { release = resolve })
+    const { cut, requests, title, submit } = await openRecord(() => Response.json({ id: 'entity-7', auditId: 'audit-9' }, { status: 201 }),
     path => path.includes('/authorization/traces/') ? pending : Response.json({ displayName: 'Late authorized record' }))
     submit()
-    if (operation === 'read') {
-      await screen.findByText(/"id": "entity-7"/)
-      fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
-    }
+    await screen.findByText(/"id": "entity-7"/)
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
     await screen.findByText('Working…')
+    expect(title).toBeEnabled()
     fireEvent.change(title, { target: { value: 'Changed while pending' } })
+    expect(title).toHaveValue('Changed while pending')
     await act(async () => release(outcome === 'refusal'
       ? Response.json({ stage: 'validate', refusals: [{ code: 'entity.validation.body_invalid', pointer: '/title' }] }, { status: 409 })
-      : Response.json(operation === 'create' ? { id: 'entity-7', auditId: 'audit-9' } : { outcome: 'Allowed', detail: 'Late trace' }, { status: 201 })))
+      : Response.json({ outcome: 'Allowed', detail: 'Late trace' }, { status: 201 })))
     await waitFor(() => expect(screen.queryByText('Working…')).not.toBeInTheDocument())
     expect(cut.container.textContent).not.toMatch(/entity-7|audit-9|Late authorized record|Late trace|"outcome"|"stage": "validate"|Request failed|Request refused/)
     const count = requests.length
