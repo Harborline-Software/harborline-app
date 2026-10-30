@@ -118,7 +118,16 @@ interface ActiveForm {
   readonly entry: FormCatalogueEntry
 }
 
-interface ResultView { readonly key: number; readonly label: string; readonly text: string }
+interface ResultView { readonly key: number; readonly operation: string; readonly label: string; readonly text: string }
+
+type RecordValidationCode = 'entity.validation.body_invalid' | 'entity.validation.schema_unknown'
+  | 'entity.validation.rule_refused' | 'entity.validation.rules_unavailable'
+
+interface RecordValidationRefusal {
+  readonly stage: 'validate'
+  readonly refusals: readonly { readonly code: RecordValidationCode; readonly pointer: string }[]
+  readonly auditId?: string
+}
 
 interface ResponseBody {
   readonly value: unknown
@@ -217,6 +226,33 @@ function strings(value: unknown, name: string): readonly unknown[] {
   return Array.isArray(candidate) ? candidate : []
 }
 
+function recordValidationRefusal(status: number, value: unknown): RecordValidationRefusal | null {
+  const body = object(value)
+  if (status !== 409 || !body || body.stage !== 'validate' || 'code' in body || 'pointers' in body
+    || !Array.isArray(body.refusals) || body.refusals.length === 0
+    || ('auditId' in body && (typeof body.auditId !== 'string' || !body.auditId.trim()))) return null
+  const refusals: { code: RecordValidationCode; pointer: string }[] = []
+  for (const value of body.refusals) {
+    const refusal = object(value)
+    if (!refusal || (refusal.code !== 'entity.validation.body_invalid' && refusal.code !== 'entity.validation.schema_unknown'
+      && refusal.code !== 'entity.validation.rule_refused' && refusal.code !== 'entity.validation.rules_unavailable')
+      || typeof refusal.pointer !== 'string'
+      || (refusal.pointer !== '' && (!refusal.pointer.startsWith('/') || /~(?:[^01]|$)/.test(refusal.pointer)))) return null
+    refusals.push({ code: refusal.code, pointer: refusal.pointer })
+  }
+  return { stage: 'validate', refusals, ...(typeof body.auditId === 'string' ? { auditId: body.auditId } : {}) }
+}
+
+function recordValidationErrors(refusal: RecordValidationRefusal | null): ValidationResult {
+  return { isValid: false, errors: refusal?.refusals.map(item => ({
+    jsonPointer: item.pointer, message: item.code, code: item.code, kind: 'Schema' as const,
+  })) ?? [] }
+}
+
+function recordFailureMessage(reason: unknown): string {
+  return reason instanceof ServerResponseError ? `Request failed (${reason.status}).` : 'The command could not be completed.'
+}
+
 function validationErrors(value: unknown, defaultPointer: string): ValidationResult {
   const body = object(value)
   const pointerList = Array.isArray(body?.pointers) ? body.pointers.filter(pointer => typeof pointer === 'string') as string[] : []
@@ -302,6 +338,7 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
+  const recordGeneration = useRef(0)
   const lifetime = useRef(new AbortController())
   const formView = useMemo(() => activeForm?.entry.renderPlan ? formViewFromPlan(activeForm.entry.renderPlan) : null, [activeForm])
 
@@ -313,7 +350,13 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
   useEffect(() => () => { if (workflow.download) URL.revokeObjectURL(workflow.download.href) }, [workflow.download])
 
   const append = (action: WorkshopAction, value: unknown, fallback = 'Completed.') => {
-    setResults(current => [...current, { key: Date.now() + current.length, label: action.label, text: pretty(value, fallback) }])
+    setResults(current => [...current, { key: Date.now() + current.length, operation: action.operation, label: action.label, text: pretty(value, fallback) }])
+  }
+  const invalidateRecord = () => {
+    recordGeneration.current += 1
+    setWorkflow(current => ({ ...current, receipt: undefined }))
+    setResults(current => current.filter(result => result.operation !== 'record.create' && result.operation !== 'record.read'))
+    setMessage(null)
   }
   const fail = (action: WorkshopAction, reason: unknown) => {
     const text = reason instanceof ServerResponseError
@@ -365,10 +408,12 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
       switch (action.operation) {
         case 'pack.validate':
           if (!action.inputForm) throw new Error('The validation command has no declared input form.')
+          invalidateRecord()
           await loadForm(action, action.inputForm)
           break
         case 'pack.export': {
           if (!requires(proof(workflow.validation, 'valid') && Boolean(workflow.candidate), label('pack.validate'))) break
+          invalidateRecord()
           const response = await fetch(`${origin()}/api/local-node/packs/export`, {
             method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
             body: JSON.stringify(workflow.candidate), signal: lifetime.current.signal,
@@ -382,6 +427,7 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
         }
         case 'pack.verify': {
           if (!requires(Boolean(workflow.artifact), label('pack.export'))) break
+          invalidateRecord()
           setWorkflow(current => ({ ...current, verification: undefined, installation: undefined, activation: undefined, assetType: undefined, assetContent: undefined, propertyForm: undefined, receipt: undefined }))
           const body = await requestJson('/api/local-node/packs/verify', { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: workflow.artifact, signal: lifetime.current.signal })
           const verification = object(body.value) ?? {}
@@ -391,6 +437,7 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
         }
         case 'pack.install': {
           if (!requires(object(workflow.verification)?.verdict === 'Verified' && Boolean(workflow.artifact), label('pack.verify'))) break
+          invalidateRecord()
           setWorkflow(current => ({ ...current, installation: undefined, activation: undefined, assetType: undefined, assetContent: undefined, propertyForm: undefined, receipt: undefined }))
           const body = await requestJson('/api/local-node/packs/install', { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: workflow.artifact, signal: lifetime.current.signal })
           const installation = object(body.value) ?? {}
@@ -400,6 +447,7 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
         }
         case 'pack.activate': {
           if (!requires(proof(workflow.installation, 'installed') && Boolean(workflow.candidate), label('pack.install'))) break
+          invalidateRecord()
           const candidate = workflow.candidate!
           setWorkflow(current => ({ ...current, activation: undefined, assetType: undefined, assetContent: undefined, propertyForm: undefined, receipt: undefined }))
           const body = await requestJson('/api/local-node/packs/activate', {
@@ -413,29 +461,33 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
           break
         }
         case 'record.create':
+          invalidateRecord()
           if (action.input !== 'active-pack.property-form') throw new Error('The record command has no supported declared input binding.')
           if (!requires(proof(workflow.activation, 'activated') && Boolean(workflow.propertyForm), label('pack.activate'))) break
           setActiveForm({ action, kind: 'record', entry: workflow.propertyForm! })
           break
         case 'record.read': {
           if (!requires(Boolean(workflow.receipt?.id && workflow.receipt.auditId), label('record.create'))) break
+          const generation = recordGeneration.current
           const [entity, trace] = await Promise.allSettled([
             requestJson(`/api/local-node/asset-registry/entities/${encodeURIComponent(workflow.receipt!.id!)}`, { signal: lifetime.current.signal }),
             requestJson(`/api/local-node/authorization/traces/${encodeURIComponent(workflow.receipt!.auditId!)}`, { signal: lifetime.current.signal }),
           ])
-          const evidence = {
-            entity: entity.status === 'fulfilled' ? entity.value.value : entity.reason instanceof ServerResponseError ? entity.reason.body.value : String(entity.reason),
-            trace: trace.status === 'fulfilled' ? trace.value.value : trace.reason instanceof ServerResponseError ? trace.reason.body.value : String(trace.reason),
-          }
-          append(action, evidence)
+          if (generation !== recordGeneration.current) break
           if (entity.status === 'rejected') throw entity.reason
           if (trace.status === 'rejected') throw trace.reason
+          append(action, { entity: entity.value.value, trace: trace.value.value })
           break
         }
         default:
           setMessage('The selected command is not declared by the Workshop host.')
       }
-    } catch (reason) { fail(action, reason) } finally { busyRef.current = false; setBusy(false) }
+    } catch (reason) {
+      if (action.operation === 'record.create' || action.operation === 'record.read') {
+        invalidateRecord()
+        setMessage(recordFailureMessage(reason))
+      } else fail(action, reason)
+    } finally { busyRef.current = false; setBusy(false) }
   }
 
   const submitPack = async (values: Readonly<Record<string, unknown>>): Promise<ValidationResult | void> => {
@@ -446,6 +498,7 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
     try {
       setAuthorValues(values)
       setMessage(null)
+      invalidateRecord()
       setWorkflow({})
       if (typeof values.packJson !== 'string') throw new SyntaxError('Enter a JSON pack document.')
       const parsed = JSON.parse(values.packJson) as unknown
@@ -472,45 +525,61 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
 
   const submitRecord = async (values: Readonly<Record<string, unknown>>): Promise<ValidationResult | void> => {
     const action = activeForm!.action
-    if (busyRef.current) return validationErrors(null, '')
+    if (busyRef.current) return recordValidationErrors(null)
     busyRef.current = true
     setBusy(true)
+    invalidateRecord()
+    const generation = recordGeneration.current
     try {
       if (!proof(workflow.activation, 'activated')
         || !workflow.propertyForm?.renderPlan
         || workflow.propertyForm.id !== activeForm?.entry.id
         || workflow.propertyForm.version !== activeForm.entry.version) {
         setMessage('Activate a bound record type before submitting a record.')
-        return validationErrors(null, '')
+        return recordValidationErrors(null)
       }
       const type = workflow.assetContent?.key
-      if (!type) return validationErrors(null, '')
+      if (!type) return recordValidationErrors(null)
       const firstText = firstNonemptyString(values)
       const candidateName = object(workflow.assetContent?.content)?.displayName
       const displayName = firstText ?? (typeof candidateName === 'string' ? candidateName : workflow.assetType?.displayName)
-      if (!displayName) return validationErrors(null, '')
+      if (!displayName) return recordValidationErrors(null)
       setMessage(null)
-      setWorkflow(current => ({ ...current, receipt: undefined }))
-      const body = await requestJson('/api/local-node/asset-registry/entities', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ type, displayName, values }), signal: lifetime.current.signal,
+      const signal = lifetime.current.signal
+      const response = await fetch(`${origin()}/api/local-node/asset-registry/entities`, {
+        method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type, displayName, values }), signal,
       })
-      const receipt = object(body.value) as EntityReceipt | null
-      append(action, body.value)
-      if (typeof receipt?.id !== 'string' || receipt.id.trim().length === 0
-        || typeof receipt.auditId !== 'string' || receipt.auditId.trim().length === 0) {
-        return validationErrors(body.value, '')
+      let body: ResponseBody
+      try { body = await responseBody(response) } catch (reason) {
+        if (!response.ok || signal.aborted || ((reason instanceof Error || reason instanceof DOMException) && reason.name === 'AbortError')) throw reason
+        body = { value: null, text: '' }
       }
+      if (!response.ok) throw new ServerResponseError(response.status, body)
+      signal.throwIfAborted()
+      if (generation !== recordGeneration.current) return recordValidationErrors(null)
+      const result = object(body.value)
+      if (typeof result?.id !== 'string' || result.id.trim().length === 0
+        || typeof result.auditId !== 'string' || result.auditId.trim().length === 0) {
+        setMessage('The node accepted the request but returned no complete record and audit receipt. The record may exist; do not submit again without checking.')
+        return recordValidationErrors(null)
+      }
+      const receipt = { id: result.id, auditId: result.auditId }
+      append(action, receipt)
       setWorkflow(current => ({ ...current, receipt }))
       return { isValid: true, errors: [] }
     } catch (reason) {
-      fail(action, reason)
-      return validationErrors(reason instanceof ServerResponseError ? reason.body.value : null, '')
+      if (generation !== recordGeneration.current) return recordValidationErrors(null)
+      const refusal = reason instanceof ServerResponseError ? recordValidationRefusal(reason.status, reason.body.value) : null
+      if (refusal) append(action, refusal)
+      setMessage(refusal ? 'Request refused.' : recordFailureMessage(reason))
+      return recordValidationErrors(refusal)
     } finally { busyRef.current = false; setBusy(false) }
   }
 
   const invalidateAuthoredPack = () => {
     if (!workflow.candidate && !workflow.artifact) return
+    recordGeneration.current += 1
     setWorkflow({})
     setResults([])
     setMessage(null)
@@ -537,7 +606,7 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
         key={`${activeForm.kind}:${activeForm.entry.id}:${activeForm.entry.version}`}
         view={formView}
         values={activeForm.kind === 'pack' ? authorValues : undefined}
-        onValuesChange={activeForm.kind === 'pack' ? changeAuthorValues : undefined}
+        onValuesChange={activeForm.kind === 'pack' ? changeAuthorValues : invalidateRecord}
         onSubmit={activeForm.kind === 'pack' ? submitPack : submitRecord}
         strings={{ submit: activeForm.action.label, submitting: activeForm.action.label }}
       />
