@@ -637,7 +637,6 @@ describe('seeded Workshop list', () => {
     expect(requests).toHaveLength(count)
   })
 
-  // ASSIGNMENT453 acceptance requires the existing may-exist warning after known 2xx headers.
   it.each([201, 202])('warns without receipt evidence or retry when an accepted %s body read fails', async status => {
     const failure = Object.assign(new Error('private-body-read-sentinel'), {
       cause: new Error('private-body-read-cause'), submitted: 'private-submitted-body',
@@ -668,6 +667,22 @@ describe('seeded Workshop list', () => {
     submit()
     expect((await screen.findByText('The command could not be completed.')).closest('[role="alert"]')).toBeVisible()
     expect(cut.container.textContent).not.toMatch(/private-|The node accepted|The record may exist|"auditId"/)
+    expect(requests.filter(path => path.endsWith('/asset-registry/entities'))).toHaveLength(1)
+    const count = requests.length
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))
+    expect(requests).toHaveLength(count)
+  })
+
+  it.each([
+    { name: 'AbortError', status: 201, failure: new DOMException('private-cancelled-read', 'AbortError') },
+    { name: 'non2xx', status: 403, failure: new Error('private-refused-read') },
+  ])('does not reclassify a $name body read failure as accepted', async ({ status, failure }) => {
+    const response = new Response(null, { status })
+    vi.spyOn(response, 'text').mockRejectedValue(failure)
+    const { cut, requests, submit } = await openRecord(() => response)
+    submit()
+    expect((await screen.findByText('The command could not be completed.')).closest('[role="alert"]')).toBeVisible()
+    expect(cut.container.textContent).not.toMatch(/private-|The node accepted|The record may exist|"id"|"auditId"/)
     expect(requests.filter(path => path.endsWith('/asset-registry/entities'))).toHaveLength(1)
     const count = requests.length
     fireEvent.click(screen.getByRole('button', { name: 'Inspect evidence' }))

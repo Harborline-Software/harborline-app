@@ -72,11 +72,45 @@ public sealed class HttpWorkshopCatalogueClient(HttpClient httpClient) : IWorksh
 
     public async Task<JsonElement> PostJsonAsync(string path, object body, CancellationToken cancellationToken = default)
     {
+        if (path == "api/local-node/asset-registry/entities")
+            return await PostRecordAsync(path, body, cancellationToken);
         using var response = await httpClient.PostAsJsonAsync(path, body, cancellationToken);
-        try { return await ReadResponseAsync(response, cancellationToken); }
-        catch (JsonException) when (response.IsSuccessStatusCode && path == "api/local-node/asset-registry/entities")
+        return await ReadResponseAsync(response, cancellationToken);
+    }
+
+    private async Task<JsonElement> PostRecordAsync(string path, object body, CancellationToken cancellationToken)
+    {
+        // shortcut: body reads follow this token after headers; revisit if external HttpClient cancellation is exposed.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(httpClient.Timeout);
+        using var request = new HttpRequestMessage(HttpMethod.Post, path)
         {
-            throw new WorkshopRequestException((int)response.StatusCode, string.Empty);
+            Content = JsonContent.Create(body),
+            Version = httpClient.DefaultRequestVersion,
+            VersionPolicy = httpClient.DefaultVersionPolicy,
+        };
+        try
+        {
+            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+            try
+            {
+                await response.Content.LoadIntoBufferAsync(httpClient.MaxResponseContentBufferSize, timeout.Token);
+                var receipt = await ReadResponseAsync(response, timeout.Token);
+                timeout.Token.ThrowIfCancellationRequested();
+                return receipt;
+            }
+            catch (Exception exception) when (response.IsSuccessStatusCode
+                && exception is JsonException or HttpRequestException or IOException or InvalidOperationException)
+            {
+                timeout.Token.ThrowIfCancellationRequested();
+                throw new WorkshopRequestException((int)response.StatusCode, string.Empty);
+            }
+        }
+        catch (Exception exception) when (timeout.IsCancellationRequested && exception is OperationCanceledException or HttpRequestException)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            timeout.Token.ThrowIfCancellationRequested();
+            throw;
         }
     }
 

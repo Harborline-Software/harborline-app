@@ -545,10 +545,18 @@ export function WorkshopWorkflow({ plan, rows, onRowActivate, onActivated }: {
       const displayName = firstText ?? (typeof candidateName === 'string' ? candidateName : workflow.assetType?.displayName)
       if (!displayName) return recordValidationErrors(null)
       setMessage(null)
-      const body = await requestJson('/api/local-node/asset-registry/entities', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ type, displayName, values }), signal: lifetime.current.signal,
+      const signal = lifetime.current.signal
+      const response = await fetch(`${origin()}/api/local-node/asset-registry/entities`, {
+        method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type, displayName, values }), signal,
       })
+      let body: ResponseBody
+      try { body = await responseBody(response) } catch (reason) {
+        if (!response.ok || signal.aborted || ((reason instanceof Error || reason instanceof DOMException) && reason.name === 'AbortError')) throw reason
+        body = { value: null, text: '' }
+      }
+      if (!response.ok) throw new ServerResponseError(response.status, body)
+      signal.throwIfAborted()
       if (generation !== recordGeneration.current) return recordValidationErrors(null)
       const result = object(body.value)
       if (typeof result?.id !== 'string' || result.id.trim().length === 0

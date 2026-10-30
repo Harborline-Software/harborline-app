@@ -383,6 +383,180 @@ public sealed class WorkshopWorkflowTests
     }
 
     [Theory]
+    [InlineData(200)]
+    [InlineData(201)]
+    [InlineData(202)]
+    [InlineData(204)]
+    public async Task Unreadable_accepted_record_body_preserves_actual_status_without_private_cause(int status)
+    {
+        using var content = new BodyContent((_, _) => Task.FromException(new IOException("private-body-read-sentinel")));
+        var handler = new WorkflowHandler { CreateStatus = (HttpStatusCode)status, CreateContent = content };
+        var exception = await Assert.ThrowsAsync<WorkshopRequestException>(() => Client(handler)
+            .PostJsonAsync("api/local-node/asset-registry/entities", new { subject = "submitted-secret" }));
+        Assert.Equal((HttpStatusCode)status, exception.StatusCode);
+        Assert.Equal(string.Empty, exception.ResponseBody);
+        Assert.Null(exception.InnerException);
+        Assert.DoesNotContain("private-body-read-sentinel", exception.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("submitted-secret", exception.ToString(), StringComparison.Ordinal);
+        Assert.True(content.Disposed);
+        Assert.Single(handler.Requests);
+    }
+
+    [Theory]
+    [InlineData(201)]
+    [InlineData(202)]
+    public async Task Unreadable_accepted_record_body_warns_without_evidence_reads_or_duplicate_submission(int status)
+    {
+        var handler = new WorkflowHandler { CreateStatus = (HttpStatusCode)status };
+        var workflow = await BoundWorkflow(handler);
+        handler.CreateContent = new BodyContent((_, _) => Task.FromException(new IOException("private-body-read-sentinel")));
+        var result = await workflow.SubmitAsync(new Dictionary<string, object?> { ["subject"] = "submitted-secret" });
+        Assert.False(result!.IsValid);
+        Assert.Equal("The node accepted the request but returned no complete record and audit receipt. The record may exist; do not submit again without checking.", workflow.Error);
+        Assert.Empty(result.Errors);
+        Assert.Null(workflow.ResultText);
+        Assert.Single(handler.Requests, request => request.Path == "/api/local-node/asset-registry/entities");
+        var count = handler.Requests.Count;
+        await workflow.ActivateActionAsync("g");
+        Assert.Equal(count, handler.Requests.Count);
+        Assert.DoesNotContain(handler.Requests, request => request.Path.StartsWith("/api/local-node/asset-registry/entities/", StringComparison.Ordinal)
+            || request.Path.StartsWith("/api/local-node/authorization/traces/", StringComparison.Ordinal));
+        Assert.False(workflow.Busy);
+    }
+
+    [Fact]
+    public async Task Preheader_exception_status_is_not_an_accepted_record_response()
+    {
+        var failure = new HttpRequestException("private-preheader-sentinel", null, HttpStatusCode.Created);
+        var handler = new WorkflowHandler { CreateFailure = failure };
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() => Client(handler)
+            .PostJsonAsync("api/local-node/asset-registry/entities", new { }));
+        Assert.Same(failure, exception);
+        handler.CreateFailure = null;
+        var workflow = await BoundWorkflow(handler);
+        handler.CreateFailure = failure;
+        var result = await workflow.SubmitAsync(new Dictionary<string, object?> { ["subject"] = "submitted-secret" });
+        Assert.False(result!.IsValid);
+        Assert.Equal("Request failed (201).", workflow.Error);
+        Assert.Empty(result.Errors);
+        Assert.Null(workflow.ResultText);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Unreadable_nonaccepted_record_or_pack_body_retains_existing_transport_failure(bool pack)
+    {
+        var content = new BodyContent((_, _) => Task.FromException(new IOException("private-body-read-sentinel")));
+        var handler = new WorkflowHandler { CreateStatus = HttpStatusCode.Conflict };
+        if (pack) handler.ValidationContent = content;
+        else handler.CreateContent = content;
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() => Client(handler).PostJsonAsync(
+            pack ? "api/local-node/packs/export?validateOnly=true" : "api/local-node/asset-registry/entities", new { }));
+        Assert.Null(exception.StatusCode);
+        Assert.IsType<IOException>(exception.InnerException);
+        Assert.True(content.Disposed);
+    }
+
+    [Fact]
+    public async Task Accepted_record_charset_failure_keeps_status_without_the_invalid_charset()
+    {
+        var content = new StringContent("{}", Encoding.UTF8, "application/json");
+        content.Headers.ContentType!.CharSet = "private-invalid-charset";
+        var handler = new WorkflowHandler { CreateContent = content };
+        var exception = await Assert.ThrowsAsync<WorkshopRequestException>(() => Client(handler)
+            .PostJsonAsync("api/local-node/asset-registry/entities", new { }));
+        Assert.Equal(HttpStatusCode.Created, exception.StatusCode);
+        Assert.Equal(string.Empty, exception.ResponseBody);
+        Assert.Null(exception.InnerException);
+        Assert.DoesNotContain("private-invalid-charset", exception.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Record_request_retains_configured_protocol_and_response_buffer_limit()
+    {
+        var handler = new WorkflowHandler();
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("http://localhost:5050/"),
+            DefaultRequestVersion = HttpVersion.Version20,
+            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
+            MaxResponseContentBufferSize = 8,
+        };
+        var exception = await Assert.ThrowsAsync<WorkshopRequestException>(() => new HttpWorkshopCatalogueClient(http)
+            .PostJsonAsync("api/local-node/asset-registry/entities", new { }));
+        Assert.Equal(HttpStatusCode.Created, exception.StatusCode);
+        Assert.Equal(string.Empty, exception.ResponseBody);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(new Version(2, 0), request.Version);
+        Assert.Equal(HttpVersionPolicy.RequestVersionOrHigher, request.VersionPolicy);
+    }
+
+    [Theory]
+    [InlineData(201, false)]
+    [InlineData(201, true)]
+    [InlineData(409, true)]
+    public async Task Caller_cancellation_wins_over_body_completion_or_transport_failure(int status, bool fail)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var content = new BodyContent(async (stream, token) =>
+        {
+            await stream.WriteAsync(Encoding.UTF8.GetBytes("{\"id\":\"record-1\",\"auditId\":\"audit\"}"), token);
+            cancellation.Cancel();
+            if (fail) throw new IOException("private-body-read-sentinel");
+        });
+        var handler = new WorkflowHandler { CreateStatus = (HttpStatusCode)status, CreateContent = content };
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Client(handler)
+            .PostJsonAsync("api/local-node/asset-registry/entities", new { }, cancellation.Token));
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+        Assert.True(content.Disposed);
+    }
+
+    [Fact]
+    public async Task Configured_request_timeout_still_covers_accepted_body_reading()
+    {
+        using var guard = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var reading = false;
+        var content = new BodyContent((_, token) => { reading = true; return Task.Delay(Timeout.InfiniteTimeSpan, token); });
+        var handler = new WorkflowHandler { CreateContent = content };
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:5050/"), Timeout = TimeSpan.FromSeconds(1) };
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new HttpWorkshopCatalogueClient(http)
+            .PostJsonAsync("api/local-node/asset-registry/entities", new { }, guard.Token));
+        Assert.False(guard.IsCancellationRequested);
+        Assert.True(reading);
+        Assert.True(content.Disposed);
+    }
+
+    [Fact]
+    public async Task Canceled_record_body_read_leaves_workflow_idle_without_acceptance_or_evidence()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var handler = new WorkflowHandler();
+        var workflow = await BoundWorkflow(handler);
+        handler.CreateContent = new BodyContent((_, _) =>
+        {
+            cancellation.Cancel();
+            return Task.FromException(new IOException("private-body-read-sentinel"));
+        });
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => workflow.SubmitAsync(
+            new Dictionary<string, object?> { ["subject"] = "submitted-secret" }, cancellation.Token).AsTask());
+        Assert.False(workflow.Busy);
+        Assert.Null(workflow.Error);
+        Assert.Null(workflow.ResultText);
+        Assert.Single(handler.Requests, request => request.Path == "/api/local-node/asset-registry/entities");
+    }
+
+    [Fact]
+    public async Task Request_serialization_failure_is_not_relabelled_as_an_accepted_record()
+    {
+        var body = new Dictionary<string, object?>();
+        body["cycle"] = body;
+        var handler = new WorkflowHandler();
+        await Assert.ThrowsAsync<JsonException>(() => Client(handler).PostJsonAsync("api/local-node/asset-registry/entities", body));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("not JSON")]
     [InlineData("{\"valid\":")]
@@ -471,7 +645,16 @@ public sealed class WorkshopWorkflowTests
         return new HttpWorkshopCatalogueClient(http);
     }
 
-    internal sealed record Request(string Path, byte[] Bytes, string? Authorization);
+    private sealed class BodyContent(Func<Stream, CancellationToken, Task> write) : HttpContent
+    {
+        public bool Disposed { get; private set; }
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) => write(stream, CancellationToken.None);
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken) => write(stream, cancellationToken);
+        protected override bool TryComputeLength(out long length) { length = 0; return false; }
+        protected override void Dispose(bool disposing) { Disposed = true; base.Dispose(disposing); }
+    }
+
+    internal sealed record Request(string Path, byte[] Bytes, string? Authorization, Version Version, HttpVersionPolicy VersionPolicy);
     internal sealed class WorkflowHandler : HttpMessageHandler
     {
         internal const string Refusal = """{"stage":"validate","refusals":[{"code":"entity.validation.body_invalid","pointer":"/subject"}]}""";
@@ -482,6 +665,9 @@ public sealed class WorkshopWorkflowTests
         public HttpStatusCode CreateStatus = HttpStatusCode.Created;
         public string? CreateReceipt;
         public string? ValidationBody;
+        public HttpContent? CreateContent;
+        public HttpContent? ValidationContent;
+        public HttpRequestException? CreateFailure;
         public bool FailCreateTransport;
         public bool RefuseTrace;
         public bool RefuseValidation;
@@ -495,7 +681,8 @@ public sealed class WorkshopWorkflowTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var path = request.RequestUri!.PathAndQuery;
-            Requests.Add(new Request(path, request.Content is null ? [] : await request.Content.ReadAsByteArrayAsync(cancellationToken), request.Headers.Authorization?.ToString()));
+            Requests.Add(new Request(path, request.Content is null ? [] : await request.Content.ReadAsByteArrayAsync(cancellationToken),
+                request.Headers.Authorization?.ToString(), request.Version, request.VersionPolicy));
             if (path == "/api/local-node/catalogue/definitions/FormDefinition/declared.author")
             {
                 if (FormRelease is not null) await FormRelease.Task.WaitAsync(cancellationToken);
@@ -513,6 +700,12 @@ public sealed class WorkshopWorkflowTests
                 await TraceRelease.Task.WaitAsync(cancellationToken);
             if (path == "/api/local-node/asset-registry/entities" && FailCreateTransport)
                 throw new HttpRequestException("transport-secret");
+            if (path == "/api/local-node/asset-registry/entities" && CreateFailure is not null)
+                throw CreateFailure;
+            if (path == "/api/local-node/asset-registry/entities" && CreateContent is not null)
+                return new HttpResponseMessage(CreateStatus) { Content = CreateContent };
+            if (path == "/api/local-node/packs/export?validateOnly=true" && ValidationContent is not null)
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = ValidationContent };
             if (path == "/api/local-node/asset-registry/entities" && RefuseCreate)
                 return Json(RefusalBody, RefusalStatus);
             if (path == "/api/local-node/asset-registry/entities" && CreateReceipt is not null)
