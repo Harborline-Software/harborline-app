@@ -4,6 +4,9 @@
 #
 # Keep it current: a PR that gives a job a write token, or adds a script to such a job, adds the script here.
 # This file is under .github/, so changing it is itself risky.
+#
+# Not covered: these jobs also build and test the product itself (dotnet, pnpm, cargo), so product code,
+# manifests and dependencies run with the token too. Scoping the write token to the publish step is what closes that.
 
 # packages.yml (packages: write, every job)
 eng/package-proof.py
@@ -12,6 +15,10 @@ eng/platform-pin.json
 eng/verify-packages.sh
 apps/blazor/scripts/build-local-feed.mjs
 apps/react/scripts/build-local-feed.mjs
+# npm run feed (apps/react) and npm run validate (hosts/react-native) read their commands from these manifests
+apps/react/package.json
+hosts/react-native/package.json
+hosts/react-native/validate-host.mjs
 
 # eng/verify-boundaries.sh, which eng/verify-packages.sh runs first
 eng/verify-boundaries.sh
