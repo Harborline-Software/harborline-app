@@ -1,0 +1,27 @@
+# Scripts that a job holding a write token runs, and the files those scripts import or call. A change to any of
+# them also needs a clean Codex security review (PROC-0001, "Review policy, 2026-11-01"). review-gate reads this
+# file from the base branch. One path per line; a path ending in / covers a folder.
+#
+# Keep it current: a PR that gives a job a write token, or adds a script to such a job, adds the script here.
+# This file is under .github/, so changing it is itself risky.
+#
+# Not covered: these jobs also build and test the product itself (dotnet, pnpm, cargo), so product code,
+# manifests and dependencies run with the token too. Scoping the write token to the publish step is what closes that.
+
+# packages.yml (packages: write, every job) runs eng/verify-packages.sh, which runs eng/verify-boundaries.sh. Those
+# reach eng/verify.sh, the pin and the coverage and mutation scripts, so the whole folder counts.
+eng/
+apps/blazor/scripts/build-local-feed.mjs
+apps/react/scripts/build-local-feed.mjs
+# npm run feed (apps/react) and npm run validate (hosts/react-native) read their commands from these manifests
+apps/react/package.json
+hosts/react-native/package.json
+hosts/react-native/validate-host.mjs
+# The publish step reads its publication authority from here.
+repository.yaml
+# Build-wide inputs: every project the write-token jobs build reads these, and the feeds restore pulls from.
+Directory.Build.props
+Directory.Packages.props
+Directory.Build.targets
+apps/blazor/nuget.config
+global.json
