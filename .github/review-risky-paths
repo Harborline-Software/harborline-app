@@ -19,6 +19,8 @@ apps/react/scripts/build-local-feed.mjs
 apps/react/package.json
 hosts/react-native/package.json
 hosts/react-native/validate-host.mjs
+# The publish step reads its publication authority from here.
+repository.yaml
 
 # eng/verify-boundaries.sh, which eng/verify-packages.sh runs first
 eng/verify-boundaries.sh
