@@ -19,7 +19,9 @@ hosts/react-native/package.json
 hosts/react-native/validate-host.mjs
 # The publish step reads its publication authority from here.
 repository.yaml
-# Build-wide inputs: every project the write-token jobs build reads these.
+# Build-wide inputs: every project the write-token jobs build reads these, and the feeds restore pulls from.
 Directory.Build.props
 Directory.Packages.props
+Directory.Build.targets
+apps/blazor/nuget.config
 global.json
