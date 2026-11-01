@@ -32,3 +32,6 @@ eng/tests/coverage.test.mjs
 eng/tests/stryker.test.mjs
 eng/tests/strykerjs.test.mjs
 eng/tests/workflow-policy.test.mjs
+# Build-wide inputs: every project the write-token jobs build reads these.
+Directory.Build.props
+Directory.Packages.props
