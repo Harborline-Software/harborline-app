@@ -1,0 +1,25 @@
+# Scripts that a job holding a write token runs, and the files those scripts import or call. A change to any of
+# them also needs a clean Codex security review (PROC-0001, "Review policy, 2026-11-01"). review-gate reads this
+# file from the base branch. One path per line; a path ending in / covers a folder.
+#
+# Keep it current: a PR that gives a job a write token, or adds a script to such a job, adds the script here.
+# This file is under .github/, so changing it is itself risky.
+
+# packages.yml (packages: write, every job)
+eng/package-proof.py
+eng/tests/test_package_proof.py
+eng/platform-pin.json
+eng/verify-packages.sh
+apps/blazor/scripts/build-local-feed.mjs
+apps/react/scripts/build-local-feed.mjs
+
+# eng/verify-boundaries.sh, which eng/verify-packages.sh runs first
+eng/verify-boundaries.sh
+eng/coverage.mjs
+eng/coverage-receipt.mjs
+eng/stryker.mjs
+eng/strykerjs.mjs
+eng/tests/coverage.test.mjs
+eng/tests/stryker.test.mjs
+eng/tests/strykerjs.test.mjs
+eng/tests/workflow-policy.test.mjs
