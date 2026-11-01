@@ -8,11 +8,9 @@
 # Not covered: these jobs also build and test the product itself (dotnet, pnpm, cargo), so product code,
 # manifests and dependencies run with the token too. Scoping the write token to the publish step is what closes that.
 
-# packages.yml (packages: write, every job)
-eng/package-proof.py
-eng/tests/test_package_proof.py
-eng/platform-pin.json
-eng/verify-packages.sh
+# packages.yml (packages: write, every job) runs eng/verify-packages.sh, which runs eng/verify-boundaries.sh. Those
+# reach eng/verify.sh, the pin and the coverage and mutation scripts, so the whole folder counts.
+eng/
 apps/blazor/scripts/build-local-feed.mjs
 apps/react/scripts/build-local-feed.mjs
 # npm run feed (apps/react) and npm run validate (hosts/react-native) read their commands from these manifests
@@ -21,17 +19,7 @@ hosts/react-native/package.json
 hosts/react-native/validate-host.mjs
 # The publish step reads its publication authority from here.
 repository.yaml
-
-# eng/verify-boundaries.sh, which eng/verify-packages.sh runs first
-eng/verify-boundaries.sh
-eng/coverage.mjs
-eng/coverage-receipt.mjs
-eng/stryker.mjs
-eng/strykerjs.mjs
-eng/tests/coverage.test.mjs
-eng/tests/stryker.test.mjs
-eng/tests/strykerjs.test.mjs
-eng/tests/workflow-policy.test.mjs
 # Build-wide inputs: every project the write-token jobs build reads these.
 Directory.Build.props
 Directory.Packages.props
+global.json
