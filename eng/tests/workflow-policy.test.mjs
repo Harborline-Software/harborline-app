@@ -68,6 +68,10 @@ test('only publish holds packages: write, publishes only on a tag or dispatch, a
   const publish = packages.slice(packages.indexOf('\n  publish:\n') + 1)
   assert.match(publish, /^  publish:\n    needs: \[pack-consume\]\n    if: >-\n      vars\.ACTIONS_ENABLED == 'true'\n      && \(startsWith\(github\.ref, 'refs\/tags\/'\) \|\| inputs\.publish == true\)\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      packages: write\n/)
   for (const step of ['python3 eng/package-proof.py verify', 'packageDistributionAuthority', 'dotnet nuget push']) assert.ok(publish.includes(step), step)
+  // A re-run of only a failed publish job verifies against the attempt pack-consume's proof records.
+  assert.match(packages, /^      attempt: ${{ github.run_attempt }}$/m)
+  assert.match(publish, /HARBORLINE_PRODUCER_ATTEMPT: ${{ needs.pack-consume.outputs.attempt }}
+        run: python3 eng/package-proof.py verify/)
   for (const build of ['dotnet test', 'dotnet build', 'dotnet pack', 'verify-packages.sh', 'pnpm', 'npm run', 'build-local-feed']) assert.ok(!publish.includes(build), build)
   const pack = packages.slice(packages.indexOf('\n  pack-consume:\n'), packages.indexOf('\n  publish:\n'))
   assert.doesNotMatch(pack, /permissions:|nuget push|GH_TOKEN/)
