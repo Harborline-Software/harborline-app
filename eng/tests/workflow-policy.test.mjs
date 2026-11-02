@@ -49,16 +49,28 @@ test('package triggers and both Linux proof owners remain intact', () => {
   for (const event of ['merge_group', 'release']) assert.doesNotMatch(triggers, new RegExp(`^  ${event}:`, 'm'))
   assert.match(triggers, /branches: \[main\]/)
   assert.match(triggers, /tags: \["v\*-preview\.\*", "v\*-alpha\.\*", "v\*-beta\.\*", "v\*-rc\.\*"\]/)
-  for (const job of ['react', 'pack-consume-publish']) {
+  for (const job of ['react', 'pack-consume']) {
     assert.match(packages, new RegExp(`^  ${job}:\\n    if: vars.ACTIONS_ENABLED == 'true'\\n    runs-on: ubuntu-latest`, 'm'))
   }
   for (const command of ['pnpm install --frozen-lockfile', 'pnpm run typecheck', 'pnpm test', 'pnpm run build', 'dotnet test Harborline.App.slnx -c Release', 'bash eng/verify-packages.sh', 'npm run validate']) assert.ok(packages.includes(command), command)
   assert.match(packages, /node-version: "22"/)
   assert.match(packages, /global-json-file: global.json/)
   assert.match(packages, /path: \|\n            artifacts\/packages\/\*\.nupkg\n            artifacts\/packages\/consumer-proof\.json\n            artifacts\/packages\/package-manifest\.json/)
-  assert.equal(packages.match(/if: startsWith\(github.ref, 'refs\/tags\/'\) \|\| inputs.publish == true/g)?.length, 3)
   assert.match(packages, /packageDistributionAuthority/)
   assert.match(packages, /Stable package publication is not authorized/)
+})
+
+// Owner ruling 2026-11-02 (least privilege): only the job that pushes packages holds packages: write, and it
+// builds nothing. The literals below are the oracle, not anything read back from production code.
+test('only publish holds packages: write, publishes only on a tag or dispatch, and builds nothing', () => {
+  assert.match(packages, /^permissions:\n  contents: read\n\n/m)
+  assert.equal(packages.match(/^ +packages: write$/gm)?.length, 1)
+  const publish = packages.slice(packages.indexOf('\n  publish:\n') + 1)
+  assert.match(publish, /^  publish:\n    needs: \[pack-consume\]\n    if: >-\n      vars\.ACTIONS_ENABLED == 'true'\n      && \(startsWith\(github\.ref, 'refs\/tags\/'\) \|\| inputs\.publish == true\)\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      packages: write\n/)
+  for (const step of ['python3 eng/package-proof.py verify', 'packageDistributionAuthority', 'dotnet nuget push']) assert.ok(publish.includes(step), step)
+  for (const build of ['dotnet test', 'dotnet build', 'dotnet pack', 'verify-packages.sh', 'pnpm', 'npm run', 'build-local-feed']) assert.ok(!publish.includes(build), build)
+  const pack = packages.slice(packages.indexOf('\n  pack-consume:\n'), packages.indexOf('\n  publish:\n'))
+  assert.doesNotMatch(pack, /permissions:|nuget push|GH_TOKEN/)
 })
 
 test('required verify and SBOM still report on PR and merge queue', () => {

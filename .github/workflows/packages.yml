@@ -39,9 +39,10 @@ concurrency:
   group: packages-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Least privilege: the jobs that build, test and pack run read-only. Only publish, which runs no build and pushes
+# the bytes pack-consume proved, gets packages: write.
 permissions:
   contents: read
-  packages: write
 
 jobs:
   # The React lane is the parity AUTHORITY for every pillar admin surface, and until control ticket
@@ -97,9 +98,11 @@ jobs:
       - run: pnpm run build
         working-directory: apps/react
 
-  pack-consume-publish:
+  pack-consume:
     if: vars.ACTIONS_ENABLED == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
     steps:
       - uses: actions/checkout@v7
         with: {fetch-depth: 0}
@@ -159,13 +162,31 @@ jobs:
             artifacts/packages/consumer-proof.json
             artifacts/packages/package-manifest.json
           if-no-files-found: error
+
+  # Publication builds nothing. It pushes the exact bytes pack-consume packed and consumed in this run, after
+  # checking them against that job's proof, and it is the only job that holds packages: write.
+  publish:
+    needs: [pack-consume]
+    if: >-
+      vars.ACTIONS_ENABLED == 'true'
+      && (startsWith(github.ref, 'refs/tags/') || inputs.publish == true)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with: {global-json-file: global.json}
+      - uses: actions/download-artifact@v8
+        with:
+          name: harborline-app-${{ needs.pack-consume.outputs.version }}
+          path: artifacts/packages
       - name: Verify the exact consumed bytes before publication
-        if: startsWith(github.ref, 'refs/tags/') || inputs.publish == true
         env:
-          VERSION: ${{ steps.version.outputs.value }}
+          VERSION: ${{ needs.pack-consume.outputs.version }}
         run: python3 eng/package-proof.py verify artifacts/packages "$VERSION"
       - name: Require explicit distribution authority
-        if: startsWith(github.ref, 'refs/tags/') || inputs.publish == true
         shell: bash
         run: |
           authority="$(jq -r '.packageDistributionAuthority // empty' repository.yaml)"
@@ -175,7 +196,6 @@ jobs:
             exit 1
           fi
       - name: Publish to GitHub Packages
-        if: startsWith(github.ref, 'refs/tags/') || inputs.publish == true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
