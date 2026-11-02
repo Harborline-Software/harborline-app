@@ -17,6 +17,12 @@ apps/react/scripts/build-local-feed.mjs
 apps/react/package.json
 hosts/react-native/package.json
 hosts/react-native/validate-host.mjs
+# pnpm test and pnpm run build (apps/react) load these configs as Node code; the workspace file and patches/ set the
+# overrides and dependency patches the install applies.
+apps/react/vite.config.ts
+apps/react/vitest.config.ts
+apps/react/pnpm-workspace.yaml
+apps/react/patches/
 # The publish step reads its publication authority from here.
 repository.yaml
 # Build-wide inputs: every project the write-token jobs build reads these, and the feeds restore pulls from.
