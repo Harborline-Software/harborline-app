@@ -27,6 +27,8 @@ apps/react/vite.config.ts
 apps/react/vitest.config.ts
 apps/react/pnpm-workspace.yaml
 apps/react/patches/
+# package-proof.py restores the packed packages into this consumer to prove them.
+tests/package-consumer/
 # The publish job reads its publication authority from here.
 repository.yaml
 # Build-wide inputs: the feed restore pulls from and the pinned SDK.
