@@ -36,7 +36,9 @@ def identity(version):
         raise ValueError('unexpected repository')
     return dict(version=version, source=commit, repository=repository,
                 run=os.environ.get('GITHUB_RUN_ID', 'local'),
-                attempt=os.environ.get('GITHUB_RUN_ATTEMPT', 'local'),
+                # The publish job verifies bytes pack-consume proved, and re-running only a failed publish job bumps
+                # GITHUB_RUN_ATTEMPT, so it passes the attempt pack-consume ran in. Run, source and bytes still match.
+                attempt=os.environ.get('HARBORLINE_PRODUCER_ATTEMPT') or os.environ.get('GITHUB_RUN_ATTEMPT', 'local'),
                 workflow=os.environ.get('GITHUB_WORKFLOW_REF', 'local'))
 
 

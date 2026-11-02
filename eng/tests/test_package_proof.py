@@ -111,6 +111,22 @@ class PromotionTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     proof.verify(self.stage, VERSION)
 
+    def test_publish_retry_verifies_against_the_producer_attempt(self):
+        # A proof sealed in attempt 1, verified by a publish job re-run as attempt 2.
+        self.consume()
+        with patch.dict(os.environ, {'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1'}):
+            proof.verify(self.stage, VERSION, seal=True)
+        retry = {'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '2'}
+        with patch.dict(os.environ, retry):
+            with self.assertRaises(ValueError):
+                proof.verify(self.stage, VERSION)
+        with patch.dict(os.environ, {**retry, 'HARBORLINE_PRODUCER_ATTEMPT': '1'}):
+            proof.verify(self.stage, VERSION)
+        for field, value in [('HARBORLINE_PRODUCER_ATTEMPT', '2'), ('GITHUB_RUN_ID', '456'), ('GITHUB_SHA', 'b' * 40)]:
+            with self.subTest(field=field), patch.dict(os.environ, {**retry, 'HARBORLINE_PRODUCER_ATTEMPT': '1', field: value}):
+                with self.assertRaises(ValueError):
+                    proof.verify(self.stage, VERSION)
+
     def test_consumer_failure_removes_old_success(self):
         self.consume()
         with self.assertRaises(subprocess.CalledProcessError):
