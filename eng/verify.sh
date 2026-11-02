@@ -11,7 +11,7 @@
 #
 # The step ids MUST stay in sync with requiredStepIds in eng/verify-receipt.mjs.
 #
-# Not covered, deliberately: the `publish` half of pack-consume-publish. Publishing is a release
+# Not covered, deliberately: packages.yml's `publish` job. Publishing is a release
 # action, not a verification, and it stays gated on a tag or an explicit dispatch.
 set -uo pipefail
 

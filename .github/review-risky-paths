@@ -1,0 +1,36 @@
+# Scripts and build inputs the package jobs run, and the files those scripts import or call. A change to any of
+# them also needs a clean Codex security review (PROC-0001, "Review policy, 2026-11-01"). review-gate reads this
+# file from main, or from a PR's base branch when a ruleset requires pull requests there.
+# One path per line; a path ending in / covers a folder.
+#
+# Only packages.yml's publish job holds the write token (packages: write), and it builds nothing: it pushes the
+# bytes pack-consume made and proved. Those bytes ship as they are, so what makes them is still risky even though
+# that job runs read-only. Product code and dependencies are not listed; they no longer run with the token.
+#
+# Keep it current: a PR that adds a script to the package jobs adds it here.
+# review-gate.sh itself counts Directory.Build.props, Directory.Build.targets and Directory.Packages.props at any
+# depth. This file is under .github/, so changing it is itself risky.
+
+# packages.yml's pack-consume runs eng/verify-packages.sh, which runs eng/verify-boundaries.sh, and publish runs
+# eng/package-proof.py. Those reach eng/verify.sh, the pin and the coverage and mutation scripts, so the whole folder
+# counts.
+eng/
+apps/blazor/scripts/build-local-feed.mjs
+apps/react/scripts/build-local-feed.mjs
+# npm run feed (apps/react) and npm run validate (hosts/react-native) read their commands from these manifests
+apps/react/package.json
+hosts/react-native/package.json
+hosts/react-native/validate-host.mjs
+# pnpm test and pnpm run build (apps/react) load these configs as Node code; the workspace file and patches/ set the
+# overrides and dependency patches the install applies.
+apps/react/vite.config.ts
+apps/react/vitest.config.ts
+apps/react/pnpm-workspace.yaml
+apps/react/patches/
+# package-proof.py restores the packed packages into this consumer to prove them.
+tests/package-consumer/
+# The publish job reads its publication authority from here.
+repository.yaml
+# Build-wide inputs: the feed restore pulls from and the pinned SDK.
+apps/blazor/nuget.config
+global.json
