@@ -1,0 +1,16 @@
+# Paths that need no review when a PR changes nothing else (PROC-0001, "Review by risk"). review-gate reads this
+# file from the base branch. One path per line; a path ending in / covers a folder; a line starting with ! takes a
+# path back out, and the last line that matches a file decides. Anything not listed here needs a review.
+#
+# Keep it to prose that no build, test, gate or package reads. The required checks still run on an exempt PR, so a
+# broken link or a gate that reads a listed file still fails there; this list only drops the review.
+# Not listed, on purpose: README.md (packed into every NuGet package), AGENTS.md, CLAUDE.md and CONTRIBUTING.md
+# (rules the reviewers and agents follow), LICENSE, NOTICE, SECURITY.md and TRADEMARKS.md (legal and security
+# policy), and docs/evidence/, docs/provenance/, docs/delivery/ and release-readiness.md (records gates and releases
+# rely on). This file is under .github/, so changing it is itself risky.
+SUPPORT.md
+docs/training/
+docs/getting-started.md
+docs/development-setup.md
+docs/solution-overview.md
+docs/workshop-view-host.md
