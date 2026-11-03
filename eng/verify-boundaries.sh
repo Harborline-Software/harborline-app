@@ -36,3 +36,5 @@ node --test eng/tests/coverage.test.mjs
 node --test eng/tests/stryker.test.mjs
 node --test eng/tests/strykerjs.test.mjs
 node --test eng/tests/workflow-policy.test.mjs
+# Separate signing job: only attest can sign, and publish refuses any file without its attestation for this commit.
+node --test eng/tests/attestation-verify.test.mjs
