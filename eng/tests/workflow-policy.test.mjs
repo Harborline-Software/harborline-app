@@ -66,14 +66,16 @@ test('only publish holds packages: write, publishes only on a tag or dispatch, a
   assert.match(packages, /^permissions:\n  contents: read\n\n/m)
   assert.equal(packages.match(/^ +packages: write$/gm)?.length, 1)
   const publish = packages.slice(packages.indexOf('\n  publish:\n') + 1)
-  assert.match(publish, /^  publish:\n    needs: \[pack-consume\]\n    if: >-\n      vars\.ACTIONS_ENABLED == 'true'\n      && \(startsWith\(github\.ref, 'refs\/tags\/'\) \|\| inputs\.publish == true\)\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      packages: write\n/)
+  // It also needs the attest job (the only signer) and may only read attestations (2026-11-03, separate signing job).
+  assert.match(publish, /^  publish:\n    needs: \[pack-consume, attest\]\n    if: >-\n      vars\.ACTIONS_ENABLED == 'true'\n      && \(startsWith\(github\.ref, 'refs\/tags\/'\) \|\| inputs\.publish == true\)\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      packages: write\n      attestations: read\n/)
   for (const step of ['python3 eng/package-proof.py verify', 'packageDistributionAuthority', 'dotnet nuget push']) assert.ok(publish.includes(step), step)
   // A re-run of only a failed publish job verifies against the attempt pack-consume's proof records.
   assert.ok(packages.includes('\n      attempt: ${{ github.run_attempt }}\n'), 'pack-consume exports its attempt')
   assert.ok(publish.includes('HARBORLINE_PRODUCER_ATTEMPT: ${{ needs.pack-consume.outputs.attempt }}\n        run: python3 eng/package-proof.py verify'),
     'publish verifies against the producer attempt')
   for (const build of ['dotnet test', 'dotnet build', 'dotnet pack', 'verify-packages.sh', 'pnpm', 'npm run', 'build-local-feed']) assert.ok(!publish.includes(build), build)
-  const pack = packages.slice(packages.indexOf('\n  pack-consume:\n'), packages.indexOf('\n  publish:\n'))
+  const pack = packages.slice(packages.indexOf('\n  pack-consume:\n'), packages.indexOf('\n  attest:\n'))
+  assert.ok(pack.length > 0, 'pack-consume comes before attest')
   assert.doesNotMatch(pack, /permissions:|nuget push|GH_TOKEN/)
 })
 
