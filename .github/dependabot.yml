@@ -7,6 +7,8 @@ updates:
       day: "monday"
     open-pull-requests-limit: 5
     groups:
+      microsoft-and-system:
+        patterns: ["Microsoft.*", "System.*"]
       minor-and-patch:
         update-types: ["minor", "patch"]
   - package-ecosystem: "github-actions"
