@@ -58,6 +58,7 @@ pnpm-debug.log*
 *.tsbuildinfo
 .eslintcache
 coverage/
-# Vite: .env.development is tracked; local overrides are not
+# Vite: .env.development is tracked; local overrides are not (they can hold LOCAL_NODE_SESSION_TOKEN).
+# These and *.user change the build, so eng/verify-receipt.mjs looks for them on disk before it records a pass.
 .env.local
 .env.*.local
