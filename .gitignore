@@ -14,3 +14,50 @@ stryker-setup-*.js
 **/reports/mutation/
 # Stryker.NET output; CI uploads the json report as an artifact
 StrykerOutput/
+
+# From GitHub's VisualStudio.gitignore (github/gitignore), the file `dotnet new gitignore` writes.
+# Only the rules this repository needs: the whole template also matches tracked sources here.
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+
+# Visual Studio cache and options
+.vs/
+
+# Test results
+[Tt]est[Rr]esult*/
+
+# MSBuild binary logs
+*.binlog
+
+# Code coverage output
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+
+# Publish output; publish profiles and certificates can carry credentials
+publish/
+*.pubxml
+*.publishsettings
+*.pfx
+
+# NuGet packages
+*.nupkg
+*.snupkg
+
+# From GitHub's Node.gitignore (github/gitignore)
+npm-debug.log*
+pnpm-debug.log*
+*.tsbuildinfo
+.eslintcache
+coverage/
+# Vite: .env.development is tracked; local overrides are not
+.env.local
+.env.*.local
