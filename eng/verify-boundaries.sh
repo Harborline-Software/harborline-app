@@ -33,6 +33,7 @@ fi
 
 echo "Harborline App consumer-neutral boundary: PASS"
 node --test eng/tests/coverage.test.mjs
+node --test eng/tests/local-build-overrides.test.mjs
 node --test eng/tests/stryker.test.mjs
 node --test eng/tests/strykerjs.test.mjs
 node --test eng/tests/workflow-policy.test.mjs

@@ -17,6 +17,7 @@ import {execFileSync} from 'node:child_process'
 import {existsSync, readFileSync, writeFileSync} from 'node:fs'
 import path from 'node:path'
 import {coverageRecord, receiptCoverage} from './coverage-receipt.mjs'
+import {findLocalBuildOverrides} from './local-build-overrides.mjs'
 
 const REPOSITORY = 'harborline-app'
 const SCHEMA_VERSION = 1
@@ -51,6 +52,15 @@ if (process.argv.includes('--record')) {
     console.error('refusing to record a receipt from a dirty working tree - commit first, then verify.')
     console.error('The receipt attests to HEAD; uncommitted changes were not what the run tested:')
     console.error(dirty.split(String.fromCharCode(10)).slice(0, 10).map(line => '  ' + line).join(String.fromCharCode(10)))
+    process.exit(1)
+  }
+  // Ignored files that still change the build (*.csproj.user, Vite's .env*.local) never show in
+  // `git status`, so look for them on disk: a run that used them did not test HEAD either.
+  const overrides = findLocalBuildOverrides(root)
+  if (overrides.length > 0) {
+    console.error('refusing to record a receipt - these local files change the build but are not part of HEAD:')
+    console.error(overrides.slice(0, 10).map(file => '  ' + file).join(String.fromCharCode(10)))
+    console.error('Move them out of the checkout (do not commit them; .env*.local can hold tokens), then verify again.')
     process.exit(1)
   }
   const recordArgs = process.argv.slice(process.argv.indexOf('--record') + 1)
