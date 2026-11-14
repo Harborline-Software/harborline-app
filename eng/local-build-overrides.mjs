@@ -8,11 +8,13 @@
 import {readdirSync} from 'node:fs'
 import path from 'node:path'
 
-// Directories that hold dependencies or build output, never a project's own override file.
-const SKIPPED_DIRECTORIES = new Set(['.git', 'node_modules', 'bin', 'obj', 'artifacts', 'TestResults', 'StrykerOutput'])
+// Directories that hold dependencies or build output, never a project's own override file, and the
+// agent folders whose worktrees are separate checkouts with builds of their own.
+const SKIPPED_DIRECTORIES = new Set(['.git', 'node_modules', 'bin', 'obj', 'artifacts', 'TestResults', 'StrykerOutput', '.claude', '.codex'])
 
-const MSBUILD_USER_FILE = /\.[a-z]+proj\.user$/i
-const VITE_LOCAL_ENV_FILE = /^\.env(\.[^/\\]+)?\.local$/
+// Case-insensitive: Windows and macOS file systems are, so MSBuild and Vite read these at any case.
+const MSBUILD_USER_FILE = /\.[a-z]*proj\.user$/i
+const VITE_LOCAL_ENV_FILE = /^\.env(\.[^/\\]+)?\.local$/i
 
 export function isLocalBuildOverride(fileName) {
   return MSBUILD_USER_FILE.test(fileName) || VITE_LOCAL_ENV_FILE.test(fileName)
