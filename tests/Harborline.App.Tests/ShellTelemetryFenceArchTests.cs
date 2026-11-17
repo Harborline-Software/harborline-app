@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Harborline.App.Tests;
@@ -44,6 +45,60 @@ public sealed class ShellTelemetryFenceArchTests
         Assert.Contains("allow-list row and its ticket", exception.Message);
         AssertAllowed(findings, new() { ["src/planted.cs"] = (1, "T-502") });
         Assert.Throws<Xunit.Sdk.TrueException>(() => AssertAllowed([], new() { ["src/planted.cs"] = (1, "T-502") }));
+    }
+
+    [Fact]
+    public void Shell_fence_ignores_block_comments_opened_after_code()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"shell-fence-{Guid.NewGuid():N}");
+        try
+        {
+            foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
+            File.WriteAllLines(Path.Combine(root, "apps/react/src/comment.ts"),
+            ["const enabled = true; /*", "console.log(\"example\");", "*/", "console.log(after);", "console.log(before); /*", "ignored", "*/"]);
+            var (findings, _) = Scan(root);
+            Assert.Equal(new[] { "apps/react/src/comment.ts:4", "apps/react/src/comment.ts:5" },
+                findings.Select(finding => $"{finding.Path}:{finding.Line}"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Shell_fence_ignores_browser_event_source_in_razor_script()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"shell-fence-{Guid.NewGuid():N}");
+        try
+        {
+            foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
+            File.WriteAllLines(Path.Combine(root, "apps/blazor/Script.razor"),
+                ["<script>const events = new EventSource(\"/events\");</script>", "<script>", "new EventSource('/events');", "console.log(value);", "</script>"]);
+            var (findings, _) = Scan(root);
+            Assert.Equal(new[] { "apps/blazor/Script.razor:4" }, findings.Select(finding => $"{finding.Path}:{finding.Line}"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Shell_fence_reports_dotnet_event_source_in_razor_code()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"shell-fence-{Guid.NewGuid():N}");
+        try
+        {
+            foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
+            File.WriteAllLines(Path.Combine(root, "apps/blazor/Code.razor"), ["@code {", "EventSource source;", "}"]);
+            var (findings, _) = Scan(root);
+            Assert.Equal(new[] { "apps/blazor/Code.razor:2" }, findings.Select(finding => $"{finding.Path}:{finding.Line}"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     [Fact]
@@ -132,18 +187,47 @@ public sealed class ShellTelemetryFenceArchTests
             {
                 var lines = File.ReadAllLines(file);
                 var inBlockComment = false;
+                var inScript = false;
                 for (var index = 0; index < lines.Length; index++)
                 {
-                    var line = lines[index].TrimStart();
-                    if (inBlockComment || line.StartsWith("/*", StringComparison.Ordinal))
+                    var source = lines[index];
+                    var code = new StringBuilder();
+                    var offset = 0;
+                    while (offset < source.Length)
                     {
-                        var end = line.IndexOf("*/", StringComparison.Ordinal);
-                        if (end < 0) { inBlockComment = true; continue; }
-                        inBlockComment = false;
-                        line = line[(end + 2)..].TrimStart();
+                        if (inBlockComment)
+                        {
+                            var end = source.IndexOf("*/", offset, StringComparison.Ordinal);
+                            if (end < 0) break;
+                            inBlockComment = false;
+                            offset = end + 2;
+                            continue;
+                        }
+
+                        var token = Regex.Match(source[offset..], @"""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*'|//|/\*");
+                        if (!token.Success) { code.Append(source[offset..]); break; }
+                        code.Append(source.AsSpan(offset, token.Index));
+                        offset += token.Index + token.Length;
+                        if (token.Value == "//") break;
+                        if (token.Value == "/*") { inBlockComment = true; code.Append(' '); }
+                        else code.Append(token.Value);
                     }
+                    var line = code.ToString().TrimStart();
                     if (line.StartsWith("*/", StringComparison.Ordinal)) line = line[2..].TrimStart();
-                    var dotnetEventSource = (Path.GetExtension(file) is ".cs" or ".razor") && Regex.IsMatch(line, @"\bEventSource\b");
+                    var dotnetCode = new StringBuilder();
+                    if (Path.GetExtension(file) == ".razor")
+                    {
+                        var position = 0;
+                        foreach (Match tag in Regex.Matches(line, @"</?script\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                        {
+                            if (!inScript) dotnetCode.Append(line.AsSpan(position, tag.Index - position));
+                            inScript = !tag.Value.StartsWith("</", StringComparison.Ordinal);
+                            position = tag.Index + tag.Length;
+                        }
+                        if (!inScript) dotnetCode.Append(line.AsSpan(position));
+                    }
+                    else if (Path.GetExtension(file) == ".cs") dotnetCode.Append(line);
+                    var dotnetEventSource = Regex.IsMatch(dotnetCode.ToString(), @"\bEventSource\b");
                     if (!line.StartsWith("//", StringComparison.Ordinal) && !line.StartsWith("<!--", StringComparison.Ordinal) &&
                         (Emit.IsMatch(line) || dotnetEventSource))
                         findings.Add((Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/'), index + 1));
