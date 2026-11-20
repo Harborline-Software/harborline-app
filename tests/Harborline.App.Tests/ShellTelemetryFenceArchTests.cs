@@ -7,7 +7,8 @@ public sealed class ShellTelemetryFenceArchTests
 {
     private static readonly string[] Roots = ["apps/react/src", "apps/blazor", "src"];
     private static readonly HashSet<string> Extensions = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".cs", ".razor", ".html"];
-    private static readonly HashSet<string> ExcludedDirectories = ["bin", "obj", "dist", "node_modules", "scripts", "__tests__", "_framework", "_content", "lib", "vendor"];
+    private static readonly HashSet<string> ExcludedDirectories = ["bin", "obj", "dist", "node_modules", "__tests__"];
+    private static readonly string[] ExcludedWwwrootDirectories = ["_framework", "_content", "lib", "vendor"];
     private static readonly Regex Emit = new(@"\b(?:console\s*(?:\?\.\s*\w+|\.\s*\w+|\[\s*['""'][^'""']+['""']\s*\])\s*\(|Invoke(?:Void)?Async\s*(?:<[^>]+>\s*)?\(\s*['""']console\.[^'""']+['""']|ILogger(?:Factory)?\b|LoggerMessage\b|LoggerFactory\s*\.\s*Create\s*\(|Add(?:\w*Logger|Console|Debug|EventLog|OpenTelemetry)\s*\(|(?:TracerProvider|MeterProvider|IMeterFactory|ActivitySource|DiagnosticListener)\b|System\.Diagnostics\.Metrics\b|new\s+Meter\s*\(|Console\.(?:Write|Error|Out)\w*\b|Debug\.(?:Write|Print)\w*\b|Trace\.(?:Write|Trace)\w*\b|Log\s*\.\s*\w+\s*\(|navigator\s*(?:\?\.|\.)\s*sendBeacon\b|PerformanceObserver\b|(?:import|from|require)\b[^\r\n]*@opentelemetry/)", RegexOptions.CultureInvariant);
 
     // Add only exact paths with their count and admitting ticket or design clause.
@@ -50,7 +51,7 @@ public sealed class ShellTelemetryFenceArchTests
     [Fact]
     public void Shell_fence_ignores_block_comments_opened_after_code()
     {
-        var root = Path.Combine(Path.GetTempPath(), $"shell-fence-{Guid.NewGuid():N}");
+        var root = Path.Combine(Path.GetTempPath(), "harborline", "app104", $"shell-fence-{Guid.NewGuid():N}");
         try
         {
             foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
@@ -69,7 +70,7 @@ public sealed class ShellTelemetryFenceArchTests
     [Fact]
     public void Shell_fence_ignores_browser_event_source_in_razor_script()
     {
-        var root = Path.Combine(Path.GetTempPath(), $"shell-fence-{Guid.NewGuid():N}");
+        var root = Path.Combine(Path.GetTempPath(), "harborline", "app104", $"shell-fence-{Guid.NewGuid():N}");
         try
         {
             foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
@@ -87,7 +88,7 @@ public sealed class ShellTelemetryFenceArchTests
     [Fact]
     public void Shell_fence_reports_dotnet_event_source_in_razor_code()
     {
-        var root = Path.Combine(Path.GetTempPath(), $"shell-fence-{Guid.NewGuid():N}");
+        var root = Path.Combine(Path.GetTempPath(), "harborline", "app104", $"shell-fence-{Guid.NewGuid():N}");
         try
         {
             foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
@@ -104,7 +105,7 @@ public sealed class ShellTelemetryFenceArchTests
     [Fact]
     public void Shell_fence_reports_every_planted_emit_call()
     {
-        var root = Path.Combine(Path.GetTempPath(), $"shell-fence-{Guid.NewGuid():N}");
+        var root = Path.Combine(Path.GetTempPath(), "harborline", "app104", $"shell-fence-{Guid.NewGuid():N}");
         try
         {
             foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
@@ -134,10 +135,12 @@ public sealed class ShellTelemetryFenceArchTests
             File.WriteAllText(Path.Combine(root, "apps/react/src/emit.html"), "<script>console.log(value);</script>\n");
             Directory.CreateDirectory(Path.Combine(root, "apps/react/src/dist"));
             Directory.CreateDirectory(Path.Combine(root, "apps/react/src/__tests__"));
+            Directory.CreateDirectory(Path.Combine(root, "apps/react/src/features/lib"));
             Directory.CreateDirectory(Path.Combine(root, "apps/blazor/wwwroot/vendor"));
             Directory.CreateDirectory(Path.Combine(root, "apps/blazor/wwwroot/scripts"));
             File.WriteAllText(Path.Combine(root, "apps/react/src/dist/ignored.js"), "console.log(ignored);\n");
             File.WriteAllText(Path.Combine(root, "apps/react/src/__tests__/ignored.js"), "console.log(ignored);\n");
+            File.WriteAllText(Path.Combine(root, "apps/react/src/features/lib/emit.ts"), "console.log(value);\n");
             File.WriteAllText(Path.Combine(root, "apps/blazor/wwwroot/vendor/ignored.js"), "console.log(ignored);\n");
             File.WriteAllText(Path.Combine(root, "apps/blazor/wwwroot/blazor.web.js"), "console.log(ignored);\n");
             File.WriteAllText(Path.Combine(root, "apps/blazor/wwwroot/jquery.min.js"), "console.log(ignored);\n");
@@ -159,7 +162,7 @@ public sealed class ShellTelemetryFenceArchTests
                 "apps/react/src/emit.cjs:1", "apps/react/src/emit.html:1", "apps/react/src/emit.js:1", "apps/react/src/emit.mjs:1",
                 "apps/react/src/emits.ts:1", "apps/react/src/emits.ts:2", "apps/react/src/emits.ts:3", "apps/react/src/emits.ts:4",
                 "apps/react/src/emits.ts:6", "apps/react/src/emits.ts:7", "apps/react/src/emits.ts:8",
-                "apps/react/src/emits.ts:9", "apps/react/src/emits.ts:10", "src/interop.cs:1"
+                "apps/react/src/emits.ts:9", "apps/react/src/emits.ts:10", "apps/react/src/features/lib/emit.ts:1", "src/interop.cs:1"
             }, findings.Select(finding => $"{finding.Path}:{finding.Line}"));
         }
         finally
@@ -176,8 +179,9 @@ public sealed class ShellTelemetryFenceArchTests
         {
             var directory = Path.Combine(root, sourceRoot);
             var files = Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
-                .Where(file => !Path.GetRelativePath(directory, file).Split(Path.DirectorySeparatorChar).SkipLast(1).Any(segment =>
-                    ExcludedDirectories.Contains(segment) && !(segment == "scripts" && Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/').StartsWith("apps/blazor/wwwroot/", StringComparison.Ordinal))))
+                .Where(file => !Path.GetRelativePath(directory, file).Split(Path.DirectorySeparatorChar).SkipLast(1).Any(ExcludedDirectories.Contains))
+                .Where(file => !ExcludedWwwrootDirectories.Any(name =>
+                    Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/').StartsWith($"apps/blazor/wwwroot/{name}/", StringComparison.Ordinal)))
                 .Where(file => Extensions.Contains(Path.GetExtension(file)) && !Regex.IsMatch(Path.GetFileName(file), @"\.(?:test|spec)\."))
                 .Where(file => !Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/').StartsWith("apps/blazor/wwwroot/", StringComparison.Ordinal) ||
                     (!Path.GetFileName(file).StartsWith("blazor.", StringComparison.OrdinalIgnoreCase) && !Regex.IsMatch(Path.GetFileName(file), @"^(?:jquery|bootstrap)(?:[.-]|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))
