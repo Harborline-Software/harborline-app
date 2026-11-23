@@ -202,6 +202,36 @@ public sealed class ShellTelemetryFenceArchTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    [Theory]
+    [InlineData("regex-comment.ts", "const pattern = /[/*]/;")]
+    [InlineData("regex-tick.ts", "const tick = /`/;")]
+    public void Shell_fence_handles_regex_literals(string name, string firstLine)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "harborline", "app104", $"shell-fence-{Guid.NewGuid():N}");
+        try
+        {
+            foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
+            File.WriteAllLines(Path.Combine(root, "apps/react/src", name), [firstLine, "console.log(secret);"]);
+            var (findings, _) = Scan(root);
+            Assert.Contains((name == "regex-comment.ts" ? "apps/react/src/regex-comment.ts" : "apps/react/src/regex-tick.ts", 2), findings);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void Shell_fence_handles_html_markup_backticks()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "harborline", "app104", $"shell-fence-{Guid.NewGuid():N}");
+        try
+        {
+            foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
+            File.WriteAllLines(Path.Combine(root, "apps/react/src/help.html"), ["<p>Type ` for code.</p>", "<script>console.log(secret);</script>"]);
+            var (findings, _) = Scan(root);
+            Assert.Equal(new[] { ("apps/react/src/help.html", 2) }, findings);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     private static (List<(string Path, int Line)> Findings, Dictionary<string, int> Counts) Scan(string root)
     {
         var findings = new List<(string Path, int Line)>();
@@ -225,6 +255,9 @@ public sealed class ShellTelemetryFenceArchTests
                 var lines = File.ReadAllLines(file);
                 var inBlockComment = false;
                 var inScript = false;
+                var htmlScript = false;
+                var isHtml = Path.GetExtension(file).Equals(".html", StringComparison.OrdinalIgnoreCase);
+                var isJavaScript = isHtml || new[] { ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx" }.Contains(Path.GetExtension(file));
                 var templateDepths = new Stack<int>();
                 for (var index = 0; index < lines.Length; index++)
                 {
@@ -233,6 +266,22 @@ public sealed class ShellTelemetryFenceArchTests
                     var offset = 0;
                     while (offset < source.Length)
                     {
+                        if (isHtml && !htmlScript)
+                        {
+                            var open = Regex.Match(source[offset..], @"<script\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                            if (!open.Success) { code.Append(source[offset..]); break; }
+                            code.Append(source.AsSpan(offset, open.Index + open.Length));
+                            offset += open.Index + open.Length;
+                            htmlScript = true;
+                            continue;
+                        }
+                        if (isHtml && source.AsSpan(offset).StartsWith("</script", StringComparison.OrdinalIgnoreCase))
+                        {
+                            htmlScript = false;
+                            templateDepths.Clear();
+                            inBlockComment = false;
+                            continue;
+                        }
                         if (inBlockComment)
                         {
                             var end = source.IndexOf("*/", offset, StringComparison.Ordinal);
@@ -264,11 +313,18 @@ public sealed class ShellTelemetryFenceArchTests
                             code.Append(source[offset++]);
                             continue;
                         }
-                        var token = Regex.Match(source[offset..], @"""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*'|//|/\*|`|[{}]");
+                        if (isJavaScript && source[offset] == '/' && offset + 1 < source.Length && source[offset + 1] != '/' && source[offset + 1] != '*' &&
+                            Regex.IsMatch(code.ToString(), @"(?:^|[([=,:!&|?{};+*%~^<>-]|\b(?:return|typeof|case|throw|yield|delete|void|new|in|of))\s*$"))
+                        {
+                            var literal = Regex.Match(source[offset..], @"^/(?:\\.|\[(?:\\.|[^\]\\])*\]|[^/\[\\\r\n])+/[a-z]*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                            if (literal.Success) { code.Append(' '); offset += literal.Length; continue; }
+                        }
+                        var token = Regex.Match(source[offset..], @"""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*'|//|/\*|/|`|[{}]|</script\b");
                         if (!token.Success) { code.Append(source[offset..]); break; }
                         code.Append(source.AsSpan(offset, token.Index));
                         offset += token.Index;
-                        if (token.Value == "`" || (templateDepths.Count > 0 && (token.Value == "{" || token.Value == "}"))) continue;
+                        if (token.Value == "/" && token.Index > 0) continue;
+                        if ((isHtml && token.Value.StartsWith("</script", StringComparison.OrdinalIgnoreCase)) || token.Value == "`" || (templateDepths.Count > 0 && (token.Value == "{" || token.Value == "}"))) continue;
                         offset += token.Length;
                         if (token.Value == "//") break;
                         if (token.Value == "/*") { inBlockComment = true; code.Append(' '); }
