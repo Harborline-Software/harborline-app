@@ -171,6 +171,37 @@ public sealed class ShellTelemetryFenceArchTests
         }
     }
 
+    [Fact]
+    public void Shell_fence_reports_react_entry_point_emit()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "harborline", "app104", $"shell-fence-{Guid.NewGuid():N}");
+        try
+        {
+            foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
+            File.WriteAllText(Path.Combine(root, "apps/react/index.html"), "<script>console.log(secret);</script>\n");
+            var (findings, _) = Scan(root);
+            Assert.Equal(new[] { "apps/react/index.html:1" }, findings.Select(finding => $"{finding.Path}:{finding.Line}"));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void Shell_fence_handles_template_comments_and_interpolation()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "harborline", "app104", $"shell-fence-{Guid.NewGuid():N}");
+        try
+        {
+            foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
+            File.WriteAllLines(Path.Combine(root, "apps/react/src/template.ts"),
+                ["const pattern = `/*`;", "console.log(secret);", "const url = `//`; console.log(secret);",
+                 "const value = `${console.log(secret)}`;", "/* console.log(hidden);", "console.log(hidden); */"]);
+            var (findings, _) = Scan(root);
+            Assert.Equal(new[] { "apps/react/src/template.ts:2", "apps/react/src/template.ts:3", "apps/react/src/template.ts:4" },
+                findings.Select(finding => $"{finding.Path}:{finding.Line}"));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     private static (List<(string Path, int Line)> Findings, Dictionary<string, int> Counts) Scan(string root)
     {
         var findings = new List<(string Path, int Line)>();
@@ -185,6 +216,8 @@ public sealed class ShellTelemetryFenceArchTests
                 .Where(file => Extensions.Contains(Path.GetExtension(file)) && !Regex.IsMatch(Path.GetFileName(file), @"\.(?:test|spec)\."))
                 .Where(file => !Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/').StartsWith("apps/blazor/wwwroot/", StringComparison.Ordinal) ||
                     (!Path.GetFileName(file).StartsWith("blazor.", StringComparison.OrdinalIgnoreCase) && !Regex.IsMatch(Path.GetFileName(file), @"^(?:jquery|bootstrap)(?:[.-]|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))
+                .Concat(sourceRoot == "apps/react/src" && File.Exists(Path.Combine(root, "apps/react/index.html"))
+                    ? [Path.Combine(root, "apps/react/index.html")] : [])
                 .OrderBy(file => file, StringComparer.Ordinal).ToArray();
             counts[sourceRoot] = files.Length;
             foreach (var file in files)
@@ -192,6 +225,7 @@ public sealed class ShellTelemetryFenceArchTests
                 var lines = File.ReadAllLines(file);
                 var inBlockComment = false;
                 var inScript = false;
+                var templateDepths = new Stack<int>();
                 for (var index = 0; index < lines.Length; index++)
                 {
                     var source = lines[index];
@@ -208,10 +242,34 @@ public sealed class ShellTelemetryFenceArchTests
                             continue;
                         }
 
-                        var token = Regex.Match(source[offset..], @"""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*'|//|/\*");
+                        if (templateDepths.Count > 0 && templateDepths.Peek() == 0)
+                        {
+                            var ch = source[offset++];
+                            if (ch == '\\' && offset < source.Length) { offset++; continue; }
+                            if (ch == '`') { templateDepths.Pop(); continue; }
+                            if (ch == '$' && offset < source.Length && source[offset] == '{')
+                            {
+                                offset++;
+                                templateDepths.Pop();
+                                templateDepths.Push(1);
+                                code.Append(' ');
+                            }
+                            continue;
+                        }
+                        if (source[offset] == '`') { templateDepths.Push(0); offset++; continue; }
+                        if (templateDepths.Count > 0 && (source[offset] == '{' || source[offset] == '}'))
+                        {
+                            var depth = templateDepths.Pop() + (source[offset] == '{' ? 1 : -1);
+                            templateDepths.Push(depth);
+                            code.Append(source[offset++]);
+                            continue;
+                        }
+                        var token = Regex.Match(source[offset..], @"""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*'|//|/\*|`|[{}]");
                         if (!token.Success) { code.Append(source[offset..]); break; }
                         code.Append(source.AsSpan(offset, token.Index));
-                        offset += token.Index + token.Length;
+                        offset += token.Index;
+                        if (token.Value == "`" || (templateDepths.Count > 0 && (token.Value == "{" || token.Value == "}"))) continue;
+                        offset += token.Length;
                         if (token.Value == "//") break;
                         if (token.Value == "/*") { inBlockComment = true; code.Append(' '); }
                         else code.Append(token.Value);
