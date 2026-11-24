@@ -9,7 +9,7 @@ public sealed class ShellTelemetryFenceArchTests
     private static readonly HashSet<string> ExcludedDirectories = ["bin", "obj", "dist", "node_modules", "wwwroot", "scripts", "__tests__"];
     // Accidental emits in team-authored shell source: a lint fence, not a security boundary.
     // Deliberate evasion, obfuscated access and runtime-built keys are out of scope.
-    private static readonly Regex Emit = new(@"\b(?:(?<![\w$.])console\s*(?:(?:\?\.|\.)\s*\w+\s*(?:\?\.\s*)?\(|(?:\?\.\s*)?\[\s*(?:(?:'[^'\r\n]+'|""[^""\r\n]+"")\s*\]\s*(?:\?\.\s*)?\(|`[^`${}\r\n]+`\s*\]))|Invoke(?:Void(?:Async)?|Async)\s*(?:<(?>[^<>]+|<(?<TypeDepth>)|>(?<-TypeDepth>))*(?(TypeDepth)(?!))>\s*)?\(\s*@?['""']console\.[^'""']+['""']|EventSource\b|ILogger(?:Factory)?\b|LoggerMessage\b|LoggerFactory\s*\.\s*Create\s*\(|Add(?:\w*Logger|Console|Debug|EventLog|OpenTelemetry)\s*\(|(?:TracerProvider|MeterProvider|IMeterFactory|ActivitySource|DiagnosticListener)\b|System\.Diagnostics\.Metrics\b|new\s+Meter\s*\(|Console\.(?:Write|Error|Out)\w*\b|Debug\.(?:Write|Print)\w*\b|Trace\.(?:Write|Trace)\w*\b|Log\s*\.\s*\w+\s*\(|navigator\s*(?:(?:\?\.|\.)\s*sendBeacon\b|(?:\?\.\s*)?\[\s*(?:'sendBeacon'|""sendBeacon""|`sendBeacon`)\s*\])|PerformanceObserver\b|(?:import|from|require)\b[^\r\n]*@opentelemetry/)", RegexOptions.CultureInvariant);
+    private static readonly Regex Emit = new(@"\b(?:(?<![\w$.])(?:(?:window|globalThis|self)\s*(?:\?\.|\.)\s*)?console\s*(?:(?:\?\.|\.)\s*\w+\s*(?:\?\.\s*)?\(|(?:\?\.\s*)?\[\s*(?:(?:'[^'\r\n]+'|""[^""\r\n]+"")\s*\]\s*(?:\?\.\s*)?\(|`[^`${}\r\n]+`\s*\]))|Invoke(?:Void(?:Async)?|Async)\s*(?:<(?>[^<>]+|<(?<TypeDepth>)|>(?<-TypeDepth>))*(?(TypeDepth)(?!))>\s*)?\(\s*@?['""']console\.[^'""']+['""']|EventSource\b|ILogger(?:Factory)?\b|LoggerMessage\b|LoggerFactory\s*\.\s*Create\s*\(|Add(?:\w*Logger|Console|Debug|EventLog|OpenTelemetry)\s*\(|(?:TracerProvider|MeterProvider|IMeterFactory|ActivitySource|DiagnosticListener)\b|System\.Diagnostics\.Metrics\b|new\s+Meter\s*\(|Console\.(?:Write|Error|Out)\w*\b|Debug\.(?:Write|Print)\w*\b|Trace\.(?:Write|Trace)\w*\b|Log\s*\.\s*\w+\s*\(|navigator\s*(?:(?:\?\.|\.)\s*sendBeacon\b|(?:\?\.\s*)?\[\s*(?:'sendBeacon'|""sendBeacon""|`sendBeacon`)\s*\])|PerformanceObserver\b|(?:import|from|require)\b[^\r\n]*@opentelemetry/)", RegexOptions.CultureInvariant);
 
     // Add only exact paths with their count and admitting ticket or design clause.
     private static readonly Dictionary<string, (int Count, string Reason)> AllowList = [];
@@ -528,6 +528,44 @@ public sealed class ShellTelemetryFenceArchTests
             var (findings, _) = Scan(root);
             // Acceptance 3: plain/verbatim identifiers with generic type parameters.
             Assert.Equal(new[] { ("src/nested-interop.cs", 1), ("src/nested-interop.cs", 2) }, findings);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Theory]
+    [InlineData("window")]
+    [InlineData("globalThis")]
+    [InlineData("self")]
+    public void Shell_fence_reports_global_console_receivers(string receiver)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "harborline", "t502-member", $"shell-fence-{Guid.NewGuid():N}");
+        try
+        {
+            foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
+            File.WriteAllLines(Path.Combine(root, "apps/react/src/globals.ts"),
+            [
+                $"{receiver}.console.log(notification);", $"{receiver}.console.error(value);",
+                $"{receiver}.console?.log(value);", $"{receiver}.console.log?.(value);",
+                $"{receiver}.console['log'](value);", $"{receiver}.console?.['log'](value);",
+                $"{receiver}.console[\"warn\"](value);", $"{receiver}.console?.[\"warn\"]?.(value);",
+                $"{receiver}.console[`log`](value);", $"{receiver}.console?.[`log`]?.(value);",
+                $"{receiver}?.console?.log(value);", $"{receiver}?.console?.['log']?.(value);",
+                $"{receiver}?.console?.[`log`]?.(value);",
+                "mywindow.console.log(x);", "myself.console.log(x);", "obj.window.console.log(x);",
+                "this.console['title'](x);", "obj.console['title'](x);"
+            ]);
+            var (findings, _) = Scan(root);
+            // Acceptance 1 preserves console-call coverage; the oracle is literal physical lines.
+            Assert.Equal(new[]
+            {
+                ("apps/react/src/globals.ts", 1), ("apps/react/src/globals.ts", 2),
+                ("apps/react/src/globals.ts", 3), ("apps/react/src/globals.ts", 4),
+                ("apps/react/src/globals.ts", 5), ("apps/react/src/globals.ts", 6),
+                ("apps/react/src/globals.ts", 7), ("apps/react/src/globals.ts", 8),
+                ("apps/react/src/globals.ts", 9), ("apps/react/src/globals.ts", 10),
+                ("apps/react/src/globals.ts", 11), ("apps/react/src/globals.ts", 12),
+                ("apps/react/src/globals.ts", 13)
+            }, findings);
         }
         finally { Directory.Delete(root, recursive: true); }
     }
