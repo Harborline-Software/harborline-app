@@ -309,6 +309,55 @@ public sealed class ShellTelemetryFenceArchTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    [Fact]
+    public void Shell_fence_reports_comment_prefixes_with_code_or_string_delimiters()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "harborline", "app104", $"shell-fence-{Guid.NewGuid():N}");
+        try
+        {
+            foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
+            var cases = new (string Path, string[] Lines, int[] Expected)[]
+            {
+                ("apps/react/src/mixed.tsx", ["{/* note */ console.log(secret)}", "{/* a */ console.log(secret) /* b */}"], [1, 2]),
+                ("apps/react/src/mixed.jsx", ["{/* note */ console.log(secret)}", "{/* a */ console.log(secret) /* b */}"], [1, 2]),
+                ("apps/react/src/mixed.html", ["<!-- note --!><script>console.log(secret);</script>"], [1]),
+                ("apps/react/src/template.ts", ["const s = `", "//`; console.log(secret);"], [2]),
+                ("src/verbatim.cs", ["var s = @\"", "//\"; Console.WriteLine(secret);"], [2]),
+                ("apps/react/src/quoted.ts", ["// 'console.log(secret);'", "// \"console.log(secret);\"", "/* a */ console.log(secret);"], [1, 2, 3])
+            };
+            foreach (var row in cases) File.WriteAllLines(Path.Combine(root, row.Path), row.Lines);
+            var (findings, _) = Scan(root);
+            Assert.All(cases, row => Assert.Equal(row.Expected,
+                findings.Where(finding => finding.Path == row.Path).Select(finding => finding.Line)));
+            Assert.Equal(10, findings.Count);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Theory]
+    [InlineData(".ts", "// console.log(ignored);")]
+    [InlineData(".js", "/* console.log(ignored); */")]
+    [InlineData(".mjs", "// console.log(ignored);")]
+    [InlineData(".cjs", "/* console.log(ignored); */")]
+    [InlineData(".cs", "/* Console.WriteLine(ignored); */")]
+    [InlineData(".html", "<!-- console.log(ignored); -->")]
+    [InlineData(".html", "<!-- console.log(ignored); --!>")]
+    [InlineData(".razor", "@* Console.WriteLine(ignored); *@")]
+    [InlineData(".tsx", "{/* console.log(ignored); */}")]
+    [InlineData(".jsx", "{/* console.log(ignored); */}")]
+    public void Shell_fence_ignores_whole_line_comments_without_string_delimiters(string extension, string comment)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "harborline", "app104", $"shell-fence-{Guid.NewGuid():N}");
+        try
+        {
+            foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
+            File.WriteAllText(Path.Combine(root, "apps/react/src/comment" + extension), "  " + comment + "  ");
+            var (findings, _) = Scan(root);
+            Assert.Empty(findings);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     private static (List<(string Path, int Line)> Findings, Dictionary<string, int> Counts) Scan(string root)
     {
         var findings = new List<(string Path, int Line)>();
@@ -326,21 +375,24 @@ public sealed class ShellTelemetryFenceArchTests
             foreach (var file in scanFiles)
             {
                 var lines = File.ReadAllLines(file);
-                var (commentOpener, commentCloser) = Path.GetExtension(file) switch
+                var (commentOpener, commentCloser, commentSuffix) = Path.GetExtension(file) switch
                 {
-                    ".html" => (@"^\s*<!--", @"-->"),
-                    ".razor" => (@"^\s*@\*", @"\*@"),
-                    ".tsx" or ".jsx" => (@"^\s*\{/\*", @"\*/\}"),
-                    _ => (@"^\s*(?://|/\*)", @"\*/")
+                    ".html" => (@"^<!--", @"--!?>", ""),
+                    ".razor" => (@"^@\*", @"\*@", ""),
+                    ".tsx" or ".jsx" => (@"^\{/\*", @"\*/", "}"),
+                    _ => (@"^(?://|/\*)", @"\*/", "")
                 };
                 for (var index = 0; index < lines.Length; index++)
                 {
                     // Acceptance item 3 is line-based. Never let source syntax hide a later line.
-                    var line = lines[index];
-                    var comment = Regex.IsMatch(line, commentOpener, RegexOptions.CultureInvariant);
-                    var emitAfterCloser = Regex.Matches(line, commentCloser, RegexOptions.CultureInvariant)
-                        .Any(closer => Emit.IsMatch(line[(closer.Index + closer.Length)..]));
-                    if ((!comment && Emit.IsMatch(line)) || (comment && emitAfterCloser))
+                    var line = lines[index].Trim();
+                    var closer = Regex.Match(line, commentCloser, RegexOptions.CultureInvariant);
+                    // Only an unambiguous whole-line comment can suppress an emit match.
+                    var comment = Regex.IsMatch(line, commentOpener, RegexOptions.CultureInvariant) &&
+                        line.IndexOfAny(['`', '"', '\'']) < 0 &&
+                        (!closer.Success || (closer.Index + closer.Length + commentSuffix.Length == line.Length &&
+                            line.EndsWith(commentSuffix, StringComparison.Ordinal)));
+                    if (!comment && Emit.IsMatch(line))
                         findings.Add((Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/'), index + 1));
                 }
             }
