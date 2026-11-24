@@ -9,7 +9,7 @@ public sealed class ShellTelemetryFenceArchTests
     private static readonly HashSet<string> ExcludedDirectories = ["bin", "obj", "dist", "node_modules", "wwwroot", "scripts", "__tests__"];
     // Accidental emits in team-authored shell source: a lint fence, not a security boundary.
     // Deliberate evasion, obfuscated access and runtime-built keys are out of scope.
-    private static readonly Regex Emit = new(@"\b(?:console\s*(?:(?:\?\.|\.)\s*\w+\s*(?:\?\.\s*)?\(|(?:\?\.\s*)?\[\s*(?:'[^'\r\n]+'|""[^""\r\n]+""|`[^`${}\r\n]+`)\s*\])|Invoke(?:Void(?:Async)?|Async)\s*(?:<[^>]+>\s*)?\(\s*@?['""']console\.[^'""']+['""']|EventSource\b|ILogger(?:Factory)?\b|LoggerMessage\b|LoggerFactory\s*\.\s*Create\s*\(|Add(?:\w*Logger|Console|Debug|EventLog|OpenTelemetry)\s*\(|(?:TracerProvider|MeterProvider|IMeterFactory|ActivitySource|DiagnosticListener)\b|System\.Diagnostics\.Metrics\b|new\s+Meter\s*\(|Console\.(?:Write|Error|Out)\w*\b|Debug\.(?:Write|Print)\w*\b|Trace\.(?:Write|Trace)\w*\b|Log\s*\.\s*\w+\s*\(|navigator\s*(?:(?:\?\.|\.)\s*sendBeacon\b|(?:\?\.\s*)?\[\s*(?:'sendBeacon'|""sendBeacon""|`sendBeacon`)\s*\])|PerformanceObserver\b|(?:import|from|require)\b[^\r\n]*@opentelemetry/)", RegexOptions.CultureInvariant);
+    private static readonly Regex Emit = new(@"\b(?:(?<![\w$.])console\s*(?:(?:\?\.|\.)\s*\w+\s*(?:\?\.\s*)?\(|(?:\?\.\s*)?\[\s*(?:(?:'[^'\r\n]+'|""[^""\r\n]+"")\s*\]\s*(?:\?\.\s*)?\(|`[^`${}\r\n]+`\s*\]))|Invoke(?:Void(?:Async)?|Async)\s*(?:<(?>[^<>]+|<(?<TypeDepth>)|>(?<-TypeDepth>))*(?(TypeDepth)(?!))>\s*)?\(\s*@?['""']console\.[^'""']+['""']|EventSource\b|ILogger(?:Factory)?\b|LoggerMessage\b|LoggerFactory\s*\.\s*Create\s*\(|Add(?:\w*Logger|Console|Debug|EventLog|OpenTelemetry)\s*\(|(?:TracerProvider|MeterProvider|IMeterFactory|ActivitySource|DiagnosticListener)\b|System\.Diagnostics\.Metrics\b|new\s+Meter\s*\(|Console\.(?:Write|Error|Out)\w*\b|Debug\.(?:Write|Print)\w*\b|Trace\.(?:Write|Trace)\w*\b|Log\s*\.\s*\w+\s*\(|navigator\s*(?:(?:\?\.|\.)\s*sendBeacon\b|(?:\?\.\s*)?\[\s*(?:'sendBeacon'|""sendBeacon""|`sendBeacon`)\s*\])|PerformanceObserver\b|(?:import|from|require)\b[^\r\n]*@opentelemetry/)", RegexOptions.CultureInvariant);
 
     // Add only exact paths with their count and admitting ticket or design clause.
     private static readonly Dictionary<string, (int Count, string Reason)> AllowList = [];
@@ -475,6 +475,59 @@ public sealed class ShellTelemetryFenceArchTests
                 ("src/console-interop.cs", 5), ("src/console-interop.cs", 6),
                 ("src/console-interop.cs", 7), ("src/console-interop.cs", 8)
             }, findings);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void Shell_fence_requires_calls_for_quoted_console_keys()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "harborline", "t502-member", $"shell-fence-{Guid.NewGuid():N}");
+        try
+        {
+            foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
+            File.WriteAllLines(Path.Combine(root, "apps/react/src/reads.ts"),
+                ["const title = console['title'];", "const title = console?.[\"title\"];",
+                 "console['log'](x);", "console?.[\"warn\"]?.(x);", "console[`log`]", "console?.[`log`]"]);
+            var (findings, _) = Scan(root);
+            // Acceptance 1 / Scope 1 retains the two explicitly required template-key reads.
+            Assert.Equal(new[] { ("apps/react/src/reads.ts", 3), ("apps/react/src/reads.ts", 4),
+                ("apps/react/src/reads.ts", 5), ("apps/react/src/reads.ts", 6) }, findings);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void Shell_fence_distinguishes_console_from_an_object_property()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "harborline", "t502-member", $"shell-fence-{Guid.NewGuid():N}");
+        try
+        {
+            foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
+            File.WriteAllLines(Path.Combine(root, "apps/react/src/objects.ts"),
+                ["this.console['title'](x);", "this.console?.['title'](x);", "obj.console['title'](x);",
+                 "console['log'](x);", "console?.['warn']?.(x);"]);
+            var (findings, _) = Scan(root);
+            // Acceptance 4: non-telemetry computed accesses are negative controls.
+            Assert.Equal(new[] { ("apps/react/src/objects.ts", 4), ("apps/react/src/objects.ts", 5) }, findings);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void Shell_fence_reports_interop_with_nested_generic_arguments()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "harborline", "t502-member", $"shell-fence-{Guid.NewGuid():N}");
+        try
+        {
+            foreach (var sourceRoot in Roots) Directory.CreateDirectory(Path.Combine(root, sourceRoot));
+            File.WriteAllLines(Path.Combine(root, "src/nested-interop.cs"),
+                ["JS.InvokeAsync<List<string>>(\"console.log\", x);",
+                 "JS.InvokeAsync<Dictionary<string, List<List<int>>>>(@\"console.error\", x);",
+                 "JS.InvokeAsync<List<string>>(\"focus\", x);", "InvokeAsync(StateHasChanged);"]);
+            var (findings, _) = Scan(root);
+            // Acceptance 3: plain/verbatim identifiers with generic type parameters.
+            Assert.Equal(new[] { ("src/nested-interop.cs", 1), ("src/nested-interop.cs", 2) }, findings);
         }
         finally { Directory.Delete(root, recursive: true); }
     }
