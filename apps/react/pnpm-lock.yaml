@@ -24,13 +24,13 @@ importers:
         version: file:.feed/contracts
       '@harborline-software/rule-authoring':
         specifier: file:.feed/rule-authoring
-        version: file:.feed/rule-authoring(@harborline-software/rule-engine@file:.feed/rule-engine)
+        version: file:.feed/rule-authoring(@harborline-software/rule-engine@file:.feed/rule-engine(@harborline-software/contracts@file:.feed/contracts))
       '@harborline-software/rule-engine':
         specifier: file:.feed/rule-engine
-        version: file:.feed/rule-engine
+        version: file:.feed/rule-engine(@harborline-software/contracts@file:.feed/contracts)
       '@harborline-software/ui-react':
         specifier: file:.feed/ui-react
-        version: file:.feed/ui-react(@harborline-software/contracts@file:.feed/contracts)(@harborline-software/rule-authoring@file:.feed/rule-authoring(@harborline-software/rule-engine@file:.feed/rule-engine))(@harborline-software/rule-engine@file:.feed/rule-engine)(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        version: file:.feed/ui-react(@harborline-software/contracts@file:.feed/contracts)(@harborline-software/rule-authoring@file:.feed/rule-authoring(@harborline-software/rule-engine@file:.feed/rule-engine(@harborline-software/contracts@file:.feed/contracts)))(@harborline-software/rule-engine@file:.feed/rule-engine(@harborline-software/contracts@file:.feed/contracts))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -357,6 +357,8 @@ packages:
 
   '@harborline-software/rule-engine@file:.feed/rule-engine':
     resolution: {directory: .feed/rule-engine, type: directory}
+    peerDependencies:
+      '@harborline-software/contracts': 0.0.0-alpha.0
 
   '@harborline-software/ui-react@file:.feed/ui-react':
     resolution: {directory: .feed/ui-react, type: directory}
@@ -536,8 +538,8 @@ packages:
       '@types/react':
         optional: true
 
-  '@radix-ui/react-slot@1.3.3':
-    resolution: {integrity: sha512-qx7oqnYbxnK9kYI9m317qmFmEgo6ywqWvbTogdj7cL9p3/yx4M48p7Rnw5z3H890cL/ow/EeWJsuTykeZVXP5Q==}
+  '@radix-ui/react-slot@1.5.0':
+    resolution: {integrity: sha512-tyYd9ddPXAysAbdbD9eYxgwpCSv6f3PncqVSNKQFSR5lcJVLz3cb/pANDoYrLiHBpXv7skortyUgGUWsYuPPFQ==}
     peerDependencies:
       '@types/react': '*'
       react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
@@ -1393,8 +1395,8 @@ packages:
   symbol-tree@3.2.4:
     resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}
 
-  tailwind-merge@3.6.0:
-    resolution: {integrity: sha512-uxL7qAVQriqRQPAyK3pj66VqskWqoZ37PW94jwOTwNfq/z9oyu1V+eqrZqtR2+fCiXdYOZe/Modt8GtvqNzu+w==}
+  tailwind-merge@3.7.0:
+    resolution: {integrity: sha512-XPPUyAc+cvspz3lHTcR/QgPfW2A0lv/xQNIjX3HGhLR+Nq2lHaLq5MtTesHn8GUr3W3DguT2KT5x3NVgRtYwmA==}
 
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
@@ -1891,23 +1893,25 @@ snapshots:
 
   '@harborline-software/contracts@file:.feed/contracts': {}
 
-  '@harborline-software/rule-authoring@file:.feed/rule-authoring(@harborline-software/rule-engine@file:.feed/rule-engine)':
+  '@harborline-software/rule-authoring@file:.feed/rule-authoring(@harborline-software/rule-engine@file:.feed/rule-engine(@harborline-software/contracts@file:.feed/contracts))':
     optionalDependencies:
-      '@harborline-software/rule-engine': file:.feed/rule-engine
+      '@harborline-software/rule-engine': file:.feed/rule-engine(@harborline-software/contracts@file:.feed/contracts)
 
-  '@harborline-software/rule-engine@file:.feed/rule-engine': {}
-
-  '@harborline-software/ui-react@file:.feed/ui-react(@harborline-software/contracts@file:.feed/contracts)(@harborline-software/rule-authoring@file:.feed/rule-authoring(@harborline-software/rule-engine@file:.feed/rule-engine))(@harborline-software/rule-engine@file:.feed/rule-engine)(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+  '@harborline-software/rule-engine@file:.feed/rule-engine(@harborline-software/contracts@file:.feed/contracts)':
     dependencies:
-      '@radix-ui/react-slot': 1.3.3(@types/react@19.3.0)(react@19.3.1)
+      '@harborline-software/contracts': file:.feed/contracts
+
+  '@harborline-software/ui-react@file:.feed/ui-react(@harborline-software/contracts@file:.feed/contracts)(@harborline-software/rule-authoring@file:.feed/rule-authoring(@harborline-software/rule-engine@file:.feed/rule-engine(@harborline-software/contracts@file:.feed/contracts)))(@harborline-software/rule-engine@file:.feed/rule-engine(@harborline-software/contracts@file:.feed/contracts))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+    dependencies:
+      '@radix-ui/react-slot': 1.5.0(@types/react@19.3.0)(react@19.3.1)
       clsx: 2.1.1
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tailwind-merge: 3.6.0
+      tailwind-merge: 3.7.0
     optionalDependencies:
       '@harborline-software/contracts': file:.feed/contracts
-      '@harborline-software/rule-authoring': file:.feed/rule-authoring(@harborline-software/rule-engine@file:.feed/rule-engine)
-      '@harborline-software/rule-engine': file:.feed/rule-engine
+      '@harborline-software/rule-authoring': file:.feed/rule-authoring(@harborline-software/rule-engine@file:.feed/rule-engine(@harborline-software/contracts@file:.feed/contracts))
+      '@harborline-software/rule-engine': file:.feed/rule-engine(@harborline-software/contracts@file:.feed/contracts)
     transitivePeerDependencies:
       - '@types/react'
 
@@ -2054,7 +2058,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.3.0
 
-  '@radix-ui/react-slot@1.3.3(@types/react@19.3.0)(react@19.3.1)':
+  '@radix-ui/react-slot@1.5.0(@types/react@19.3.0)(react@19.3.1)':
     dependencies:
       '@radix-ui/react-compose-refs': 1.1.5(@types/react@19.3.0)(react@19.3.1)
       react: 19.3.1
@@ -2818,7 +2822,7 @@ snapshots:
 
   symbol-tree@3.2.4: {}
 
-  tailwind-merge@3.6.0: {}
+  tailwind-merge@3.7.0: {}
 
   tinybench@2.9.0: {}
 
