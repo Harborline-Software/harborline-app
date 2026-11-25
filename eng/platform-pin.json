@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "repository": "Harborline-Software/harborline-platform",
-  "commit": "eda5e62976c1e6d8aafe12e06ba0d3bcd2cbc26e",
-  "recordedAt": "2026-09-24 (T-243 RC1: platform origin/main commit eda5e629, T-705 D3, moves the SDK and Microsoft package pins to 11.0.100-rc.1.26425.128; supersedes the T-461 pin at 7176ab5a)",
+  "commit": "aa6be6c28d63cf5194026678d5d9cb80446ceab7",
+  "recordedAt": "T-1281/blazor-feed-closure: pack the full Views Blazor closure at platform main (2026-11-25)",
   "why": [
     "Both app lanes consume the platform's UI packages from a local feed built out of a sibling",
     "platform checkout. The feed directories are gitignored, so a clean CI runner had no package",
@@ -22,8 +22,10 @@
   "producers": {
     "Harborline.Contracts": "Harborline.Contracts.dll",
     "Harborline.Foundation": "Harborline.Foundation.dll",
+    "Harborline.Foundation.Definitions": "Harborline.Foundation.Definitions.dll",
     "Harborline.Foundation.RuleAuthoring": "Harborline.Foundation.RuleAuthoring.dll",
     "Harborline.Foundation.RuleEngine": "Harborline.Foundation.RuleEngine.dll",
+    "Harborline.Kernel.SchemaValidation": "Harborline.Kernel.SchemaValidation.dll",
     "Harborline.UIAdapters.Blazor": "Harborline.UIAdapters.Blazor.dll"
   },
   "producersWhy": [
